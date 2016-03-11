@@ -1,10 +1,7 @@
 language: python
 
 python:
-    - 2.6
     - 2.7
-    - 3.3
-    - 3.4
 
 # Setting sudo to false opts in to Travis-CI container-based builds.
 sudo: false
@@ -29,11 +26,11 @@ env:
         - NUMPY_VERSION=1.9
         - ASTROPY_VERSION=stable
         - SETUP_CMD='test'
-        - PIP_DEPENDENCIES=''
+        - PIP_DEPENDENCIES='pyparsing', 'beautifulsoup4', 'html5lib', 'requests', 'sqlalchemy'
         # For this package-template, we include examples of Cython modules,
         # so Cython is required for testing. If your package does not include
         # Cython code, you can set CONDA_DEPENDENCIES=''
-        - CONDA_DEPENDENCIES='Cython'
+        - CONDA_DEPENDENCIES=''
     matrix:
         # Make sure that egg_info works without dependencies
         - SETUP_CMD='egg_info'
@@ -47,10 +44,14 @@ matrix:
         - python: 2.7
           env: SETUP_CMD='test --coverage'
 
+        # Test with remote data
+        - python: 2.7
+          env: SETUP_CMD='test --remote-data'
+
         # Check for sphinx doc build warnings - we do this first because it
         # may run for a long time
-        - python: 2.7
-          env: SETUP_CMD='build_sphinx -w'
+        #- python: 2.7
+        #  env: SETUP_CMD='build_sphinx -w'
 
         # Try Astropy development version
         - python: 2.7
@@ -59,12 +60,12 @@ matrix:
           env: ASTROPY_VERSION=development
 
         # Try older numpy versions
-        - python: 2.7
-          env: NUMPY_VERSION=1.8
-        - python: 2.7
-          env: NUMPY_VERSION=1.7
-        - python: 2.7
-          env: NUMPY_VERSION=1.6
+        #- python: 2.7
+        #  env: NUMPY_VERSION=1.8
+        #- python: 2.7
+        #  env: NUMPY_VERSION=1.7
+        #- python: 2.7
+        #  env: NUMPY_VERSION=1.6
 
 before_install:
 
