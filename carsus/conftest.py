@@ -3,8 +3,8 @@
 # no matter how it is invoked within the source tree.
 
 from astropy.tests.pytest_plugins import *
+from carsus.base import AtomicDatabase
 
-## Uncomment the following line to treat all DeprecationWarnings as
 ## exceptions
 # enable_deprecations_as_exceptions()
 
@@ -32,3 +32,8 @@ from astropy.tests.pytest_plugins import *
 #     TESTED_VERSIONS[packagename] = version.version
 # except NameError:   # Needed to support Astropy <= 1.0.0
 #     pass
+
+
+@pytest.fixture
+def atomic_db():
+    return AtomicDatabase("sqlite://")  # use a SQLite :memory: database
