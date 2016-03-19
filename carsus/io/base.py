@@ -1,6 +1,6 @@
 import pandas as pd
 from util import to_flat_dict
-from carsus.alchemy.atomic import DataSource
+from carsus.alchemy import DataSource
 from abc import ABCMeta, abstractmethod, abstractproperty
 from sqlalchemy.orm.exc import NoResultFound
 

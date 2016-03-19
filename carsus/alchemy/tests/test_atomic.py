@@ -1,9 +1,19 @@
 import pytest
-from carsus.alchemy.atomic import *
+from carsus.alchemy import Atom, AtomicWeight, DataSource
 from sqlalchemy.exc import IntegrityError
 from numpy.testing import assert_allclose, assert_almost_equal
 
 
+def test_data_source_as_unique(memory_session):
+    nist = DataSource.as_unique(memory_session, short_name="nist",
+                                name="National Institute of Standards and Technology")
+    nist2 = DataSource.as_unique(memory_session, short_name="nist")
+    assert nist is nist2
+
+
+
+
+"""
 def test_atom_count(session_w_atoms):
     assert session_w_atoms.query(Atom).count() == 2
 
@@ -55,3 +65,4 @@ def test_atomic_weights_integrity(session_w_atomic_weights):
     )
     with pytest.raises(IntegrityError):
         session_w_atomic_weights.commit()
+"""

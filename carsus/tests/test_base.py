@@ -1,6 +1,6 @@
 import pytest
 from numpy.testing import assert_almost_equal
-from carsus.alchemy.atomic import Atom
+from carsus.alchemy import Atom
 
 def test_atomic_database_init_empty_db(atomic_db):
     assert atomic_db.session.query(Atom).count() == 118

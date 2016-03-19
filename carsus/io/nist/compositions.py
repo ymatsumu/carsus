@@ -1,7 +1,7 @@
 from carsus.io.base import BasePyparser, BaseIngester
 from carsus.io.util import to_nom_val_and_std_dev
 from carsus.io.nist.grammars.compositions_grammar import *
-from carsus.alchemy.atomic import *
+from carsus.alchemy import AtomicWeight, Atom
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup

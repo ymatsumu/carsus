@@ -4,7 +4,7 @@ from pandas.util.testing import assert_frame_equal
 from numpy.testing import assert_almost_equal
 from carsus.io.nist.compositions import NISTCompositionsPyparser, NISTCompositionsIngester
 from carsus.io.nist.grammars.compositions_grammar import *
-from carsus.alchemy.atomic import *
+from carsus.alchemy import Atom, AtomicWeight
 
 test_input = """
 Atomic Number = 35

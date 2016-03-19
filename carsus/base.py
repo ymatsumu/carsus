@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import carsus
-from carsus.alchemy.atomic import *
+from carsus.alchemy import Base, Atom
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
