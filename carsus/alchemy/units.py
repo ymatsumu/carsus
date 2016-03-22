@@ -1,6 +1,6 @@
 from .meta import Base, UnitType, UniqueMixin
 from sqlalchemy.orm import relationship
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, event
 
 
 class UnitDB(UniqueMixin, Base):
@@ -14,23 +14,25 @@ class UnitDB(UniqueMixin, Base):
 
     @classmethod
     def unique_hash(cls, unit, *args, **kwargs):
-        return unit
+        return unit.to_string()
 
     @classmethod
     def unique_filter(cls, query, unit, *args, **kwargs):
         return query.filter(UnitDB.unit == unit)
 
-    @classmethod
-    def construct(cls, session, unit, *args, **kwargs):
-        unit_db = UnitDB(unit=unit)
-        unit_db._add_physical_type(session)
-        return unit_db
-
-    def _add_physical_type(self, session):
+    def add_physical_type(self, session):
         self.physical_type = PhysicalType.as_unique(session, type=self.unit.physical_type)
 
     def __repr__(self):
         return "<Unit {0}>".format(self.unit)
+
+
+#@event.listens_for(Session, 'before_flush')
+#def add_physical_type_before_flush(session, flush_context, instances):
+#    for obj in session.new:
+#        if isinstance(obj, UnitDB):
+#            if obj.unit is not None:
+#                obj.add_physical_type(session=session)
 
 
 class PhysicalType(UniqueMixin, Base):

@@ -53,21 +53,14 @@ class BaseIngester(object):
     def requirements_satisfied(self):
         return True
 
-    def __init__(self, atomic_db, parser, downloader):
-        self.atomic_db = atomic_db
+    def __init__(self, session, parser, downloader):
+        self.session = session
         self.parser = parser
         self.downloader = downloader
-        try:
-            self.data_source = self.atomic_db.session.query(DataSource).filter_by(short_name=self.ds_short_name).one()
-        except NoResultFound:
-            self._add_data_source()
+        self.data_source = DataSource.as_unique(self.session, short_name=self.ds_short_name)
+
         if not self.requirements_satisfied():
             raise IngesterError('Requirements for ingest are not satisfied!')
-
-    def _add_data_source(self):
-        self.data_source = DataSource(short_name=self.ds_short_name)
-        self.atomic_db.session.add(self.data_source)
-        self.atomic_db.session.commit()
 
     @abstractmethod
     def download(self):

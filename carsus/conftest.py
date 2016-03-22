@@ -37,3 +37,10 @@ from carsus.base import AtomicDatabase
 @pytest.fixture
 def atomic_db():
     return AtomicDatabase("sqlite://")  # use a SQLite :memory: database
+
+
+@pytest.yield_fixture
+def db_session(atomic_db):
+    session = atomic_db.session_maker()
+    yield session
+    session.close()

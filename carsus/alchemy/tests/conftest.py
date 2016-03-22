@@ -1,27 +1,27 @@
 import pytest
+import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from carsus.alchemy import Base, Atom, DataSource, AtomicWeight, UnitDB, PhysicalType
+from carsus.alchemy import Base, Session, Atom, DataSource, AtomicWeight, UnitDB, PhysicalType
 from astropy import units as u
+
+foo_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'foo.db')
+
 
 @pytest.fixture
 def memory_session():
-    engine = create_engine("sqlite://")
+    engine = create_engine(foo_db_url)
     Base.metadata.create_all(engine)
     session = Session(bind=engine)
     return session
 
-"""
-@pytest.fixture
-def foo_engine(scope="session"):
-    engine = create_engine("sqlite:///tests/foo.db")
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    return engine
-
 
 @pytest.fixture(scope="session")
-def foo_session(foo_engine):
+def foo_engine():
+    engine = create_engine(foo_db_url)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    session = Session(bind=engine)
+
     # atoms
     H = Atom(atomic_number=1, symbol='H')
     O = Atom(atomic_number=8, symbol='O')
@@ -31,38 +31,44 @@ def foo_session(foo_engine):
     ku = DataSource(short_name='ku')
 
     # physical types and units
-    u.m = UnitDB(unit=u.m, physical_type=PhysicalType(type=u.m.physical_type))
+    length = PhysicalType(type=u.m.physical_type)
     mass = PhysicalType(type=u.u.physical_type)
+    u_m = UnitDB(unit=u.m, physical_type=length)
+    u_u = UnitDB(unit=u.u, physical_type=mass)
+
+    # atomic weights
+    H.quantities = [
+        AtomicWeight(value=1.00784, unit_db=u_u, data_source=nist, std_dev=4e-3),
+        AtomicWeight(value=1.00811, unit_db=u_u, data_source=ku, std_dev=4e-3),
+    ]
+
+    session.add_all([H, O, nist, ku, length, mass, u_m, u_u])
+    session.commit()
+    session.close()
+    return engine
 
 
 @pytest.fixture
-def session_w_units(memory_session):
-    m = UnitDB(unit=u.m)
-    atomic_mass_unit = UnitDB(unit=u.u)
-    memory_session.add_all([m, atomic_mass_unit])
-    memory_session.commit()
-    return memory_session
+def foo_session(foo_engine, request):
+    # connect to the database
+    connection = foo_engine.connect()
 
+    # begin a non-ORM transaction
+    trans = connection.begin()
 
-@pytest.fixture
-def session_w_atoms(memory_session):
-    H = Atom(atomic_number=1, symbol='H')
-    O = Atom(atomic_number=8, symbol='O')
-    memory_session.add_all([H, O])
-    memory_session.commit()
-    return memory_session
+    # bind an individual Session to the connection
+    session = Session(bind=connection)
 
+    def fin():
+        session.close()
+        # rollback - everything that happened with the
+        # Session above (including calls to commit())
+        # is rolled back.
+        trans.rollback()
+        # return connection to the Engine
+        connection.close()
 
-@pytest.fixture
-def session_w_atomic_weights(session_w_atoms):
-    nist = DataSource(short_name='nist')
-    ku = DataSource(short_name='ku')
-    u_u = UnitDB(unit=u.u)
-    H = session_w_atoms.query(Atom).filter(Atom.atomic_number==1).one()
-    H.quantities = ([
-        AtomicWeight(data_source=ku, value=1.00784, unit=u_u),
-        AtomicWeight(data_source=nist, value=1.00811, unit=u_u)
-    ])
-    session_w_atoms.commit()
-    return session_w_atoms
-"""
+    request.addfinalizer(fin)
+
+    return session
+

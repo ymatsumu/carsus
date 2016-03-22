@@ -2,9 +2,10 @@ import pytest
 import pandas as pd
 from pandas.util.testing import assert_frame_equal
 from numpy.testing import assert_almost_equal
+from astropy import units as u
 from carsus.io.nist.compositions import NISTCompositionsPyparser, NISTCompositionsIngester
 from carsus.io.nist.grammars.compositions_grammar import *
-from carsus.alchemy import Atom, AtomicWeight
+from carsus.alchemy import Atom, AtomicWeight, UnitDB, DataSource
 
 test_input = """
 Atomic Number = 35
@@ -77,7 +78,10 @@ def expected_df():
 
 @pytest.fixture
 def nist_comp_ingester(atomic_db):
-    return NISTCompositionsIngester(atomic_db)
+    session = atomic_db.session_maker()
+    ingester = NISTCompositionsIngester(session)
+    ingester.parser(test_input)
+    return ingester
 
 
 def test_nist_comp_pyparser_base_df_index(nist_comp_pyparser):
@@ -92,17 +96,18 @@ def test_nist_comp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
     assert_frame_equal(atomic_df, expected_df, check_names=False)
 
 
+
 @pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
 def test_nist_comp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, nist_comp_ingester):
-    nist_comp_ingester.parser(test_input)  # load parser with test data
-    atom = nist_comp_ingester.atomic_db.session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
+    u_u = UnitDB.as_unique(nist_comp_ingester.session, unit=u.u)
+    atom = nist_comp_ingester.session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
     atom.quantities = [
-        AtomicWeight(data_source=nist_comp_ingester.data_source, value=9.9999),
+        AtomicWeight(data_source=nist_comp_ingester.data_source, value=9.9999, unit_db=u_u),
     ]
-    nist_comp_ingester.atomic_db.session.commit()
+    nist_comp_ingester.session.commit()
 
     nist_comp_ingester.ingest()
-    q = nist_comp_ingester.atomic_db.session.query(Atom, AtomicWeight).\
+    q = nist_comp_ingester.session.query(Atom, AtomicWeight).\
         join(Atom.quantities.of_type(AtomicWeight)).\
         filter(AtomicWeight.data_source==nist_comp_ingester.data_source).\
         filter(Atom.atomic_number==atomic_number).one()
@@ -113,17 +118,17 @@ def test_nist_comp_ingest_existing_atomic_weights(atomic_number, nom_val, std_de
 
 
 def test_nist_comp_ingest_nonexisting_atomic_weights(nist_comp_ingester):
-    nist_comp_ingester.parser(test_input)  # load parser with test data
     nist_comp_ingester.ingest()
     for t in expected_tuples:
-        aw = nist_comp_ingester.atomic_db.session.query(AtomicWeight).\
+        aw = nist_comp_ingester.session.query(AtomicWeight).\
             filter(AtomicWeight.atomic_number==t[0]).\
             filter(AtomicWeight.data_source==nist_comp_ingester.data_source).one()
         assert_almost_equal(aw.value, t[1])
         assert_almost_equal(aw.std_dev, t[2])
 
+
 @pytest.mark.remote_data
 def test_nist_comp_ingest_default_count(nist_comp_ingester):
     nist_comp_ingester()
-    assert nist_comp_ingester.atomic_db.session.query(AtomicWeight).\
+    assert nist_comp_ingester.session.query(AtomicWeight).\
                filter(AtomicWeight.data_source==nist_comp_ingester.data_source).count() == 94

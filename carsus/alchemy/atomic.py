@@ -1,11 +1,9 @@
 from .meta import Base, UniqueMixin
-from .units import UnitDB
 
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint
-from astropy import units as u
-
-# __all__ = ['Base', 'Atom', 'AtomicQuantity', 'AtomicWeight', 'DataSource']
+from sqlalchemy import and_
 
 
 class Atom(Base):
@@ -22,8 +20,24 @@ class Atom(Base):
     def __repr__(self):
         return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
 
+    def merge_quantity(self, session, source_qty):
 
-class AtomicQuantity(UniqueMixin, Base):
+        qty_cls = source_qty.__class__
+
+        try:
+            target_qty = session.query(qty_cls).\
+                         filter(and_(qty_cls.atom==self,
+                                     qty_cls.data_source==source_qty.data_source)).one()
+            target_qty.value = source_qty.value
+            target_qty.unit_db = source_qty.unit_db
+            target_qty.std_dev = source_qty.std_dev
+
+        except NoResultFound:
+
+            self.quantities.append(source_qty)
+
+
+class AtomicQuantity(Base):
     __tablename__ = "atomic_quantity"
 
     id = Column(Integer, primary_key=True)
@@ -37,29 +51,18 @@ class AtomicQuantity(UniqueMixin, Base):
     data_source = relationship("DataSource")
     unit_db = relationship("UnitDB")
 
-    __table_args__ = (UniqueConstraint('atomic_number', 'data_source_id'),)
+    __table_args__ = (UniqueConstraint('type', 'atomic_number', 'data_source_id'),)
     __mapper_args__ = {
         'polymorphic_on':type,
-        'polymorphic_identity':'atomic_quantity'
+        'polymorphic_identity':'atomic_quantity',
+        'with_polymorphic' : '*'
     }
-
-    @classmethod
-    def unique_hash(cls, data_source, atom, *args, **kwargs):
-        return repr([atom_id, data_source_id])
-
-    @classmethod
-    def unique_filter(cls, query, short_name, *args, **kwargs):
-        return query.filter(DataSource.short_name == short_name)
 
     def __repr__(self):
         return "<Quantity: {0}, value: {1}>".format(self.type, self.value)
 
 
-
 class AtomicWeight(AtomicQuantity):
-
-    # physical_type = u.u.physical_type
-
     __mapper_args__ = {
         'polymorphic_identity':'atomic_weight'
     }

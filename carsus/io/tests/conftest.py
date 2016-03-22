@@ -31,4 +31,4 @@ class ConcreteBaseIngester(BaseIngester):
 
 @pytest.fixture
 def ingester(atomic_db):
-    return ConcreteBaseIngester(atomic_db, parser=object(), downloader=object())
+    return ConcreteBaseIngester(atomic_db.session_maker(), parser=object(), downloader=object())

@@ -26,9 +26,5 @@ def test_pyparser_callable(aw_pyparser):
 
 
 def test_base_ingester_add_data_source(ingester):
-    ingester.atomic_db.session.query(DataSource).\
+    ingester.session.query(DataSource).\
         filter_by(short_name=ingester.ds_short_name).one()
-
-
-def test_base_ingester_ingest(ingester):
-    ingester()

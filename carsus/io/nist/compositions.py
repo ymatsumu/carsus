@@ -1,7 +1,8 @@
 from carsus.io.base import BasePyparser, BaseIngester
 from carsus.io.util import to_nom_val_and_std_dev
 from carsus.io.nist.grammars.compositions_grammar import *
-from carsus.alchemy import AtomicWeight, Atom
+from carsus.alchemy import AtomicWeight, Atom, UnitDB
+from astropy import units as u
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -88,7 +89,6 @@ class NISTCompositionsIngester(BaseIngester):
                      parser=NISTCompositionsPyparser(),
                      downloader=download_compositions)
 
-
     def download(self):
         data = self.downloader()
         self.parser(data)
@@ -96,32 +96,11 @@ class NISTCompositionsIngester(BaseIngester):
     def ingest(self):
         """ *Only* ingests atomic weights *for now* """
         atomic_df = self.parser.prepare_atomic_dataframe()
-        # 1. Select existing atomic weights from the NIST data source
-        existing_nist_aw = self.atomic_db.session.query(AtomicWeight).\
-            filter(AtomicWeight.data_source==self.data_source).all()  # all returns a list of atomic weights
+        atomic_df = atomic_df[pd.notnull(atomic_df[AW_VAL_COL])]
 
-        # 2. Select corresponding rows from the atomic_df
-        existing_atom_nums = [_.atomic_number for _ in existing_nist_aw]
-        existing_rows = [_[1] for _ in atomic_df[atomic_df.index.isin(existing_atom_nums)].iterrows()]  # iterrows return (index, Series)
+        u_u = UnitDB.as_unique(self.session, unit=u.u)
 
-        # 3. Update the existing atomic weights
-        for aw, row in zip(existing_nist_aw, existing_rows):
-            aw.value = row[AW_VAL_COL]
-            aw.std_dev = row[AW_SD_COL]
-
-        # 4. For all other atoms create new Atomic Weight quantities
-        nonexisting = [_ for _ in atomic_df[~atomic_df.index.isin(existing_atom_nums)].iterrows()]
-        for atom_num, row in nonexisting:
-            if not pd.isnull(row[AW_VAL_COL]):  # check if the value actually exists
-                atom = self.atomic_db.session.query(Atom).filter(Atom.atomic_number==atom_num).one()
-                atom.quantities.append(
-                    AtomicWeight(data_source=self.data_source, value=row[AW_VAL_COL], std_dev=row[AW_SD_COL])
-                )
-
-        # 5. Shoot!
-        self.atomic_db.session.commit()
-
-if __name__ == '__main__':
-    data = download_compositions()
-    comp_pyparser = NISTCompositionsPyparser(input_data=data)
-    atomic_df = comp_pyparser.prepare_atomic_dataframe()
+        for atom_num, row in atomic_df.iterrows():
+            atom = self.session.query(Atom).filter(Atom.atomic_number==atom_num).one()
+            atom.merge_quantity(self.session,
+                AtomicWeight(data_source=self.data_source, value=row[AW_VAL_COL], std_dev=row[AW_SD_COL], unit_db=u_u))

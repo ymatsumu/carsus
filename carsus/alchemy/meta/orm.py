@@ -20,16 +20,13 @@ class UniqueMixin(object):
     def unique_filter(cls, query, *args, **kwargs):
         raise NotImplementedError()
 
-    @classmethod
-    def construct(cls, session, *args, **kwargs):
-        return cls(*args, **kwargs)
 
     @classmethod
     def as_unique(cls, session, *args, **kwargs):
 
         hashfunc = cls.unique_hash
         queryfunc = cls.unique_filter
-        constructor = cls.construct
+        constructor = cls
 
         if 'unique_cache' not in session.info:
             session.info['unique_cache'] = cache = {}
@@ -45,7 +42,7 @@ class UniqueMixin(object):
                 q = queryfunc(q, *args, **kwargs)
                 obj = q.first()
                 if not obj:
-                    obj = constructor(session, *args, **kwargs)
+                    obj = constructor(*args, **kwargs)
                     session.add(obj)
             cache[key] = obj
             return obj
