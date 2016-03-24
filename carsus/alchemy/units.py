@@ -1,6 +1,5 @@
 from .meta import Base, UnitType, UniqueMixin
-from sqlalchemy.orm import relationship
-from sqlalchemy import Column, Integer,  ForeignKey
+from sqlalchemy import Column, Integer
 
 
 class UnitDB(UniqueMixin, Base):

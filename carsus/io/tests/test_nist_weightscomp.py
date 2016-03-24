@@ -3,8 +3,8 @@ import pandas as pd
 from pandas.util.testing import assert_frame_equal
 from numpy.testing import assert_almost_equal
 from astropy import units as u
-from carsus.io.nist.compositions import NISTCompositionsPyparser, NISTCompositionsIngester
-from carsus.io.nist.grammars.compositions_grammar import *
+from carsus.io.nist import NISTWeightsCompIngester, NISTWeightsCompPyparser
+from carsus.io.nist.weightscomp_grammar import *
 from carsus.alchemy import Atom, AtomicWeight, UnitDB
 
 test_input = """
@@ -63,12 +63,12 @@ expected_tuples = [
 
 
 @pytest.fixture
-def nist_comp_pyparser():
-    return NISTCompositionsPyparser(input_data=test_input)
+def weightscomp_pyparser():
+    return NISTWeightsCompPyparser(input_data=test_input)
 
 @pytest.fixture
-def atomic_df(nist_comp_pyparser):
-    return nist_comp_pyparser.prepare_atomic_dataframe()
+def atomic_df(weightscomp_pyparser):
+    return weightscomp_pyparser.prepare_atomic_dataframe()
 
 
 @pytest.fixture
@@ -77,39 +77,39 @@ def expected_df():
 
 
 @pytest.fixture
-def nist_comp_ingester(atomic_db):
+def weightscomp_ingester(atomic_db):
     session = atomic_db.session_maker()
-    ingester = NISTCompositionsIngester(session)
+    ingester = NISTWeightsCompIngester(session)
     ingester.parser(test_input)
     return ingester
 
 
-def test_nist_comp_pyparser_base_df_index(nist_comp_pyparser):
-    assert nist_comp_pyparser.base_df.index.names == [ATOM_NUM_COL, MASS_NUM_COL]
+def test_weightscomp_pyparser_base_df_index(weightscomp_pyparser):
+    assert weightscomp_pyparser.base_df.index.names == [ATOM_NUM_COL, MASS_NUM_COL]
 
 
-def test_nist_comp_pyparser_prepare_atomic_df_index(atomic_df):
+def test_weightscomp_pyparser_prepare_atomic_df_index(atomic_df):
     assert atomic_df.index.name == ATOM_NUM_COL
 
 
-def test_nist_comp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
+def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
     assert_frame_equal(atomic_df, expected_df, check_names=False)
 
 
 
 @pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
-def test_nist_comp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, nist_comp_ingester):
-    u_u = UnitDB.as_unique(nist_comp_ingester.session, unit=u.u)
-    atom = nist_comp_ingester.session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
+def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester):
+    u_u = UnitDB.as_unique(weightscomp_ingester.session, unit=u.u)
+    atom = weightscomp_ingester.session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
     atom.quantities = [
-        AtomicWeight(data_source=nist_comp_ingester.data_source, value=9.9999, unit_db=u_u),
+        AtomicWeight(data_source=weightscomp_ingester.data_source, value=9.9999, unit_db=u_u),
     ]
-    nist_comp_ingester.session.commit()
+    weightscomp_ingester.session.commit()
 
-    nist_comp_ingester.ingest()
-    q = nist_comp_ingester.session.query(Atom, AtomicWeight).\
+    weightscomp_ingester.ingest()
+    q = weightscomp_ingester.session.query(Atom, AtomicWeight).\
         join(Atom.quantities.of_type(AtomicWeight)).\
-        filter(AtomicWeight.data_source==nist_comp_ingester.data_source).\
+        filter(AtomicWeight.data_source==weightscomp_ingester.data_source).\
         filter(Atom.atomic_number==atomic_number).one()
 
     assert q.AtomicWeight.atomic_number == atomic_number
@@ -117,18 +117,18 @@ def test_nist_comp_ingest_existing_atomic_weights(atomic_number, nom_val, std_de
     assert_almost_equal(q.AtomicWeight.std_dev, std_dev)
 
 
-def test_nist_comp_ingest_nonexisting_atomic_weights(nist_comp_ingester):
-    nist_comp_ingester.ingest()
+def test_weightscomp_ingest_nonexisting_atomic_weights(weightscomp_ingester):
+    weightscomp_ingester.ingest()
     for t in expected_tuples:
-        aw = nist_comp_ingester.session.query(AtomicWeight).\
+        aw = weightscomp_ingester.session.query(AtomicWeight).\
             filter(AtomicWeight.atomic_number==t[0]).\
-            filter(AtomicWeight.data_source==nist_comp_ingester.data_source).one()
+            filter(AtomicWeight.data_source==weightscomp_ingester.data_source).one()
         assert_almost_equal(aw.value, t[1])
         assert_almost_equal(aw.std_dev, t[2])
 
 
 @pytest.mark.remote_data
-def test_nist_comp_ingest_default_count(nist_comp_ingester):
-    nist_comp_ingester()
-    assert nist_comp_ingester.session.query(AtomicWeight).\
-               filter(AtomicWeight.data_source==nist_comp_ingester.data_source).count() == 94
+def test_weightscomp_ingest_default_count(weightscomp_ingester):
+    weightscomp_ingester()
+    assert weightscomp_ingester.session.query(AtomicWeight).\
+               filter(AtomicWeight.data_source==weightscomp_ingester.data_source).count() == 94

@@ -1,17 +1,18 @@
-from carsus.io.base import BasePyparser, BaseIngester
-from carsus.io.util import to_nom_val_and_std_dev
-from carsus.io.nist.grammars.compositions_grammar import *
+from carsus.io import BasePyparser, BaseIngester, to_nom_val_and_std_dev
+from .weightscomp_grammar import *
+
 from carsus.alchemy import AtomicWeight, Atom, UnitDB
 from astropy import units as u
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 
-COMPOSITIONS_URL = "http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl"
+WEIGHTSCOMP_URL = "http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl"
 DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
 NIST = "nist"
 
-def download_compositions(url=COMPOSITIONS_URL, params=DEFAULT_PARAMS):
+
+def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
     """
     Makes a GET request to download data; then extracts preformatted text
     Parameters
@@ -30,17 +31,17 @@ def download_compositions(url=COMPOSITIONS_URL, params=DEFAULT_PARAMS):
     return pre_text_data
 
 
-class NISTCompositionsPyparser(BasePyparser):
+class NISTWeightsCompPyparser(BasePyparser):
     """ Class for parsers for the NIST Atomic Weights and Isotopic Compositions database """
 
     def __init__(self, input_data=None):
-        super(NISTCompositionsPyparser, self).\
+        super(NISTWeightsCompPyparser, self).\
             __init__(grammar=isotope,
                      columns=COLUMNS,
                      input_data=input_data)
 
     def load(self, input_data):
-        super(NISTCompositionsPyparser, self).load(input_data)
+        super(NISTWeightsCompPyparser, self).load(input_data)
         self.base_df.set_index([ATOM_NUM_COL, MASS_NUM_COL], inplace=True)  # set multiindex "atomic_number","mass_number"
 
     def _prepare_atomic_weights(self, atomic_df):
@@ -78,16 +79,16 @@ class NISTCompositionsPyparser(BasePyparser):
         pass
 
 
-class NISTCompositionsIngester(BaseIngester):
+class NISTWeightsCompIngester(BaseIngester):
     """ Class for ingesters for the NIST Atomic Weights and Isotopic Compositions database """
 
     ds_short_name = NIST  # Data source short name
 
     def __init__(self, atomic_db):
-        super(NISTCompositionsIngester, self).\
+        super(NISTWeightsCompIngester, self).\
             __init__(atomic_db,
-                     parser=NISTCompositionsPyparser(),
-                     downloader=download_compositions)
+                     parser=NISTWeightsCompPyparser(),
+                     downloader=download_weightscomp)
 
     def download(self):
         data = self.downloader()
