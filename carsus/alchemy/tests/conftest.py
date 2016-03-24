@@ -1,7 +1,7 @@
 import pytest
 import os
 from sqlalchemy import create_engine
-from carsus.alchemy import Base, Session, Atom, DataSource, AtomicWeight, UnitDB, PhysicalType
+from carsus.alchemy import Base, Session, Atom, DataSource, AtomicWeight, UnitDB
 from astropy import units as u
 
 foo_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'foo.db')
@@ -9,7 +9,7 @@ foo_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'foo
 
 @pytest.fixture
 def memory_session():
-    engine = create_engine(foo_db_url)
+    engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     session = Session(bind=engine)
     return session
@@ -30,11 +30,9 @@ def foo_engine():
     nist = DataSource(short_name='nist')
     ku = DataSource(short_name='ku')
 
-    # physical types and units
-    length = PhysicalType(type=u.m.physical_type)
-    mass = PhysicalType(type=u.u.physical_type)
-    u_m = UnitDB(unit=u.m, physical_type=length)
-    u_u = UnitDB(unit=u.u, physical_type=mass)
+    # units
+    u_m = UnitDB(unit=u.m)
+    u_u = UnitDB(unit=u.u)
 
     # atomic weights
     H.quantities = [
@@ -42,7 +40,7 @@ def foo_engine():
         AtomicWeight(value=1.00811, unit_db=u_u, data_source=ku, std_dev=4e-3),
     ]
 
-    session.add_all([H, O, nist, ku, length, mass, u_m, u_u])
+    session.add_all([H, O, nist, ku, u_m, u_u])
     session.commit()
     session.close()
     return engine

@@ -5,7 +5,7 @@ from numpy.testing import assert_almost_equal
 from astropy import units as u
 from carsus.io.nist.compositions import NISTCompositionsPyparser, NISTCompositionsIngester
 from carsus.io.nist.grammars.compositions_grammar import *
-from carsus.alchemy import Atom, AtomicWeight, UnitDB, DataSource
+from carsus.alchemy import Atom, AtomicWeight, UnitDB
 
 test_input = """
 Atomic Number = 35
