@@ -1,7 +1,7 @@
 from carsus.io import BasePyparser, BaseIngester, to_nom_val_and_std_dev
 from .weightscomp_grammar import *
 
-from carsus.alchemy import AtomicWeight, Atom, UnitDB
+from carsus.alchemy import AtomicWeight, Atom, UnitDB, DataSource
 from astropy import units as u
 import requests
 import pandas as pd
@@ -84,24 +84,25 @@ class NISTWeightsCompIngester(BaseIngester):
 
     ds_short_name = NIST  # Data source short name
 
-    def __init__(self, atomic_db):
+    def __init__(self):
         super(NISTWeightsCompIngester, self).\
-            __init__(atomic_db,
-                     parser=NISTWeightsCompPyparser(),
+            __init__(parser=NISTWeightsCompPyparser(),
                      downloader=download_weightscomp)
 
     def download(self):
         data = self.downloader()
         self.parser(data)
 
-    def ingest(self):
+    def ingest(self, session):
         """ *Only* ingests atomic weights *for now* """
+        print "Ingesting atomic weights"
         atomic_df = self.parser.prepare_atomic_dataframe()
         atomic_df = atomic_df[pd.notnull(atomic_df[AW_VAL_COL])]
 
-        u_u = UnitDB.as_unique(self.session, unit=u.u)
+        u_u = UnitDB.as_unique(session, unit=u.u)
+        data_source = DataSource.as_unique(session, short_name=self.ds_short_name)
 
         for atom_num, row in atomic_df.iterrows():
-            atom = self.session.query(Atom).filter(Atom.atomic_number==atom_num).one()
-            atom.merge_quantity(self.session,
-                AtomicWeight(data_source=self.data_source, value=row[AW_VAL_COL], std_dev=row[AW_SD_COL], unit_db=u_u))
+            atom = session.query(Atom).filter(Atom.atomic_number==atom_num).one()
+            atom.merge_quantity(session,
+                AtomicWeight(data_source=data_source, value=row[AW_VAL_COL], std_dev=row[AW_SD_COL], unit_db=u_u))

@@ -3,7 +3,8 @@
 # no matter how it is invoked within the source tree.
 
 from astropy.tests.pytest_plugins import *
-from carsus.base import AtomicDatabase
+from carsus import init_db
+from carsus.alchemy import Session
 
 ## exceptions
 # enable_deprecations_as_exceptions()
@@ -34,13 +35,35 @@ from carsus.base import AtomicDatabase
 #     pass
 
 
+test_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'test.db')
+
+@pytest.fixture(scope="session")
+def test_db():
+    init_db(url=test_db_url)
+
+
 @pytest.fixture
-def atomic_db():
-    return AtomicDatabase("sqlite://")  # use a SQLite :memory: database
+def session(test_db, request):
+    from carsus.alchemy.meta.base import engine
+    # engine.echo=True
+    # connect to the database
+    connection = engine.connect()
 
+    # begin a non-ORM transaction
+    trans = connection.begin()
 
-@pytest.yield_fixture
-def db_session(atomic_db):
-    session = atomic_db.session_maker()
-    yield session
-    session.close()
+    # bind an individual Session to the connection
+    session = Session(bind=connection)
+
+    def fin():
+        session.close()
+        # rollback - everything that happened with the
+        # Session above (including calls to commit())
+        # is rolled back.
+        trans.rollback()
+        # return connection to the Engine
+        connection.close()
+
+    request.addfinalizer(fin)
+
+    return session

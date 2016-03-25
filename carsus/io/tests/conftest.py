@@ -1,6 +1,7 @@
 import pytest
 from pyparsing import Word, Dict, Group, alphas, nums, Suppress
 from carsus.io.base import BasePyparser, BaseIngester
+from carsus.alchemy import DataSource
 
 
 @pytest.fixture
@@ -25,10 +26,11 @@ class ConcreteBaseIngester(BaseIngester):
     def download(self):
         return "Downloaded"
 
-    def ingest(self):
+    def ingest(self, session):
+        data_source = DataSource.as_unique(session, short_name=self.ds_short_name)
         return "Ingested"
 
 
 @pytest.fixture
-def ingester(atomic_db):
-    return ConcreteBaseIngester(atomic_db.session_maker(), parser=object(), downloader=object())
+def ingester():
+    return ConcreteBaseIngester(parser=object(), downloader=object())

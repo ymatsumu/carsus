@@ -53,11 +53,9 @@ class BaseIngester(object):
     def requirements_satisfied(self):
         return True
 
-    def __init__(self, session, parser, downloader):
-        self.session = session
+    def __init__(self, parser, downloader):
         self.parser = parser
         self.downloader = downloader
-        self.data_source = DataSource.as_unique(self.session, short_name=self.ds_short_name)
 
         if not self.requirements_satisfied():
             raise IngesterError('Requirements for ingest are not satisfied!')
@@ -67,12 +65,12 @@ class BaseIngester(object):
         pass
 
     @abstractmethod
-    def ingest(self):
+    def ingest(self, session):
         pass
 
-    def __call__(self):
-        self.download()
-        self.ingest()
+    #def __call__(self, session):
+    #    self.download()
+    #    self.ingest(session)
 
     @abstractproperty
     def ds_short_name(self):  # Data source short name
