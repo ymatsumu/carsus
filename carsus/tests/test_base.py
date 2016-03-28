@@ -1,6 +1,6 @@
 import pytest
 from numpy.testing import assert_almost_equal
-from carsus.alchemy import Atom
+from carsus.model import Atom
 
 
 def test_init_db(session):

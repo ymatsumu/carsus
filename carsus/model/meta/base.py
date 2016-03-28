@@ -1,4 +1,4 @@
-"""fundamental units like declarative_base"""
+"""Fundamental units like declarative_base and Session"""
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker

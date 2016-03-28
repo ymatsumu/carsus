@@ -1,7 +1,7 @@
 import pytest
 import os
 from sqlalchemy import create_engine
-from carsus.alchemy import Base, Session, Atom, DataSource, AtomicWeight, UnitDB
+from carsus.model import Base, Session, Atom, DataSource, AtomicWeight, UnitDB
 from astropy import units as u
 
 foo_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'foo.db')

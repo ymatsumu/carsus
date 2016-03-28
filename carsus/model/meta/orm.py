@@ -2,7 +2,8 @@
 
 
 class UniqueMixin(object):
-    """Unique object mixin.
+    """
+    Unique object mixin.
 
     Allows an object to be returned or created as needed based on
     criterion.

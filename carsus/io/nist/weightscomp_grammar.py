@@ -1,7 +1,6 @@
 """
------------------------------------------
-BNF GRAMMAR (follows python BNF notation):
------------------------------------------
+BNF grammar and column names for the NIST Atomic Weights and Isotopic Compostitions database
+http://www.nist.gov/pml/data/comp.cfm (linearized ASCII output)
 
 isotope  ::=  column_name eq atomic_number \
               column_name eq symbol \
@@ -31,6 +30,7 @@ note_value     ::=  "g" | "m" | "r"
 letter         ::=  "a"..."z" | "A"..."Z"
 eq             ::=  "="
 
+The grammar follows python BNF notation.
 """
 
 from pyparsing import Word, Literal, Suppress, Group, Dict, Optional, delimitedList, oneOf, nums, alphas

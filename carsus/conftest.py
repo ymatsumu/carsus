@@ -4,7 +4,7 @@
 
 from astropy.tests.pytest_plugins import *
 from carsus import init_db
-from carsus.alchemy import Session
+from carsus.model import Session
 
 ## exceptions
 # enable_deprecations_as_exceptions()
@@ -44,7 +44,7 @@ def test_db():
 
 @pytest.fixture
 def session(test_db, request):
-    from carsus.alchemy.meta.base import engine
+    from carsus.model.meta.base import engine
     # engine.echo=True
     # connect to the database
     connection = engine.connect()

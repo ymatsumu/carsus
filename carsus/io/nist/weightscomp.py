@@ -1,7 +1,14 @@
-from carsus.io import BasePyparser, BaseIngester, to_nom_val_and_std_dev
-from .weightscomp_grammar import *
+"""
+Input module for the NIST Atomic Weights and Isotopic Compositions database
+http://www.nist.gov/pml/data/comp.cfm
+"""
 
-from carsus.alchemy import AtomicWeight, Atom, UnitDB, DataSource
+from carsus.io import BasePyparser, BaseIngester, to_nom_val_and_std_dev
+from .weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
+    AM_VAL_COL, AM_SD_COL, INTERVAL, STABLE_MASS_NUM, ATOM_WEIGHT_COLS, AW_STABLE_MASS_NUM_COL,\
+    AW_TYPE_COL, AW_VAL_COL, AW_SD_COL, AW_LWR_BND_COL, AW_UPR_BND_COL
+
+from carsus.model import AtomicWeight, Atom, UnitDB, DataSource
 from astropy import units as u
 import requests
 import pandas as pd
@@ -14,16 +21,25 @@ NIST = "nist"
 
 def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
     """
+    Downloader function for the NIST Atomic Weights and Isotopic Compositions database
+
     Makes a GET request to download data; then extracts preformatted text
+
     Parameters
     ----------
-    url: ~str -- request url, (default="http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl")
-    params: ~dict -- get request parameters (default={'ascii':'ascii2', 'isotype': 'some'})
+    url : str
+        The request url, (default="http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl")
 
-    Returns: ~str preformatted text data
+    params : dict
+        The GET request parameters (default={'ascii':'ascii2', 'isotype': 'some'})
+
+    Returns
     -------
+    str
+        Preformatted text data
 
     """
+    print "Downloading the data from {}".format(url)
     r = requests.get(url, params=params)
     soup = BeautifulSoup(r.text, 'html5lib')
     pre_text_data = soup.pre.get_text()
@@ -32,12 +48,36 @@ def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
 
 
 class NISTWeightsCompPyparser(BasePyparser):
-    """ Class for parsers for the NIST Atomic Weights and Isotopic Compositions database """
+    """
+    Class for parsers for the NIST Atomic Weights and Isotopic Compositions database
 
-    def __init__(self, input_data=None):
+    Attributes
+    ----------
+    base_df : pandas.DataFrame
+
+    grammar : pyparsing.ParseElement
+        (default value = isotope)
+
+    columns : list of str
+        (default value = COLUMNS)
+
+    Methods
+    -------
+    load(input_data)
+        Parses the input data and stores the results in the `base_df` attribute
+
+    prepare_atomic_dataframe()
+        Returns a new dataframe created from the `base_df` and containing data *only* related to atoms.
+
+    prepare_isotopic_dataframe()
+        Returns a new dataframe created from the `base_df` and containing data *only* related to isotopes
+
+    """
+
+    def __init__(self, grammar=isotope, columns=COLUMNS, input_data=None):
         super(NISTWeightsCompPyparser, self).\
-            __init__(grammar=isotope,
-                     columns=COLUMNS,
+            __init__(grammar=grammar,
+                     columns=columns,
                      input_data=input_data)
 
     def load(self, input_data):
@@ -80,14 +120,37 @@ class NISTWeightsCompPyparser(BasePyparser):
 
 
 class NISTWeightsCompIngester(BaseIngester):
-    """ Class for ingesters for the NIST Atomic Weights and Isotopic Compositions database """
+    """
+    Class for ingesters for the NIST Atomic Weights and Isotopic Compositions database
 
-    ds_short_name = NIST  # Data source short name
+    Attributes
+    ----------
+    parser : BaseParser instance
+        (default value = NISTWeightsCompPyparser())
 
-    def __init__(self):
+    downloader : function
+        (default value = download_weightscomp)
+
+    ds_short_name : str
+        (default value = NIST)
+
+    Methods
+    -------
+    download()
+        Downloads the data with the 'downloader' and loads the `parser` with it
+
+    ingest(session)
+        Persists the downloaded data into the database
+
+    """
+
+    ds_short_name = NIST
+
+    def __init__(self, parser_cls=NISTWeightsCompPyparser, downloader=download_weightscomp):
+        parser = parser_cls()
         super(NISTWeightsCompIngester, self).\
-            __init__(parser=NISTWeightsCompPyparser(),
-                     downloader=download_weightscomp)
+            __init__(parser=parser,
+                     downloader=downloader)
 
     def download(self):
         data = self.downloader()

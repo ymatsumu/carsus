@@ -1,5 +1,5 @@
 import pytest
-from carsus.alchemy import UnitDB
+from carsus.model import UnitDB
 from sqlalchemy.exc import IntegrityError
 from astropy import units as u
 

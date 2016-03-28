@@ -21,9 +21,8 @@ class Atom(Base):
         return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
 
     def merge_quantity(self, session, source_qty):
-
+        """ Updates an existing quantity or creates a new one"""
         qty_cls = source_qty.__class__
-
         try:
             target_qty = session.query(qty_cls).\
                          filter(and_(qty_cls.atom==self,
