@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import carsus
-from carsus.model import Atom, setup, session_scope
+from carsus.model import Atom, setup
 
 
 basic_atomic_data_fname = os.path.join(carsus.__path__[0], 'data',
@@ -10,7 +10,8 @@ basic_atomic_data_fname = os.path.join(carsus.__path__[0], 'data',
 
 def init_db(url, **kwargs):
     """
-    Initializes the database
+    Initializes the database.
+    If the database is empty ingests basic atomic data (atomic numbers, symbols, etc.)
 
     Parameters
     ----------
@@ -20,15 +21,18 @@ def init_db(url, **kwargs):
     kwargs
         Additional keyword arguments that can be passed to the `create_engine` function (e.g. echo=True)
 
-    """
-    config={"url":url}
-    config.update(kwargs)
-    print "Initializing the database"
-    setup(config)
+    Returns
+    --------
+    an instance of the sqlalchemy.orm.session.Session class
 
-    with session_scope() as session:
-        if session.query(Atom).count() == 0:
-             _init_empty_db(session)
+    """
+    print "Initializing the database"
+    session = setup(url, **kwargs)
+
+    if session.query(Atom).count() == 0:
+        _init_empty_db(session)
+
+    return session
 
 
 def _init_empty_db(session):

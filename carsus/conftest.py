@@ -4,7 +4,7 @@
 
 from astropy.tests.pytest_plugins import *
 from carsus import init_db
-from carsus.model import Session
+from sqlalchemy.orm import Session
 
 ## exceptions
 # enable_deprecations_as_exceptions()
@@ -37,17 +37,21 @@ from carsus.model import Session
 
 test_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'test.db')
 
+
 @pytest.fixture(scope="session")
-def test_db():
-    init_db(url=test_db_url)
+def test_engine():
+    session = init_db(url=test_db_url)
+    session.commit()
+    session.close()
+    return session.get_bind()
 
 
 @pytest.fixture
-def session(test_db, request):
-    from carsus.model.meta.base import engine
+def test_session(test_engine, request):
+
     # engine.echo=True
     # connect to the database
-    connection = engine.connect()
+    connection = test_engine.connect()
 
     # begin a non-ORM transaction
     trans = connection.begin()

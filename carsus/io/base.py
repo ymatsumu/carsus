@@ -23,9 +23,8 @@ class BaseParser(object):
     load(input_data)
         Parses the input data and stores the results in the `base_df` attribute
 
-    Notes
-    -----
-    Instead of invoking the `load` method you can just "call" an instance with input data.
+    __call__(input_data)
+        Call an instance with input data to invoke the `load` method.
 
     """
     __metaclass__ = ABCMeta

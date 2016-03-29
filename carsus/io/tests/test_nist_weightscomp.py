@@ -97,18 +97,18 @@ def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
 
 
 @pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
-def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, session):
-    u_u = UnitDB.as_unique(session, unit=u.u)
-    nist = DataSource.as_unique(session, short_name="nist")
-    atom = session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
+def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, test_session):
+    u_u = UnitDB.as_unique(test_session, unit=u.u)
+    nist = DataSource.as_unique(test_session, short_name="nist")
+    atom = test_session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
     atom.quantities = [
         AtomicWeight(data_source=nist, value=9.9999, unit_db=u_u),
     ]
-    session.commit()
+    test_session.commit()
 
-    weightscomp_ingester.ingest(session)
+    weightscomp_ingester.ingest(test_session)
 
-    q = session.query(Atom, AtomicWeight).\
+    q = test_session.query(Atom, AtomicWeight).\
         join(Atom.quantities.of_type(AtomicWeight)).\
         filter(AtomicWeight.data_source==nist).\
         filter(Atom.atomic_number==atomic_number).one()
@@ -119,10 +119,10 @@ def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_d
 
 
 @pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
-def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, session):
-    weightscomp_ingester.ingest(session)
-    nist = DataSource.as_unique(session, short_name="nist")
-    aw = session.query(AtomicWeight).\
+def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, test_session):
+    weightscomp_ingester.ingest(test_session)
+    nist = DataSource.as_unique(test_session, short_name="nist")
+    aw = test_session.query(AtomicWeight).\
         filter(AtomicWeight.atomic_number==atomic_number).\
         filter(AtomicWeight.data_source==nist).one()
     assert_almost_equal(aw.value, nom_val)
@@ -130,9 +130,9 @@ def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, nom_val, s
 
 
 @pytest.mark.remote_data
-def test_weightscomp_ingest_default_count(weightscomp_ingester, session):
+def test_weightscomp_ingest_default_count(weightscomp_ingester, test_session):
     weightscomp_ingester.download()
-    weightscomp_ingester.ingest(session)
-    nist = DataSource.as_unique(session, short_name="nist")
-    assert session.query(AtomicWeight).\
+    weightscomp_ingester.ingest(test_session)
+    nist = DataSource.as_unique(test_session, short_name="nist")
+    assert test_session.query(AtomicWeight).\
                filter(AtomicWeight.data_source==nist).count() == 94

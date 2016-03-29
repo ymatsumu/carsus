@@ -25,6 +25,6 @@ def test_pyparser_callable(aw_pyparser):
     assert aw_pyparser.base_df.loc[0, AW_SD_COL] == "23"
 
 
-def test_base_ingester_add_data_source(ingester, session):
-    ingester.ingest(session)
-    session.query(DataSource).filter_by(short_name=ingester.ds_short_name).one()
+def test_base_ingester_add_data_source(ingester, test_session):
+    ingester.ingest(test_session)
+    test_session.query(DataSource).filter_by(short_name=ingester.ds_short_name).one()

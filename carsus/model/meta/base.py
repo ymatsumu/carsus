@@ -1,35 +1,18 @@
-"""Fundamental units like declarative_base and Session"""
+"""Fundamental units like declarative_base"""
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import engine_from_config
-from contextlib import contextmanager
+from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
 
 Base = declarative_base()
 
-Session = sessionmaker()
 
-engine = None
+def setup(url, **kwargs):
+    """Creates a configured "Session" class and returns its instance"""
 
-
-def setup(config):
-    """Setup the application given a config dictionary."""
-
-    global engine
-    engine = engine_from_config(config, prefix='')
+    engine = create_engine(url, **kwargs)
     Base.metadata.create_all(engine)
-    Session.configure(bind=engine)
+    session = Session(bind=engine)
+    return session
 
 
-@contextmanager
-def session_scope():
-    """Provide a transactional scope around a series of operations."""
-    session = Session()
-    try:
-        yield session
-        session.commit()
-    except:
-        session.rollback()
-        raise
-    finally:
-        session.close()
