@@ -9,12 +9,16 @@ Initialize a database
 ---------------------
 
 Initializing a database is a matter of calling the ``init_db`` function.
+You *must* pass to the function a database url. You can also pass optional keyword arguments to
+establish various engine options, e.g. ``echo=True``.
+``init_db`` creates and returns a session object that is used to query the database.
 Let's initialize a SQLite memory database:
 
 .. code:: python
 
     from carsus import init_db
-    init_db("sqlite://")
+    session = init_db("sqlite://")
+    session.commit()
 
 
 .. parsed-literal::
@@ -24,25 +28,12 @@ Let's initialize a SQLite memory database:
 
 
 Because the database was empty, basic atomic data (atomic numbers, symbols, etc.)
-was added to it. Now let's create a session and query the database.
-Firstly, we need to import a sessionmaker (that is already bound to our engine):
-
-.. code:: python
-
-    from carsus.model import Session
-    print Session
-
-
-.. parsed-literal::
-
-    sessionmaker(class_='Session',autoflush=True, bind=Engine(sqlite://), autocommit=False, expire_on_commit=True)
-
-We use the sessionmaker to create a session; after that we can work with the database:
+was added to it. You should commit the session yourself if you want changes to be persisted to the database!
+Let's query the database:
 
 .. code:: python
 
     from carsus.model import Atom
-    session = Session()
     q = session.query(Atom).all()
     for atom in q[:5]:
         print atom
@@ -240,7 +231,7 @@ Let's see what we got now:
     <Atom Si, Z=14> 28.095 ku
 
 
-Imagine that the ku source is better than the nist and we want to use
+Imagine that the ku source is better than nist and we want to use
 it whenever it's available. We first define define our rating using the CASE statement.
 Then we use the min function to select the best source for each atom. Records in a
 GROUP BY query are guaranteed to come from the record in a group that matches a
