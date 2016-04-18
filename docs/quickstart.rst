@@ -161,38 +161,19 @@ For example, lets try to create another NIST data source:
     nist2 = DataSource.as_unique(session, short_name="nist")
     assert nist2 is nist
 
-To create new units use the ``astropy.units`` module. The mapping class is named ``UnitDB`` so it's
-distinguishable from the ``astropy.units.Unit`` class. You should use ``as_unique()`` to create new
-units for the same reasons as with data sources:
+To build more interesting queries lets create new atomic quantites from another
+data source. You should use the ``merge_quantity()`` helper method to create new quantities.
+Basically, it works the same way as the ``as_unique()`` method: queries the database first and either returns
+the existing quantity or creates a new one. To specify the unit of a quantity you should pass Astropy's unit to
+its constructor.
 
 .. code:: python
 
     from astropy import units as u
-    from carsus.model import UnitDB
-    u_u = UnitDB.as_unique(session, unit=u.u)
-
-Works with complex units as well:
-
-.. code:: python
-
-    u_complex = UnitDB.as_unique(session, unit=u.Unit("kg*m/s"))
-    u_complex2 = UnitDB.as_unique(session, unit=u.Unit("meter*kilogram*s**-1"))
-    assert u_complex is u_complex2
-
-
-
-To build more interesting queries lets create new atomic quantites from another
-data source. You should use the ``merge_quantity()`` helper method to create new quantities.
-Basically, it works the same way as the ``as_unique()`` method: queries the database first and either returns
-the existing quantity or creates a new one.
-
-.. code:: python
-
-
     atomic_weights = [(1, 1.00769), (2, 4.0033), (3, 6.987), (4, 9.012), (5, 10.733), (14, 28.095)]
     for atomic_number, value in atomic_weights:
         atom = session.query(Atom).filter(Atom.atomic_number == atomic_number).one()
-        atom.merge_quantity(session, AtomicWeight(data_source=ku, unit_db=u_u, value=value))
+        atom.merge_quantity(session, AtomicWeight(data_source=ku, unit=u.u, value=value))
     session.commit()
 
 Let's see what we got now:
@@ -278,3 +259,38 @@ MIN for that group.
     <Atom K, Z=19> 39.0983 nist 2
     <Atom Ca, Z=20> 40.078 nist 2
 
+You can convert quantities to new units with the ``to`` method.
+
+.. code:: python
+
+    q = session.query(AtomicWeight)
+    for aw in q.all()[:5]:
+        aw.to(u.ng)
+        print aw.value, aw.unit
+
+
+.. parsed-literal::
+
+    1.67378149613e-15 ng
+    1.6733082426e-15 ng
+    6.6464755217e-15 ng
+    6.64763457771e-15 ng
+    1.15698033922e-14 ng
+
+In fact if you change the unit of a quantity it's value will be automatically
+converted.
+
+.. code:: python
+
+    for aw in q.all()[:5]:
+        aw.unit = u.u
+        print aw.value, aw.unit
+
+
+.. parsed-literal::
+
+    1.007975 u
+    1.00769 u
+    4.002602 u
+    4.0033 u
+    6.9675 u

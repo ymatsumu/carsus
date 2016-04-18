@@ -1,9 +1,9 @@
-from .meta import Base, UniqueMixin
+from .meta import Base, UniqueMixin, UnitType
 
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint
-from sqlalchemy import and_
+from sqlalchemy.util import symbol
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, and_, event
 
 
 class Atom(Base):
@@ -28,7 +28,7 @@ class Atom(Base):
                          filter(and_(qty_cls.atom==self,
                                      qty_cls.data_source==source_qty.data_source)).one()
             target_qty.value = source_qty.value
-            target_qty.unit_db = source_qty.unit_db
+            target_qty.unit = source_qty.unit
             target_qty.std_dev = source_qty.std_dev
 
         except NoResultFound:
@@ -43,12 +43,11 @@ class AtomicQuantity(Base):
     type = Column(String(20))
     atomic_number = Column(Integer, ForeignKey('atom.atomic_number'), nullable=False)
     data_source_id = Column(Integer, ForeignKey('data_source.id'), nullable=False)
-    unit_id = Column(Integer, ForeignKey('unit_db.id'), nullable=False)
+    unit = Column(UnitType(150), nullable=False)
     value = Column(Float, nullable=False)
     std_dev = Column(Float)
 
     data_source = relationship("DataSource")
-    unit_db = relationship("UnitDB")
 
     __table_args__ = (UniqueConstraint('type', 'atomic_number', 'data_source_id'),)
     __mapper_args__ = {
@@ -59,6 +58,24 @@ class AtomicQuantity(Base):
 
     def __repr__(self):
         return "<Quantity: {0}, value: {1}>".format(self.type, self.value)
+
+    def to(self, unit):
+        """
+        Converts a quantity to a new specified unit
+
+        Parameters
+        ----------
+        unit : astropy.units.Unit
+
+        """
+        self.unit = unit  # ``unit_set`` event converts the value
+
+
+@event.listens_for(AtomicQuantity.unit, "set", propagate=True)
+def unit_set(target, value, oldvalue, initiator):
+    """ Listen for the unit 'set' event and convert target's value when the new unit is different/"""
+    if (oldvalue != symbol('NO_VALUE')) and (oldvalue != value):
+        target.value = (target.value*oldvalue).to(value).value
 
 
 class AtomicWeight(AtomicQuantity):

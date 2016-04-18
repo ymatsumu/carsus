@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 #     pass
 
 
-test_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'test.db')
+test_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'tests', 'data', 'test.db')
 
 
 @pytest.fixture(scope="session")

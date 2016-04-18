@@ -2,7 +2,7 @@ import pytest
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from carsus.model import Base, Atom, DataSource, AtomicWeight, UnitDB
+from carsus.model import Base, Atom, DataSource, AtomicWeight
 from astropy import units as u
 
 foo_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'foo.db')
@@ -31,17 +31,13 @@ def foo_engine():
     nist = DataSource(short_name='nist')
     ku = DataSource(short_name='ku')
 
-    # units
-    u_m = UnitDB(unit=u.m)
-    u_u = UnitDB(unit=u.u)
-
     # atomic weights
     H.quantities = [
-        AtomicWeight(value=1.00784, unit_db=u_u, data_source=nist, std_dev=4e-3),
-        AtomicWeight(value=1.00811, unit_db=u_u, data_source=ku, std_dev=4e-3),
+        AtomicWeight(value=1.00784, unit=u.u, data_source=nist, std_dev=4e-3),
+        AtomicWeight(value=1.00811, unit=u.u, data_source=ku, std_dev=4e-3),
     ]
 
-    session.add_all([H, O, nist, ku, u_m, u_u])
+    session.add_all([H, O, nist, ku])
     session.commit()
     session.close()
     return engine

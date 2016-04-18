@@ -5,7 +5,7 @@ from numpy.testing import assert_almost_equal
 from astropy import units as u
 from carsus.io.nist import NISTWeightsCompIngester, NISTWeightsCompPyparser
 from carsus.io.nist.weightscomp_grammar import *
-from carsus.model import Atom, AtomicWeight, UnitDB, DataSource
+from carsus.model import Atom, AtomicWeight, DataSource
 
 test_input = """
 Atomic Number = 35
@@ -98,11 +98,11 @@ def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
 
 @pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
 def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, test_session):
-    u_u = UnitDB.as_unique(test_session, unit=u.u)
     nist = DataSource.as_unique(test_session, short_name="nist")
     atom = test_session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
+    #import pdb; pdb.set_trace()
     atom.quantities = [
-        AtomicWeight(data_source=nist, value=9.9999, unit_db=u_u),
+        AtomicWeight(data_source=nist, value=9.9999, unit=u.u),
     ]
     test_session.commit()
 

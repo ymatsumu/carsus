@@ -1,5 +1,5 @@
 import pytest
-from carsus.model import Atom, AtomicWeight, DataSource, UnitDB
+from carsus.model import Atom, AtomicWeight, DataSource
 from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
@@ -71,8 +71,7 @@ def test_atomic_weights_unique_constraint(foo_session):
 def test_atom_merge_new_quantity(foo_session):
     H = foo_session.query(Atom).filter(Atom.atomic_number==1).one()
     cr = DataSource.as_unique(foo_session, short_name="cr")
-    u_u = UnitDB.as_unique(foo_session, unit=u.u)
-    H.merge_quantity(foo_session, AtomicWeight(data_source=cr, unit_db=u_u, value=1.00754, std_dev=3e-5,))
+    H.merge_quantity(foo_session, AtomicWeight(data_source=cr, unit=u.u, value=1.00754, std_dev=3e-5,))
     foo_session.commit()
     q = foo_session.query(AtomicWeight).filter(and_(AtomicWeight.atom==H,
                                                     AtomicWeight.data_source==cr)).one()
@@ -82,9 +81,17 @@ def test_atom_merge_new_quantity(foo_session):
 def test_atom_merge_existing_quantity(foo_session):
     H = foo_session.query(Atom).filter(Atom.atomic_number==1).one()
     nist = DataSource.as_unique(foo_session, short_name="nist")
-    u_u = UnitDB.as_unique(foo_session, unit=u.u)
-    H.merge_quantity(foo_session,  AtomicWeight(data_source=nist, unit_db=u_u, value=1.00654, std_dev=4e-5,))
+    H.merge_quantity(foo_session,  AtomicWeight(data_source=nist, unit=u.u, value=1.00654, std_dev=4e-5,))
     foo_session.commit()
     q = foo_session.query(AtomicWeight).filter(and_(AtomicWeight.atom==H,
                                                     AtomicWeight.data_source==nist)).one()
     assert_almost_equal(q.value, 1.00654)
+
+
+def test_atomic_quantity_convert_to(foo_session):
+    H = foo_session.query(Atom).filter(Atom.atomic_number==1).one()
+    nist = DataSource.as_unique(foo_session, short_name="nist")
+    aw = foo_session.query(AtomicWeight).filter(and_(AtomicWeight.atom==H,
+                                                    AtomicWeight.data_source==nist)).one()
+    aw.to(u.ng)
+    assert_almost_equal(aw.value, 1.6735573234079996e-15)
