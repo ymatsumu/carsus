@@ -259,7 +259,7 @@ MIN for that group.
     <Atom K, Z=19> 39.0983 nist 2
     <Atom Ca, Z=20> 40.078 nist 2
 
-You can convert quantities to new units with the ``to`` method.
+You can convert quantities to new units with the ``to()`` method.
 
 .. code:: python
 
