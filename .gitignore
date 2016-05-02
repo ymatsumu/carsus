@@ -43,6 +43,7 @@ develop-eggs
 distribute-*.tar.gz
 
 # Other
+.ipynb_checkpoints
 .cache
 .tox
 .*.sw[op]
