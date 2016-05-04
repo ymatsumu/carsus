@@ -4,6 +4,7 @@ http://www.nist.gov/pml/data/comp.cfm
 """
 
 from carsus.io import BasePyparser, BaseIngester, to_nom_val_and_std_dev
+from carsus.model.meta import Quantity
 from .weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
     AM_VAL_COL, AM_SD_COL, INTERVAL, STABLE_MASS_NUM, ATOM_WEIGHT_COLS, AW_STABLE_MASS_NUM_COL,\
     AW_TYPE_COL, AW_VAL_COL, AW_SD_COL, AW_LWR_BND_COL, AW_UPR_BND_COL
@@ -167,4 +168,4 @@ class NISTWeightsCompIngester(BaseIngester):
         for atom_num, row in atomic_df.iterrows():
             atom = session.query(Atom).filter(Atom.atomic_number==atom_num).one()
             atom.merge_quantity(session,
-                AtomicWeight(data_source=data_source, value=row[AW_VAL_COL], std_dev=row[AW_SD_COL], unit=u.u))
+                AtomicWeight(data_source=data_source, quantity=Quantity(row[AW_VAL_COL], u.u), std_dev=row[AW_SD_COL]))

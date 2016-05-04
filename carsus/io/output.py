@@ -34,9 +34,8 @@ class AtomsDataset(Dataset):
                               )
         if load_atomic_weights:
 
-            q = q.add_columns(AtomicWeight.value.label("atomic_weight_value"),
+            q = q.add_columns(AtomicWeight.quantity.value.label("atomic_weight_value"),
                               AtomicWeight.std_dev.label("atomic_weight_uncert"),
-                              AtomicWeight.unit.label("atomic_weight_unit"),
                               DataSource.short_name.label("atomic_weight_data_source")).\
                               join(Atom.quantities.of_type(AtomicWeight)).\
                               join(AtomicWeight.data_source)

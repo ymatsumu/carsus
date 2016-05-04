@@ -43,6 +43,7 @@ develop-eggs
 distribute-*.tar.gz
 
 # Other
+notebooks/*.h5
 .ipynb_checkpoints
 .cache
 .tox
