@@ -68,7 +68,7 @@ class AtomicQuantity(Base):
     }
 
     def __repr__(self):
-        return "<Quantity: {0}, value: {1}>".format(self.type, self.value)
+        return "<Quantity: {0}, value: {1}>".format(self.type, self._value)
 
 
 class AtomicWeight(AtomicQuantity):
