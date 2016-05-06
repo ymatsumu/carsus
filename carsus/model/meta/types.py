@@ -7,44 +7,6 @@ from astropy.units import Quantity, Unit, dimensionless_unscaled
 import numpy as np
 
 
-# class Quantity(object):
-#
-#     def __init__(self, value, unit):
-#         self.value = value
-#         self.unit = unit
-#
-#     def __add__(self, other):
-#         return Quantity(
-#                 self.value + other.convert_to(self.unit).value,
-#                 self.unit
-#             )
-#
-#     def __sub__(self, other):
-#         return Quantity(
-#                 self.value - other.convert_to(self.unit).value,
-#                 self.unit
-#             )
-#
-#     def __lt__(self, other):
-#         return self.value < other.convert_to(self.unit).value
-#
-#     def __gt__(self, other):
-#         return self.value > other.convert_to(self.unit).value
-#
-#     def __eq__(self, other):
-#         return self.value == other.convert_to(self.unit).value
-#
-#     @hybrid_method
-#     def convert_to(self, other_unit):
-#         return Quantity(
-#             self.value * self.unit.to(other_unit),
-#             other_unit
-#         )
-#
-#     def __str__(self):
-#         return "%2.4f %s" % (self.value, self.unit)
-
-
 class DBQuantity(Quantity):
     def __new__(cls, value, unit=None, dtype=None, copy=True, order=None,
                 subok=False, ndmin=0):
