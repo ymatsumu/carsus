@@ -1,4 +1,4 @@
-from .meta import Base, UniqueMixin, Quantity
+from .meta import Base, UniqueMixin, DBQuantity
 
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.exc import NoResultFound
@@ -50,11 +50,11 @@ class AtomicQuantity(Base):
     # Public interface for value is via the Quantity object
     @hybrid_property
     def quantity(self):
-        return Quantity(self._value, self.unit)
+        return DBQuantity(self._value, self.unit)
 
     @quantity.setter
-    def quantity(self, new):
-        self._value = new.convert_to(self.unit).value
+    def quantity(self, qty):
+        self._value = qty.to(self.unit).value
 
     std_dev = Column(Float)
 

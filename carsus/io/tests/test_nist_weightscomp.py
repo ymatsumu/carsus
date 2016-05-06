@@ -6,7 +6,6 @@ from astropy import units as u
 from carsus.io.nist import NISTWeightsCompIngester, NISTWeightsCompPyparser
 from carsus.io.nist.weightscomp_grammar import *
 from carsus.model import Atom, AtomicWeight, DataSource
-from carsus.model.meta import Quantity
 
 test_input = """
 Atomic Number = 35
@@ -103,7 +102,7 @@ def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_d
     atom = test_session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
 
     atom.quantities = [
-        AtomicWeight(data_source=nist, quantity=Quantity(9.9999, unit=u.u))
+        AtomicWeight(data_source=nist, quantity=9.9999*u.u)
     ]
     test_session.commit()
 
