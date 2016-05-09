@@ -17,5 +17,3 @@ def test_quantity_add_diff_units():
     q1 = DBQuantity(100, u.m)
     q2 = DBQuantity(0.5, u.km)
     assert (q1 + q2).value == 600
-
-

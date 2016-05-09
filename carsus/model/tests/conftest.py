@@ -68,3 +68,12 @@ def foo_session(foo_engine, request):
 
     return session
 
+
+@pytest.fixture
+def H(foo_session):
+    return foo_session.query(Atom).filter(Atom.atomic_number==1).one()
+
+
+@pytest.fixture
+def nist(foo_session):
+    return DataSource.as_unique(foo_session, short_name="nist")
