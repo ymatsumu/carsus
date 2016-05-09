@@ -21,6 +21,7 @@ class DBQuantity(Quantity):
     unit : astropy.units.UnitBase instance, str
 
     """
+
     def __new__(cls, value, unit=dimensionless_unscaled):
 
         if (isinstance(value, QueryableAttribute) or
@@ -31,7 +32,8 @@ class DBQuantity(Quantity):
             value._unit = unit
             return value
 
-        return Quantity.__new__(Quantity, value, unit=unit)
+        else:
+            return Quantity.__new__(Quantity, value, unit=unit)
 
     def __quantity_subclass__(self, unit):
         """
