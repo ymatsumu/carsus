@@ -45,6 +45,7 @@ distribute-*.tar.gz
 # Other
 notebooks/*.h5
 .ipynb_checkpoints
+carsus/tests/data/*.db
 carsus/model/tests/data
 .cache
 .tox
