@@ -167,4 +167,4 @@ class NISTWeightsCompIngester(BaseIngester):
         for atom_num, row in atomic_df.iterrows():
             atom = session.query(Atom).filter(Atom.atomic_number==atom_num).one()
             atom.merge_quantity(session,
-                AtomicWeight(data_source=data_source, value=row[AW_VAL_COL], std_dev=row[AW_SD_COL], unit=u.u))
+                AtomicWeight(data_source=data_source, quantity=row[AW_VAL_COL]*u.u, std_dev=row[AW_SD_COL]))

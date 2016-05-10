@@ -1,9 +1,10 @@
-from .meta import Base, UniqueMixin, UnitType
+from .meta import Base, UniqueMixin, DBQuantity
 
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy.util import symbol
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, and_, event
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, and_
+from astropy import units as u
 
 
 class Atom(Base):
@@ -27,8 +28,7 @@ class Atom(Base):
             target_qty = session.query(qty_cls).\
                          filter(and_(qty_cls.atom==self,
                                      qty_cls.data_source==source_qty.data_source)).one()
-            target_qty.value = source_qty.value
-            target_qty.unit = source_qty.unit
+            target_qty.quantity = source_qty.quantity
             target_qty.std_dev = source_qty.std_dev
 
         except NoResultFound:
@@ -43,8 +43,19 @@ class AtomicQuantity(Base):
     type = Column(String(20))
     atomic_number = Column(Integer, ForeignKey('atom.atomic_number'), nullable=False)
     data_source_id = Column(Integer, ForeignKey('data_source.id'), nullable=False)
-    unit = Column(UnitType(150), nullable=False)
-    value = Column(Float, nullable=False)
+
+    _value = Column(Float, nullable=False)
+    unit = u.Unit("")
+
+    # Public interface for value is via the Quantity object
+    @hybrid_property
+    def quantity(self):
+        return DBQuantity(self._value, self.unit)
+
+    @quantity.setter
+    def quantity(self, qty):
+        self._value = qty.to(self.unit).value
+
     std_dev = Column(Float)
 
     data_source = relationship("DataSource")
@@ -57,28 +68,12 @@ class AtomicQuantity(Base):
     }
 
     def __repr__(self):
-        return "<Quantity: {0}, value: {1}>".format(self.type, self.value)
-
-    def to(self, unit):
-        """
-        Converts a quantity to a new specified unit
-
-        Parameters
-        ----------
-        unit : astropy.units.Unit
-
-        """
-        self.unit = unit  # ``unit_set`` event converts the value
-
-
-@event.listens_for(AtomicQuantity.unit, "set", propagate=True)
-def unit_set(target, value, oldvalue, initiator):
-    """ Listen for the unit 'set' event and convert target's value when the new unit is different/"""
-    if (oldvalue != symbol('NO_VALUE')) and (oldvalue != value):
-        target.value = (target.value*oldvalue).to(value).value
+        return "<Quantity: {0}, value: {1}>".format(self.type, self._value)
 
 
 class AtomicWeight(AtomicQuantity):
+    unit = u.u
+
     __mapper_args__ = {
         'polymorphic_identity':'atomic_weight'
     }

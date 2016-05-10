@@ -1,3 +1,4 @@
+
 import pytest
 import os
 from sqlalchemy import create_engine
@@ -33,8 +34,8 @@ def foo_engine():
 
     # atomic weights
     H.quantities = [
-        AtomicWeight(value=1.00784, unit=u.u, data_source=nist, std_dev=4e-3),
-        AtomicWeight(value=1.00811, unit=u.u, data_source=ku, std_dev=4e-3),
+        AtomicWeight(quantity=1.00784*u.u, data_source=nist, std_dev=4e-3),
+        AtomicWeight(quantity=1.00811*u.u, data_source=ku, std_dev=4e-3),
     ]
 
     session.add_all([H, O, nist, ku])
@@ -67,3 +68,12 @@ def foo_session(foo_engine, request):
 
     return session
 
+
+@pytest.fixture
+def H(foo_session):
+    return foo_session.query(Atom).filter(Atom.atomic_number==1).one()
+
+
+@pytest.fixture
+def nist(foo_session):
+    return DataSource.as_unique(foo_session, short_name="nist")
