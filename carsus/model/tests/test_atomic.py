@@ -1,7 +1,7 @@
 import pytest
 from carsus.model import Atom, AtomicWeight, DataSource
 from astropy import units as u
-from astropy.units import UnitsError
+from astropy.units import UnitsError, UnitConversionError
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 from numpy.testing import assert_allclose, assert_almost_equal
@@ -112,7 +112,7 @@ def test_atomic_quantity_compare_diff_units(foo_session):
 
 
 def test_atomic_quantity_compare_uncompatible_units(foo_session):
-    with pytest.raises(UnitsError):
+    with pytest.raises(UnitConversionError):
         res = foo_session.query(AtomicWeight).filter(AtomicWeight.quantity > 1.008*u.m)
 
 

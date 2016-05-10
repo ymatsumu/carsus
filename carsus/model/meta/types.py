@@ -3,7 +3,7 @@
 from sqlalchemy.sql.expression import ClauseElement
 from sqlalchemy.orm.attributes import QueryableAttribute
 from astropy.units import Quantity, Unit, dimensionless_unscaled, UnitsError
-from astropy.units.quantity_helper import get_converter
+from astropy.units.quantity_helper import helper_twoarg_comparison, UFUNC_HELPERS
 import numpy as np
 
 
@@ -21,12 +21,14 @@ class DBQuantity(Quantity):
     unit : astropy.units.UnitBase instance, str
 
     """
+    _equivalencies = []
+    __array_priority__ = 100000
 
-    def __new__(cls, value, unit=dimensionless_unscaled):
+    def __new__(cls, value, unit=None):
 
         if (isinstance(value, QueryableAttribute) or
                 isinstance(value, ClauseElement)):
-            unit = Unit(unit)
+            unit = Unit(unit) if unit is not None else dimensionless_unscaled
             value = np.array(value)
             value = value.view(cls)
             value._unit = unit
@@ -53,22 +55,27 @@ class DBQuantity(Quantity):
         """
         return DBQuantity, True
 
-    def _helper_twoarg_comparison(self, other):
-        other_unit = getattr(other, 'unit', dimensionless_unscaled)
-        try:
-            converter = get_converter(other_unit, self.unit)
-        except UnitsError:
-            # special case: would be OK if unitless number is zero
-            # ToDo also inf?
+    def _get_converter(self, function, other):
+        other_unit = getattr(other, 'unit', None)
+
+        converters, result_unit = UFUNC_HELPERS[function](function, self.unit, other_unit)
+
+        # We are only interested in the converter for  `other`
+
+        converter = converters[1]
+
+        if converter is False:
             if other == 0:
                 converter = None
             else:
-                raise UnitsError("Can only apply function to quantities "
-                                 "with compatible dimensions")
-        return converter
+                raise UnitsError("Can only apply '{0}' function to "
+                                 "dimensionless quantity unless it is zero)"
+                                 .format(function.__name__))
+        return converter, result_unit
 
+    #  Comparison ufuncs do not work with sqlalchemy constructs so we have to override them
     def __gt__(self, other):
-        converter = self._helper_twoarg_comparison(other)
+        converter, _ = self._get_converter(np.greater, other)
 
         if converter:
             res = self.value > converter(other.value)
@@ -78,7 +85,7 @@ class DBQuantity(Quantity):
         return res
 
     def __lt__(self, other):
-        converter = self._helper_twoarg_comparison(other)
+        converter, _ = self._get_converter(np.less, other)
 
         if converter:
             res = self.value < converter(other.value)
@@ -88,25 +95,101 @@ class DBQuantity(Quantity):
         return res
 
     def __eq__(self, other):
-        converter = self._helper_twoarg_comparison(other)
+        converter, _ = self._get_converter(np.equal, other)
 
         if converter:
             res = self.value = converter(other.value)
-        else:  # with no conversion, other can be non-Quantity.
+        else:  # with no conversion, other can be non-Quantity
             res = self.value = getattr(other, 'value', other)
 
         return res
 
-    def to(self, unit):
+    #  We have to override this method and remove a type check!
+    def __array_wrap__(self, obj, context=None):
+        if context is None:
+            # Methods like .squeeze() created a new `ndarray` and then call
+            # __array_wrap__ to turn the array into self's subclass.
+            return self._new_view(obj)
+
+        else:
+            # with context defined, we are continuing after a ufunc evaluation.
+            if hasattr(obj, '_result_unit'):
+                result_unit = obj._result_unit
+                del obj._result_unit
+            else:
+                result_unit = None
+
+            # We now need to re-calculate quantities for which the input
+            # needed to be scaled.
+            if hasattr(obj, '_converters'):
+
+                converters = obj._converters
+                del obj._converters
+
+                # For in-place operations, input will get overwritten with
+                # junk. To avoid that, we hid it in a new object in
+                # __array_prepare__ and retrieve it here.
+                if hasattr(obj, '_result'):
+                    obj = obj._result
+                elif hasattr(obj, '_contiguous'):
+                    obj[()] = obj._contiguous
+                    del obj._contiguous
+
+                # take array view to which output can be written without
+                # getting back here
+                obj_array = obj.view(np.ndarray)
+
+                # Find out which ufunc was called and with which inputs
+                function = context[0]
+                args = context[1][:function.nin]
+
+                # Set the inputs, rescaling as necessary
+                inputs = []
+                for arg, converter in zip(args, converters):
+                    if converter:
+                        inputs.append(converter(arg.value))
+                    else:  # with no conversion, input can be non-Quantity.
+                        inputs.append(getattr(arg, 'value', arg))
+
+                # For output arrays that require scaling, we can reuse the
+                # output array to perform the scaling in place, as long as the
+                # array is not integral. Here, we set the obj_array to `None`
+                # when it can not be used to store the scaled result.
+                if result_unit is not None:  #
+                    obj_array = None
+
+                # Re-compute the output using the ufunc
+                if function.nin == 1:
+                    if function.nout == 1:
+                        out = function(inputs[0], obj_array)
+                    else:  # 2-output function (np.modf, np.frexp); 1 input
+                        if context[2] == 0:
+                            out, _ = function(inputs[0], obj_array, None)
+                        else:
+                            _, out = function(inputs[0], None, obj_array)
+                else:
+                    out = function(inputs[0], inputs[1], obj_array)
+
+                if obj_array is None:
+                    obj = self._new_view(out, result_unit)
+
+            if result_unit is None:  # return a plain array
+                obj = obj.view(np.ndarray)
+            else:
+                obj._unit = result_unit
+
+        return obj
+
+
+    def to(self, unit, equivalencies=[]):
         """
         Returns a new `DBQuantity` object with the specified
         unit.
 
         """
-        # ToDo improve this implementation
-        # `to()` method from `Quantity` doesn't work because it calls
-        # `self.unit.to(unit, self.value, equivalencies=equivalencies))`
-        # where the value is validated (not acceptable in our case where
-        # the value could be a SQLAlchemy constuct
-
-        return DBQuantity(self.value * self.unit.to(unit), unit)
+        if equivalencies == []:
+            equivalencies = self._equivalencies
+        unit = Unit(unit)
+        scale = self.unit.to(unit, equivalencies=equivalencies)
+        new_val = np.asarray(self.value*scale)
+        return self._new_view(new_val, unit)
