@@ -26,7 +26,7 @@ dependencies:
 - docopt=0.6.2
 - pytest-cov=2.2.1
 - pip:
-  - nbsphinx=0.2.6
+  - nbsphinx==0.2.6
   - sphinx_bootstrap_theme
   - sphinxcontrib-bibtex
   - sphinxcontrib-tikz
