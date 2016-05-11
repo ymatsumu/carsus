@@ -2,7 +2,7 @@ formats:
   - none
 
 conda:
-  file: carsus-ci/tardis_rtd_env.yml
+  file: carsus_ci/carsus_rtd_env27.yml
 
 python:
    version: 2
