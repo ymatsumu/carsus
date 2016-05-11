@@ -51,7 +51,7 @@ before_install:
 
 install:
 
-    - conda env create -f carsus_ci/carsus_ci_env.yml
+    - conda env create -f carsus-ci/carsus_ci_env.yml
     - source activate carsus-ci
 
 script:
