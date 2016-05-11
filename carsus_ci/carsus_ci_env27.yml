@@ -11,7 +11,6 @@ dependencies:
 - pytest=2.9.1
 - requests=2.9.1
 - SQLAlchemy=1.0.9
-- pyparsing=2.1.1
 - beautifulsoup4=4.4.0
 - html5lib
 
@@ -29,6 +28,7 @@ dependencies:
 # pip packages
 - pip:
   - uncertainties
+  - pyparsing==2.0.3
   - nbsphinx==0.2.6
   - sphinx_bootstrap_theme
   - sphinxcontrib-bibtex
