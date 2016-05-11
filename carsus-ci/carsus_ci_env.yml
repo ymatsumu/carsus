@@ -12,6 +12,8 @@ dependencies:
 - SQLAlchemy=1.0.9
 - pyparsing=2.1.1
 - html5lib
+- pip:
+  - uncertainties
 
 # RTD requirements
 - sphinx=1.4.1
