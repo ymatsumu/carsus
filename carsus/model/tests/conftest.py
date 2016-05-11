@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 from carsus.model import Base, Atom, DataSource, AtomicWeight
 from astropy import units as u
 
-foo_db_url = 'sqlite:///' + os.path.join(os.path.dirname(__file__), 'data', 'foo.db')
+data_dir = os.path.join(os.path.dirname(__file__), 'data')
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
+
+foo_db_url = 'sqlite:///' + os.path.join(data_dir, 'foo.db')
 
 
 @pytest.fixture

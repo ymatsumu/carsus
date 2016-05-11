@@ -46,7 +46,7 @@ distribute-*.tar.gz
 notebooks/*.h5
 .ipynb_checkpoints
 carsus/tests/data/*.db
-carsus/model/tests/data
+carsus/model/tests/data/*.db
 .cache
 .tox
 .*.sw[op]
