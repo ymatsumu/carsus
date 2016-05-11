@@ -1,0 +1,8 @@
+formats:
+  - none
+
+conda:
+  file: carsus-ci/tardis_rtd_env.yml
+
+python:
+   version: 2
