@@ -43,7 +43,7 @@ develop-eggs
 distribute-*.tar.gz
 
 # Other
-docs/notebooks/.ipynb_chechpoints
+.ipynb_checkpoints
 carsus/tests/data/*.db
 carsus/model/tests/data/*.db
 .cache
