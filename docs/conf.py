@@ -55,6 +55,7 @@ import sphinx_bootstrap_theme
 extensions = [
     'sphinx.ext.autodoc',
     'numpydoc',
+    'nbsphinx',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
