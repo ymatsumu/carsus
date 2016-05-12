@@ -19,6 +19,10 @@ dependencies:
 - nbconvert=4.2.0
 - numpydoc=0.5
 - docutils
+- jupyter=1.0.0
+- pygments=2.1.3
+- notebook=4.1.0
+- nbformat=4.0.1
 
 # Coverage requirements
 - coverage=3.7.1
