@@ -1,2 +1,2 @@
-from .atomic import Atom, AtomicQuantity, AtomicWeight, DataSource
+from .atomic import Atom, BasicAtom, AtomQuantity, AtomWeight, DataSource
 from .meta import Base, setup
