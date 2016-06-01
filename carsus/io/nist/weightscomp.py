@@ -8,7 +8,7 @@ from .weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
     AM_VAL_COL, AM_SD_COL, INTERVAL, STABLE_MASS_NUM, ATOM_WEIGHT_COLS, AW_STABLE_MASS_NUM_COL,\
     AW_TYPE_COL, AW_VAL_COL, AW_SD_COL, AW_LWR_BND_COL, AW_UPR_BND_COL
 
-from carsus.model import AtomicWeight, Atom, DataSource
+from carsus.model import Atom, AtomWeight, DataSource
 from astropy import units as u
 import requests
 import pandas as pd
@@ -16,7 +16,6 @@ from bs4 import BeautifulSoup
 
 WEIGHTSCOMP_URL = "http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl"
 DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
-NIST = "nist"
 
 
 def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
@@ -144,7 +143,7 @@ class NISTWeightsCompIngester(BaseIngester):
 
     """
 
-    ds_short_name = NIST
+    ds_short_name = "nist"
 
     def __init__(self, parser_cls=NISTWeightsCompPyparser, downloader=download_weightscomp):
         parser = parser_cls()
@@ -165,6 +164,7 @@ class NISTWeightsCompIngester(BaseIngester):
         data_source = DataSource.as_unique(session, short_name=self.ds_short_name)
 
         for atom_num, row in atomic_df.iterrows():
-            atom = session.query(Atom).filter(Atom.atomic_number==atom_num).one()
-            atom.merge_quantity(session,
-                AtomicWeight(data_source=data_source, quantity=row[AW_VAL_COL]*u.u, std_dev=row[AW_SD_COL]))
+            atom = Atom.as_unique(session, atomic_number=atom_num, data_source=data_source)
+            atom.weights=[
+                AtomWeight(quantity=row[AW_VAL_COL]*u.u, uncert=row[AW_SD_COL])
+            ]

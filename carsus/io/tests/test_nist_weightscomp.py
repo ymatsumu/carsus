@@ -5,7 +5,7 @@ from numpy.testing import assert_almost_equal
 from astropy import units as u
 from carsus.io.nist import NISTWeightsCompIngester, NISTWeightsCompPyparser
 from carsus.io.nist.weightscomp_grammar import *
-from carsus.model import Atom, AtomicWeight, DataSource
+from carsus.model import Atom, AtomWeight, DataSource
 
 test_input = """
 Atomic Number = 35
@@ -94,45 +94,19 @@ def test_weightscomp_pyparser_prepare_atomic_df_index(atomic_df):
 def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
     assert_frame_equal(atomic_df, expected_df, check_names=False)
 
-
-
-@pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
-def test_weithscomp_ingest_existing_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, test_session):
-    nist = DataSource.as_unique(test_session, short_name="nist")
-    atom = test_session.query(Atom).filter(Atom.atomic_number==atomic_number).one()
-
-    atom.quantities = [
-        AtomicWeight(data_source=nist, quantity=9.9999*u.u)
-    ]
-    test_session.commit()
-
-    weightscomp_ingester.ingest(test_session)
-
-    q = test_session.query(Atom, AtomicWeight).\
-        join(Atom.quantities.of_type(AtomicWeight)).\
-        filter(AtomicWeight.data_source==nist).\
-        filter(Atom.atomic_number==atomic_number).one()
-
-    assert q.AtomicWeight.atomic_number == atomic_number
-    assert_almost_equal(q.AtomicWeight.quantity.value, nom_val)
-    assert_almost_equal(q.AtomicWeight.std_dev, std_dev)
-
-
-@pytest.mark.parametrize("atomic_number,nom_val,std_dev", expected_tuples)
-def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, nom_val, std_dev, weightscomp_ingester, test_session):
+@pytest.mark.parametrize("atomic_number,value,uncert", expected_tuples)
+def test_weightscomp_ingest_atomic_weights(atomic_number, value, uncert, weightscomp_ingester, test_session):
     weightscomp_ingester.ingest(test_session)
     nist = DataSource.as_unique(test_session, short_name="nist")
-    aw = test_session.query(AtomicWeight).\
-        filter(AtomicWeight.atomic_number==atomic_number).\
-        filter(AtomicWeight.data_source==nist).one()
-    assert_almost_equal(aw.quantity.value, nom_val)
-    assert_almost_equal(aw.std_dev, std_dev)
+    atom = Atom.as_unique(test_session, atomic_number=atomic_number, data_source=nist)
+    aw = test_session.query(AtomWeight).\
+        filter(AtomWeight.atom==atom).one()
+    assert_almost_equal(aw.quantity.value, value)
+    assert_almost_equal(aw.uncert, uncert)
 
 
 @pytest.mark.remote_data
 def test_weightscomp_ingest_default_count(weightscomp_ingester, test_session):
     weightscomp_ingester.download()
     weightscomp_ingester.ingest(test_session)
-    nist = DataSource.as_unique(test_session, short_name="nist")
-    assert test_session.query(AtomicWeight).\
-               filter(AtomicWeight.data_source==nist).count() == 94
+    assert test_session.query(AtomWeight).count() == 94
