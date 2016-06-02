@@ -164,7 +164,10 @@ class NISTWeightsCompIngester(BaseIngester):
         data_source = DataSource.as_unique(session, short_name=self.ds_short_name)
 
         for atom_num, row in atomic_df.iterrows():
-            atom = Atom.as_unique(session, atomic_number=atom_num, data_source=data_source)
-            atom.weights=[
-                AtomWeight(quantity=row[AW_VAL_COL]*u.u, uncert=row[AW_SD_COL])
-            ]
+            atom = Atom(
+                atomic_number=atom_num,
+                data_source=data_source,
+                weights=[
+                    AtomWeight(quantity=row[AW_VAL_COL]*u.u, uncert=row[AW_SD_COL])
+                ]
+            )
