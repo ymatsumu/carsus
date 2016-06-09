@@ -35,7 +35,7 @@ def test_data_source_unique_constraint(foo_session):
     (1, "ku", 1.00811*u.u),
     (1, "nist", 1.00784*u.u)
 ])
-def test_atomic_weights_values(foo_session, atomic_number, ds_short_name, expected_weight):
+def test_atomic_weights_query(foo_session, atomic_number, ds_short_name, expected_weight):
     data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
     atom, atom_weight = foo_session.query(Atom, AtomWeight).\
         filter(Atom.atomic_number == atomic_number).\
