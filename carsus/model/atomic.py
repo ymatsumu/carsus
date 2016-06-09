@@ -1,8 +1,6 @@
-from .meta import Base, UniqueMixin, DBQuantity
+from .meta import Base, UniqueMixin, QuantityMixin, DataSourceMixin
 
 from sqlalchemy.orm import relationship
-from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint, and_
 from astropy import units as u
 
@@ -14,68 +12,34 @@ class Atom(Base):
     name = Column(String(150))
     group = Column(Integer)
     period = Column(Integer)
-    quantities = relationship("AtomicQuantity",
-                    backref='atom',
-                    cascade='all, delete-orphan')
+
+    weights = relationship("AtomWeight", back_populates='atom')
 
     def __repr__(self):
         return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
 
-    def merge_quantity(self, session, source_qty):
-        """ Updates an existing quantity or creates a new one"""
-        qty_cls = source_qty.__class__
-        try:
-            target_qty = session.query(qty_cls).\
-                         filter(and_(qty_cls.atom==self,
-                                     qty_cls.data_source==source_qty.data_source)).one()
-            target_qty.quantity = source_qty.quantity
-            target_qty.std_dev = source_qty.std_dev
 
-        except NoResultFound:
+class AtomQuantity(QuantityMixin, DataSourceMixin, Base):
+    __tablename__ = "atom_quantity"
 
-            self.quantities.append(source_qty)
-
-
-class AtomicQuantity(Base):
-    __tablename__ = "atomic_quantity"
-
-    id = Column(Integer, primary_key=True)
+    atom_qty_id = Column(Integer, primary_key=True)
+    atom_id = Column(Integer, ForeignKey("atom.atom_id"), nullable=False)
     type = Column(String(20))
-    atomic_number = Column(Integer, ForeignKey('atom.atomic_number'), nullable=False)
-    data_source_id = Column(Integer, ForeignKey('data_source.id'), nullable=False)
 
-    _value = Column(Float, nullable=False)
-    unit = u.Unit("")
-
-    # Public interface for value is via the Quantity object
-    @hybrid_property
-    def quantity(self):
-        return DBQuantity(self._value, self.unit)
-
-    @quantity.setter
-    def quantity(self, qty):
-        self._value = qty.to(self.unit).value
-
-    std_dev = Column(Float)
-
-    data_source = relationship("DataSource")
-
-    __table_args__ = (UniqueConstraint('type', 'atomic_number', 'data_source_id'),)
+    __table_args__ = (UniqueConstraint( 'data_source_id', 'atom_id', 'type'),)
     __mapper_args__ = {
-        'polymorphic_on':type,
-        'polymorphic_identity':'atomic_quantity',
-        'with_polymorphic' : '*'
+        'polymorphic_on': type,
+        'polymorphic_identity': 'qty'
     }
 
-    def __repr__(self):
-        return "<Quantity: {0}, value: {1}>".format(self.type, self._value)
 
+class AtomWeight(AtomQuantity):
 
-class AtomicWeight(AtomicQuantity):
     unit = u.u
+    atom = relationship("Atom", back_populates='weights')
 
     __mapper_args__ = {
-        'polymorphic_identity':'atomic_weight'
+        'polymorphic_identity': 'weight'
     }
 
 
@@ -90,7 +54,7 @@ class DataSource(UniqueMixin, Base):
     def unique_filter(cls, query, short_name, *args, **kwargs):
         return query.filter(DataSource.short_name == short_name)
 
-    id = Column(Integer, primary_key=True)
+    data_source_id = Column(Integer, primary_key=True)
     short_name = Column(String(20), unique=True, nullable=False)
     name = Column(String(120))
     description = Column(String(800))
