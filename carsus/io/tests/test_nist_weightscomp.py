@@ -3,7 +3,6 @@ import pandas as pd
 from pandas.util.testing import assert_frame_equal
 from numpy.testing import assert_almost_equal
 from astropy import units as u
-from sqlalchemy import and_
 from carsus.io.nist import NISTWeightsCompIngester, NISTWeightsCompPyparser
 from carsus.io.nist.weightscomp_grammar import *
 from carsus.model import Atom, AtomWeight, DataSource
@@ -95,15 +94,13 @@ def test_weightscomp_pyparser_prepare_atomic_df_index(atomic_df):
 def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
     assert_frame_equal(atomic_df, expected_df, check_names=False)
 
-
 @pytest.mark.parametrize("atomic_number,value,uncert", expected_tuples)
 def test_weightscomp_ingest_atomic_weights(atomic_number, value, uncert, weightscomp_ingester, test_session):
     weightscomp_ingester.ingest(test_session)
     nist = DataSource.as_unique(test_session, short_name="nist")
-    atom, aw = test_session.query(Atom, AtomWeight).\
-            filter(and_(Atom.atomic_number==atomic_number,
-                        Atom.data_source==nist)).\
-            join(Atom.weights).one()
+    atom = Atom.as_unique(test_session, atomic_number=atomic_number, data_source=nist)
+    aw = test_session.query(AtomWeight).\
+        filter(AtomWeight.atom==atom).one()
     assert_almost_equal(aw.quantity.value, value)
     assert_almost_equal(aw.uncert, uncert)
 
