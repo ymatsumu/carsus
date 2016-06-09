@@ -1,7 +1,9 @@
 """ Database schema generation/definition helpers """
 
-from sqlalchemy import Column, Integer, Float, String
+from sqlalchemy import Column, Integer, Float, String, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.ext.declarative import declared_attr
 from ..meta.types import DBQuantity
 from astropy.units import dimensionless_unscaled, UnitsError, set_enabled_equivalencies
 
@@ -36,3 +38,14 @@ class QuantityMixin(object):
 
     def __repr__(self):
         return "<Quantity: {0} {1}>".format(self._value, self.unit)
+
+
+class DataSourceMixin(object):
+
+    @declared_attr
+    def data_source_id(cls):
+        return Column(Integer, ForeignKey('DataSource.data_source_id'))
+
+    @declared_attr
+    def data_source(cls):
+        return relationship("DataSource")
