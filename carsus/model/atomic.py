@@ -1,4 +1,4 @@
-from .meta import Base, UniqueMixin, QuantityMixin
+from .meta import Base, UniqueMixin, DBQuantity
 
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.exc import NoResultFound
@@ -7,64 +7,75 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstra
 from astropy import units as u
 
 
-class Atom(UniqueMixin, Base):
+class Atom(Base):
     __tablename__ = "atom"
-
-    @classmethod
-    def unique_hash(cls, atomic_number, data_source, *args, **kwargs):
-        return "atom:{0}_{1}".format(atomic_number, data_source.short_name)
-
-    @classmethod
-    def unique_filter(cls, query, atomic_number, data_source, *args, **kwargs):
-        return query.filter(and_(Atom.atomic_number == atomic_number,
-                                 Atom.data_source == data_source))
-
-    atom_id = Column(Integer, primary_key=True)
-    atomic_number = Column(Integer, ForeignKey('basic_atom.atomic_number'), nullable=False)
-    data_source_id = Column(Integer, ForeignKey('data_source.data_source_id'), nullable=False)
-
-    weights = relationship("AtomWeight", back_populates='atom')
-    data_source = relationship("DataSource", back_populates='atoms')
-
-    basic_atom = relationship("BasicAtom")
-
-    __table_args__ = (UniqueConstraint('atomic_number', 'data_source_id'),)
-
-    def __repr__(self):
-        return "<Atom Z={0}>".format(self.atomic_number)
-
-
-class BasicAtom(Base):
-    __tablename__ = "basic_atom"
-
     atomic_number = Column(Integer, primary_key=True)
-    symbol = Column(String(3), nullable=False)
-    name = Column(String(25))
+    symbol = Column(String(5), nullable=False)
+    name = Column(String(150))
     group = Column(Integer)
     period = Column(Integer)
+    quantities = relationship("AtomicQuantity",
+                    backref='atom',
+                    cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
+
+    def merge_quantity(self, session, source_qty):
+        """ Updates an existing quantity or creates a new one"""
+        qty_cls = source_qty.__class__
+        try:
+            target_qty = session.query(qty_cls).\
+                         filter(and_(qty_cls.atom==self,
+                                     qty_cls.data_source==source_qty.data_source)).one()
+            target_qty.quantity = source_qty.quantity
+            target_qty.std_dev = source_qty.std_dev
+
+        except NoResultFound:
+
+            self.quantities.append(source_qty)
 
 
-class AtomQuantity(QuantityMixin, Base):
+class AtomicQuantity(Base):
     __tablename__ = "atomic_quantity"
 
-    atom_qty_id = Column(Integer, primary_key=True)
-    atom_id = Column(Integer, ForeignKey("atom.atom_id"), nullable=False)
+    id = Column(Integer, primary_key=True)
     type = Column(String(20))
+    atomic_number = Column(Integer, ForeignKey('atom.atomic_number'), nullable=False)
+    data_source_id = Column(Integer, ForeignKey('data_source.id'), nullable=False)
 
-    __table_args__ = (UniqueConstraint('type', 'atom_id'),)
+    _value = Column(Float, nullable=False)
+    unit = u.Unit("")
+
+    # Public interface for value is via the Quantity object
+    @hybrid_property
+    def quantity(self):
+        return DBQuantity(self._value, self.unit)
+
+    @quantity.setter
+    def quantity(self, qty):
+        self._value = qty.to(self.unit).value
+
+    std_dev = Column(Float)
+
+    data_source = relationship("DataSource")
+
+    __table_args__ = (UniqueConstraint('type', 'atomic_number', 'data_source_id'),)
     __mapper_args__ = {
-        'polymorphic_on': type,
-        'polymorphic_identity': 'qty'
+        'polymorphic_on':type,
+        'polymorphic_identity':'atomic_quantity',
+        'with_polymorphic' : '*'
     }
 
+    def __repr__(self):
+        return "<Quantity: {0}, value: {1}>".format(self.type, self._value)
 
-class AtomWeight(AtomQuantity):
+
+class AtomicWeight(AtomicQuantity):
     unit = u.u
 
-    atom = relationship("Atom", back_populates='weights')
-
     __mapper_args__ = {
-        'polymorphic_identity': 'weight'
+        'polymorphic_identity':'atomic_weight'
     }
 
 
@@ -79,13 +90,11 @@ class DataSource(UniqueMixin, Base):
     def unique_filter(cls, query, short_name, *args, **kwargs):
         return query.filter(DataSource.short_name == short_name)
 
-    data_source_id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)
     short_name = Column(String(20), unique=True, nullable=False)
     name = Column(String(120))
     description = Column(String(800))
     data_source_quality = Column(Integer)
-
-    atoms = relationship("Atom", back_populates="data_source")
 
     def __repr__(self):
         return "<Data Source: {}>".format(self.short_name)
