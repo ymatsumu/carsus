@@ -38,8 +38,8 @@ def foo_engine():
 
     # atomic weights
     h.weights = [
-        AtomWeight(quantity=1.00784*u.u, data_source=nist, std_dev=4e-3),
-        AtomWeight(quantity=1.00811*u.u, data_source=ku, std_dev=4e-3),
+        AtomWeight(quantity=1.00784*u.u, data_source=nist, uncert=4e-3),
+        AtomWeight(quantity=1.00811*u.u, data_source=ku, uncert=4e-3),
     ]
 
     session.add_all([h, ne, nist, ku])

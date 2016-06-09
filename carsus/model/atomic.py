@@ -23,10 +23,10 @@ class AtomQuantity(QuantityMixin, DataSourceMixin, Base):
     __tablename__ = "atom_quantity"
 
     atom_qty_id = Column(Integer, primary_key=True)
-    atom_id = Column(Integer, ForeignKey("atom.atom_id"), nullable=False)
+    atomic_number= Column(Integer, ForeignKey("atom.atomic_number"), nullable=False)
     type = Column(String(20))
 
-    __table_args__ = (UniqueConstraint( 'data_source_id', 'atom_id', 'type'),)
+    __table_args__ = (UniqueConstraint('data_source_id', 'atomic_number', 'type'),)
     __mapper_args__ = {
         'polymorphic_on': type,
         'polymorphic_identity': 'qty'
