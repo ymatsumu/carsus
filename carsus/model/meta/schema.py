@@ -15,7 +15,7 @@ class DataSourceMixin(object):
 
     @declared_attr
     def data_source_id(cls):
-        return Column(Integer, ForeignKey('data_source.data_source_id'))
+        return Column(Integer, ForeignKey('data_source.data_source_id'), nullable=False)
 
     @declared_attr
     def data_source(cls):
