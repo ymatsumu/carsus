@@ -8,7 +8,21 @@ from ..meta.types import DBQuantity
 from astropy.units import dimensionless_unscaled, UnitsError, set_enabled_equivalencies
 
 
-class QuantityMixin(object):
+
+
+
+class DataSourceMixin(object):
+
+    @declared_attr
+    def data_source_id(cls):
+        return Column(Integer, ForeignKey('data_source.data_source_id'))
+
+    @declared_attr
+    def data_source(cls):
+        return relationship("DataSource")
+
+
+class QuantityMixin(DataSourceMixin):
 
     _value = Column(Float, nullable=False)
     uncert = Column(Float)
@@ -38,14 +52,3 @@ class QuantityMixin(object):
 
     def __repr__(self):
         return "<Quantity: {0} {1}>".format(self._value, self.unit)
-
-
-class DataSourceMixin(object):
-
-    @declared_attr
-    def data_source_id(cls):
-        return Column(Integer, ForeignKey('data_source.data_source_id'))
-
-    @declared_attr
-    def data_source(cls):
-        return relationship("DataSource")
