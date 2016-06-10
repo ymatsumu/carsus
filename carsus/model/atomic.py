@@ -62,6 +62,7 @@ class Ion(UniqueMixin, Base):
 
     ionization_energies = relationship("IonizationEnergy",
                                        back_populates='ion')
+    levels = relationship("Level", back_populates="ion")
     atom = relationship("Atom", back_populates='ions')
 
     def __repr__(self):
@@ -94,6 +95,60 @@ class IonizationEnergy(IonQuantity):
     }
 
 
+class Level(Base):
+    __tablename__ = "level"
+
+    level_id = Column(Integer, primary_key=True)
+    level_index = Column(Integer, nullable=False)  # Index of this level from the data source
+    # Ion CFK
+    atomic_number = Column(Integer, nullable=False)
+    ion_charge = Column(Integer, nullable=False)
+
+    data_source_id = Column(Integer, ForeignKey('data_source.data_source_id'), nullable=False)
+
+    configuration = Column(String(50))
+    L = Column(String(2))  # total orbital angular momentum
+    J = Column(Float)  # total angular momentum
+    spin_multiplicity = Column(Integer)  # 2*S+1, where S is total spin
+    parity = Column(Integer)  # 0 - even, 1 - odd
+    # ToDo I think that term column can be derived from L, S, parity and configuration
+    term = Column(String(20))
+
+    energies = relationship("LevelEnergy", back_populates="level")
+    ion = relationship("Ion", back_populates="levels")
+    data_source = relationship("DataSource", back_populates="levels")
+
+    __table_args__ = (UniqueConstraint('level_index', 'atomic_number', 'ion_charge', 'data_source_id'),
+                      ForeignKeyConstraint(['atomic_number', 'ion_charge'],
+                                           ['ion.atomic_number', 'ion.ion_charge'])
+                      )
+
+
+class LevelQuantity(QuantityMixin, Base):
+    __tablename__ = "level_quantity"
+
+    level_qty_id = Column(Integer, primary_key=True)
+    level_id = Column(Integer, ForeignKey('level.level_id'), nullable=False)
+    type = Column(String(20))
+
+    __mapper_args__ = {
+        'polymorphic_on': type,
+        'polymorphic_identity': 'qty'
+    }
+
+
+class LevelEnergy(LevelQuantity):
+
+    unit = u.eV
+    equivalencies = u.spectral()
+
+    level = relationship("Level", back_populates="energies")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'energy'
+    }
+
+
 class DataSource(UniqueMixin, Base):
     __tablename__ = "data_source"
 
@@ -110,6 +165,8 @@ class DataSource(UniqueMixin, Base):
     name = Column(String(120))
     description = Column(String(800))
     data_source_quality = Column(Integer)
+
+    levels = relationship("Level", back_populates="data_source")
 
     def __repr__(self):
         return "<Data Source: {}>".format(self.short_name)
