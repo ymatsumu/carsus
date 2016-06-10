@@ -165,8 +165,6 @@ class NISTWeightsCompIngester(BaseIngester):
         print "Ingesting atomic weights"
         atomic_df = self.parser.prepare_atomic_dataframe()
 
-        atom_weights_list = []
-
         for atomic_number, row in atomic_df.iterrows():
             atom_weight = AtomWeight(atomic_number=atomic_number,
                                      data_source=self.data_source,
