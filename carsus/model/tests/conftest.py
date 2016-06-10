@@ -4,7 +4,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from carsus.model import Base, Atom, DataSource, AtomWeight,\
-    Ion, IonizationEnergy
+    Ion, IonizationEnergy, Level, LevelEnergy
 from astropy import units as u
 
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
@@ -36,6 +36,7 @@ def foo_engine():
     # data sources
     nist = DataSource(short_name='nist')
     ku = DataSource(short_name='ku')
+    ch = DataSource(short_name="chianti")
 
     # atomic weights
     h.weights = [
@@ -44,14 +45,14 @@ def foo_engine():
     ]
 
     # ions
-    h_o = Ion(
+    h0 = Ion(
         atomic_number=1,
         ion_charge=0,
         ionization_energies=[
             IonizationEnergy(quantity=13.5984*u.eV, data_source=nist, method="th")
         ])
 
-    ne_1 = Ion(
+    ne1 = Ion(
         atomic_number=10,
         ion_charge=1,
         ionization_energies=[
@@ -60,7 +61,40 @@ def foo_engine():
         ]
     )
 
-    session.add_all([h, ne, h_o, ne_1, nist, ku])
+    ne2 = Ion(
+        atomic_number=10,
+        ion_charge=2,
+        ionization_energies=[
+            IonizationEnergy(quantity=48.839 * u.eV, data_source=nist, method="th")
+        ]
+    )
+
+    # levels
+    ne2_lvl0_ku = Level(
+        ion=ne2, data_source=ku, level_index=1,
+        configuration="2s2.2p5", term="2P1.5", L="P", J=1.5, spin_multiplicity=2, parity=1,
+        energies=[
+            LevelEnergy(quantity=0, data_source=ku, method="m"),
+            LevelEnergy(quantity=0, data_source=ku, method="th")
+        ])
+
+    ne2_lvl1_ku = Level(
+        ion=ne2, data_source=ku, level_index=2,
+        configuration="2s2.2p5", term="2P0.5", L="P", J=0.5, spin_multiplicity=2, parity=1,
+        energies=[
+            LevelEnergy(quantity=780.4*u.Unit("cm-1"), data_source=ku, method="m"),
+            LevelEnergy(quantity=780.0*u.Unit("cm-1"), data_source=ku, method="th")
+        ])
+
+    ne2_lvl1_ch = Level(
+        ion=ne2, data_source=ch, level_index=2,
+        configuration="2s2.2p5", term="2P0.5", L="P", J=0.5, spin_multiplicity=2, parity=1,
+        energies=[
+            LevelEnergy(quantity=780.2*u.Unit("cm-1"), data_source=ch, method="m")
+        ])
+
+    session.add_all([h, ne, nist, ku, ch, h0, ne1,
+                     ne2_lvl1_ch, ne2_lvl0_ku, ne2_lvl1_ku])
     session.commit()
     session.close()
     return engine

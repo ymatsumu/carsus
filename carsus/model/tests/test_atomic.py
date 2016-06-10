@@ -1,6 +1,6 @@
 import pytest
 from carsus.model import Atom, AtomWeight, DataSource,\
-    Ion, IonizationEnergy
+    Ion, IonizationEnergy, Level, LevelEnergy
 from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
@@ -92,3 +92,48 @@ def test_ionization_energies_query(foo_session, atomic_number, ion_charge, ds_sh
         filter(and_(IonizationEnergy.data_source == data_source,
                     IonizationEnergy.method == method)).one()
     assert_quantity_allclose([ionization_energy.quantity], expected_ionization_energy)
+
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index,"
+                         "configuration, term, L, J, spin_multiplicity, parity",[
+    (10, 2, "ku", 1, "2s2.2p5", "2P1.5", "P", 1.5, 2, 1),
+    (10, 2, "ku", 2, "2s2.2p5", "2P0.5", "P", 0.5, 2, 1),
+    (10, 2, "chianti", 2, "2s2.2p5", "2P0.5", "P", 0.5, 2, 1),
+])
+def test_level_query(foo_session, atomic_number, ion_charge, ds_short_name, level_index,
+                         configuration, term, L, J, spin_multiplicity, parity):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    level = foo_session.query(Level).\
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == level_index)).one()
+    assert level.configuration == configuration
+    assert level.term == term
+    assert level.L == L
+    assert_almost_equal(level.J, J)
+    assert level.spin_multiplicity == spin_multiplicity
+    assert level.parity == parity
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index,"
+                         "method, expected_level_energy_value", [
+    (10, 2, "ku", 1, "m", 0),
+    (10, 2, "ku", 1, "th", 0),
+    (10, 2, "ku", 2, "m", 780.4),
+    (10, 2, "chianti", 2, "m", 780.2)  # Unit cm-1
+])
+def test_ionization_energies_query(foo_session, atomic_number, ion_charge,  ds_short_name,
+                                   level_index, method, expected_level_energy_value):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    level, level_energy_value = foo_session.query(Level,
+                                        LevelEnergy.quantity.to(u.Unit("cm-1"), equivalencies=u.spectral()).value). \
+                                filter(and_(Level.ion == ion,
+                                            Level.data_source == data_source),
+                                            Level.level_index == level_index). \
+                                join(Level.energies). \
+                                filter(and_(LevelEnergy.data_source == data_source,
+                                            LevelEnergy.method == method)).one()
+    assert_almost_equal(level_energy_value, expected_level_energy_value)
