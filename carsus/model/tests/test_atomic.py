@@ -74,7 +74,7 @@ def test_ion_as_unique(foo_session, atomic_number, ion_charge):
     ion = foo_session.query(Ion).get((atomic_number, ion_charge))
     ion2 = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
     assert ion is ion2
-    
+
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, "
                          "method, expected_ionization_energy",[
