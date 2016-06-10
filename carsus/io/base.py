@@ -3,7 +3,8 @@
 import pandas as pd
 from util import to_flat_dict
 from abc import ABCMeta, abstractmethod, abstractproperty
-
+from carsus.model import DataSource
+from sqlalchemy import select
 
 class ParserError(ValueError):
     pass
@@ -114,14 +115,18 @@ class BaseIngester(object):
 
     Attributes
     ----------
+    session: SQLAlchemy session
+
+    data_source: DataSource instance
+        The data source of the ingester
+
     parser : BaseParser instance
         Parses the downloaded data
 
     downloader : function
         Downloads the data
 
-    ds_short_name : str
-        The short name of the data source
+
 
     Methods
     -------
@@ -137,9 +142,14 @@ class BaseIngester(object):
     def requirements_satisfied(self):
         return True
 
-    def __init__(self, parser, downloader):
+    def __init__(self, session, ds_short_name, parser, downloader):
         self.parser = parser
         self.downloader = downloader
+        self.session = session
+
+        self.data_source = DataSource.as_unique(self.session, short_name=ds_short_name)
+        if self.data_source.data_source_id is None:  # To get the id if a new data source was created
+            self.session.flush()
 
         if not self.requirements_satisfied():
             raise IngesterError('Requirements for ingest are not satisfied!')
@@ -155,7 +165,3 @@ class BaseIngester(object):
     #def __call__(self, session):
     #    self.download()
     #    self.ingest(session)
-
-    @abstractproperty
-    def ds_short_name(self):  # Data source short name
-        pass
