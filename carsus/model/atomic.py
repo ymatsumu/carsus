@@ -19,7 +19,7 @@ class Atom(Base):
         return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
 
 
-class AtomQuantity(QuantityMixin, DataSourceMixin, Base):
+class AtomQuantity(QuantityMixin, Base):
     __tablename__ = "atom_quantity"
 
     atom_qty_id = Column(Integer, primary_key=True)
