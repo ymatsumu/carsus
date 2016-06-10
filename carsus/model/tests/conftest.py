@@ -3,7 +3,8 @@ import pytest
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from carsus.model import Base, Atom, DataSource, AtomWeight
+from carsus.model import Base, Atom, DataSource, AtomWeight,\
+    Ion, IonizationEnergy
 from astropy import units as u
 
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
@@ -42,7 +43,24 @@ def foo_engine():
         AtomWeight(quantity=1.00811*u.u, data_source=ku, uncert=4e-3),
     ]
 
-    session.add_all([h, ne, nist, ku])
+    # ions
+    h_o = Ion(
+        atomic_number=1,
+        ion_charge=0,
+        ionization_energies=[
+            IonizationEnergy(quantity=13.5984*u.eV, data_source=nist, method="th")
+        ])
+
+    ne_1 = Ion(
+        atomic_number=10,
+        ion_charge=1,
+        ionization_energies=[
+            IonizationEnergy(quantity=40.96296*u.eV, data_source=nist, method="th"),
+            IonizationEnergy(quantity=40.97*u.eV, data_source=nist, method="m")
+        ]
+    )
+
+    session.add_all([h, ne, h_o, ne_1, nist, ku])
     session.commit()
     session.close()
     return engine

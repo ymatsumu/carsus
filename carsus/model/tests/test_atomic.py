@@ -1,5 +1,6 @@
 import pytest
-from carsus.model import Atom, AtomWeight, DataSource
+from carsus.model import Atom, AtomWeight, DataSource,\
+    Ion, IonizationEnergy
 from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
@@ -55,3 +56,39 @@ def test_atomic_weights_convert_to(foo_session, atomic_number, ds_short_name, ex
         join(Atom.weights). \
         filter(AtomWeight.data_source == data_source).one()
     assert_almost_equal(atom_weight_value, expected_weight_value)
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, symbol",[
+    (1, 0, "H"),
+    (10, 1, "Ne")
+])
+def test_ion_query(foo_session, atomic_number, ion_charge, symbol):
+    ion = foo_session.query(Ion).get((atomic_number, ion_charge))
+    assert ion.atom.symbol == symbol
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge",[
+    (1, 0)
+])
+def test_ion_as_unique(foo_session, atomic_number, ion_charge):
+    ion = foo_session.query(Ion).get((atomic_number, ion_charge))
+    ion2 = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    assert ion is ion2
+    
+
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, "
+                         "method, expected_ionization_energy",[
+    (1, 0, "nist", "th", 13.5984*u.eV),
+    (10, 1, "nist", "th", 40.96296*u.eV),
+    (10, 1, "nist", "m", 40.97*u.eV),
+])
+def test_ionization_energies_query(foo_session, atomic_number, ion_charge, ds_short_name,
+                                   method, expected_ionization_energy):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion, ionization_energy = foo_session.query(Ion, IonizationEnergy).\
+        filter(and_(Ion.atomic_number == atomic_number,
+                    Ion.ion_charge == ion_charge)).\
+        join(Ion.ionization_energies).\
+        filter(and_(IonizationEnergy.data_source == data_source,
+                    IonizationEnergy.method == method)).one()
+    assert_quantity_allclose([ionization_energy.quantity], expected_ionization_energy)
