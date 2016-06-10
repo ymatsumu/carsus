@@ -3,7 +3,7 @@ import pytest
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from carsus.model import Base, Atom, DataSource, AtomicWeight
+from carsus.model import Base, Atom, DataSource, AtomWeight
 from astropy import units as u
 
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
@@ -29,20 +29,20 @@ def foo_engine():
     session = Session(bind=engine)
 
     # atoms
-    H = Atom(atomic_number=1, symbol='H')
-    O = Atom(atomic_number=8, symbol='O')
+    h = Atom(atomic_number=1, symbol='H')
+    ne = Atom(atomic_number=10, symbol='Ne')
 
     # data sources
     nist = DataSource(short_name='nist')
     ku = DataSource(short_name='ku')
 
     # atomic weights
-    H.quantities = [
-        AtomicWeight(quantity=1.00784*u.u, data_source=nist, std_dev=4e-3),
-        AtomicWeight(quantity=1.00811*u.u, data_source=ku, std_dev=4e-3),
+    h.weights = [
+        AtomWeight(quantity=1.00784*u.u, data_source=nist, uncert=4e-3),
+        AtomWeight(quantity=1.00811*u.u, data_source=ku, uncert=4e-3),
     ]
 
-    session.add_all([H, O, nist, ku])
+    session.add_all([h, ne, nist, ku])
     session.commit()
     session.close()
     return engine
@@ -73,11 +73,3 @@ def foo_session(foo_engine, request):
     return session
 
 
-@pytest.fixture
-def H(foo_session):
-    return foo_session.query(Atom).filter(Atom.atomic_number==1).one()
-
-
-@pytest.fixture
-def nist(foo_session):
-    return DataSource.as_unique(foo_session, short_name="nist")

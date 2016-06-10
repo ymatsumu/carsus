@@ -8,7 +8,7 @@ from .weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
     AM_VAL_COL, AM_SD_COL, INTERVAL, STABLE_MASS_NUM, ATOM_WEIGHT_COLS, AW_STABLE_MASS_NUM_COL,\
     AW_TYPE_COL, AW_VAL_COL, AW_SD_COL, AW_LWR_BND_COL, AW_UPR_BND_COL
 
-from carsus.model import AtomicWeight, Atom, DataSource
+from carsus.model import AtomWeight, AtomQuantity, Atom, DataSource
 from astropy import units as u
 import requests
 import pandas as pd
@@ -112,6 +112,7 @@ class NISTWeightsCompPyparser(BasePyparser):
         atomic_df = self.base_df[ATOM_WEIGHT_COLS].reset_index(level=MASS_NUM_COL, drop=True)
         atomic_df = atomic_df[~atomic_df.index.duplicated()]
         atomic_df = self._prepare_atomic_weights(atomic_df)
+        atomic_df = atomic_df[pd.notnull(atomic_df[AW_VAL_COL])]
         return atomic_df
 
     def prepare_isotope_dataframe(self):
@@ -125,14 +126,16 @@ class NISTWeightsCompIngester(BaseIngester):
 
     Attributes
     ----------
+    session: SQLAlchemy session
+
+    data_source: DataSource instance
+        The data source of the ingester
+
     parser : BaseParser instance
         (default value = NISTWeightsCompPyparser())
 
     downloader : function
         (default value = download_weightscomp)
-
-    ds_short_name : str
-        (default value = NIST)
 
     Methods
     -------
@@ -144,27 +147,29 @@ class NISTWeightsCompIngester(BaseIngester):
 
     """
 
-    ds_short_name = NIST
-
-    def __init__(self, parser_cls=NISTWeightsCompPyparser, downloader=download_weightscomp):
-        parser = parser_cls()
+    def __init__(self, session, ds_short_name="nist", parser=None, downloader=None):
+        if parser is None:
+            parser = NISTWeightsCompPyparser()
+        if downloader is None:
+            downloader = download_weightscomp
         super(NISTWeightsCompIngester, self).\
-            __init__(parser=parser,
-                     downloader=downloader)
+            __init__(session, ds_short_name, parser=parser, downloader=downloader)
 
     def download(self):
         data = self.downloader()
         self.parser(data)
 
-    def ingest(self, session):
+    def ingest(self):
         """ *Only* ingests atomic weights *for now* """
+
         print "Ingesting atomic weights"
         atomic_df = self.parser.prepare_atomic_dataframe()
-        atomic_df = atomic_df[pd.notnull(atomic_df[AW_VAL_COL])]
 
-        data_source = DataSource.as_unique(session, short_name=self.ds_short_name)
+        atom_weights_list = []
 
-        for atom_num, row in atomic_df.iterrows():
-            atom = session.query(Atom).filter(Atom.atomic_number==atom_num).one()
-            atom.merge_quantity(session,
-                AtomicWeight(data_source=data_source, quantity=row[AW_VAL_COL]*u.u, std_dev=row[AW_SD_COL]))
+        for atomic_number, row in atomic_df.iterrows():
+            atom_weight = AtomWeight(atomic_number=atomic_number,
+                                     data_source=self.data_source,
+                                     quantity=row[AW_VAL_COL]*u.u,
+                                     uncert=row[AW_SD_COL])
+            self.session.add(atom_weight)
