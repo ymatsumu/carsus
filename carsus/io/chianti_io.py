@@ -210,7 +210,7 @@ class ChiantiIonReader(object):
 class ChiantiIngester(object):
     """
         Class for ingesting data from the CHIANTI database
-        
+
         Attributes
         ----------
         session: SQLAlchemy session

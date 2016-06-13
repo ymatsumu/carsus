@@ -1,6 +1,6 @@
 import pytest
 from carsus.model import Atom, AtomWeight, DataSource,\
-    Ion, IonizationEnergy, Level, LevelEnergy
+    Ion, IonizationEnergy, Level, LevelEnergy, Line, ECollision
 from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
@@ -137,3 +137,65 @@ def test_ionization_energies_query(foo_session, atomic_number, ion_charge,  ds_s
                                 filter(and_(LevelEnergy.data_source == data_source,
                                             LevelEnergy.method == method)).one()
     assert_almost_equal(level_energy_value, expected_level_energy_value)
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, lower_level_index, upper_level_index,"
+                         "expected_wavelength, expected_a_value, expected_gf_value", [
+                        (10, 2, "ku", 1, 2, 155545.188*u.AA, 5.971e-03*u.Unit("s-1"), 8.792e-01),
+])
+def test_line_quantities_query(foo_session, atomic_number, ion_charge, ds_short_name,
+                               lower_level_index, upper_level_index,
+                               expected_wavelength, expected_a_value, expected_gf_value):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    lower_level = foo_session.query(Level).\
+        filter(and_(Level.data_source==data_source,
+                    Level.ion == ion,
+                    Level.level_index == lower_level_index)).one()
+    upper_level = foo_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == upper_level_index)).one()
+    line = foo_session.query(Line).\
+        filter(and_(Line.data_source == data_source,
+                    Line.lower_level == lower_level,
+                    Line.upper_level == upper_level)).one()
+
+    wavelength = line.wavelengths[0].quantity
+    a_value = line.a_values[0].quantity
+    gf_value = line.gf_values[0].quantity
+
+    assert_quantity_allclose(wavelength, expected_wavelength)
+    assert_quantity_allclose(a_value, expected_a_value)
+    assert_quantity_allclose(gf_value, expected_gf_value)
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, lower_level_index, upper_level_index,"
+                         "expected_energy, expected_temp_strengths", [
+                             (10, 2, "ku", 1, 2, 0.007108*u.rydberg, [(0.0, 0.255), (0.07394, 0.266)]),
+                         ])
+def test_e_collision_quantities_query(foo_session, atomic_number, ion_charge, ds_short_name,
+                               lower_level_index, upper_level_index,
+                               expected_energy, expected_temp_strengths):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    lower_level = foo_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == lower_level_index)).one()
+    upper_level = foo_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == upper_level_index)).one()
+    e_col = foo_session.query(ECollision). \
+        filter(and_(ECollision.data_source == data_source,
+                    ECollision.lower_level == lower_level,
+                    ECollision.upper_level == upper_level)).one()
+
+    energy = e_col.energies[0].quantity
+
+    assert_quantity_allclose(energy, expected_energy)
+
+    for temp_strength, expected_temp_strength in zip(e_col.temp_strengths_tuple, expected_temp_strengths):
+        assert_allclose(temp_strength, expected_temp_strength)
+
