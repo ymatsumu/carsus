@@ -10,7 +10,9 @@ from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.orm.exc import NoResultFound
 from carsus.io.base import IngesterError
-from carsus.model import DataSource, Ion, Level, LevelEnergy
+from carsus.model import DataSource, Ion, Level, LevelEnergy,\
+    Line,LineGFValue, LineAValue, LineWavelength, \
+    ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
 
 if os.getenv('XUVTOP'):
     masterlist_ions_path = os.path.join(
@@ -95,6 +97,8 @@ class ChiantiIonReader(object):
 
         self.ion = ch.ion(ion_name)
         self._levels_df = None
+        self._lines_df = None
+        self._collisions_df = None
 
     @property
     def levels_df(self):
@@ -243,18 +247,18 @@ class ChiantiIngester(object):
         if self.data_source.data_source_id is None:  # To get the id if a new data source was created
             self.session.flush()
 
-    def get_index2id_df(self, ion):
+    def get_lvl_index2id_df(self, ion):
         """ Return a DataFrame that maps levels indexes to ids """
 
-        q_ion_lvls = self.session.query(Level.id.label("id"),
-                                        Level.index.label("index")). \
+        q_ion_lvls = self.session.query(Level.level_id.label("id"),
+                                        Level.level_index.label("index")). \
                                   filter(and_(Level.ion == ion,
-                                              Level.data_source == self.ds))
+                                              Level.data_source == self.data_source))
 
-        index2id_df = read_sql_query(q_ion_lvls.selectable, self.session.bind,
+        lvl_index2id_df = read_sql_query(q_ion_lvls.selectable, self.session.bind,
                                        index_col="index")
 
-        return index2id_df
+        return lvl_index2id_df
 
     def ingest_levels(self):
 
@@ -277,13 +281,114 @@ class ChiantiIngester(object):
                 for column, method in [('energy', 'meas'), ('energy_theoretical', 'theor')]:
                     if row[column] != -1:  # check if the value exists
                         level.energies.append(
-                            LevelEnergy(quantity=row[column] * u.Unit("cm-1"), method=method),
+                            LevelEnergy(quantity=row[column]*u.Unit("cm-1"),
+                                        data_source=self.data_source,
+                                        method=method),
                         )
                 self.session.add(level)
+
+    def ingest_lines(self):
+
+        for rdr in self.ion_readers:
+
+            atomic_number = rdr.ion.Z
+            ion_charge = rdr.ion.Ion - 1
+
+            ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            lvl_index2id_df = self.get_lvl_index2id_df(ion)
+
+            for index, row in rdr.bound_lines_df.iterrows():
+
+                # index: (lower_level_index, upper_level_index)
+                lower_level_index, upper_level_index = index
+
+                try:
+                    lower_level_id = int(lvl_index2id_df.loc[lower_level_index])
+                    upper_level_id = int(lvl_index2id_df.loc[upper_level_index])
+                except KeyError:
+                    raise IngesterError("Levels from this source have not been found."
+                                        "You must ingest levels before transitions")
+
+                # Create a new line
+                line = Line(
+                    lower_level_id=lower_level_id,
+                    upper_level_id=upper_level_id,
+                    data_source=self.data_source,
+                    wavelengths=[
+                        LineWavelength(quantity=row["wavelength"]*u.AA,
+                                       data_source=self.data_source,
+                                       method=row["method"])
+                    ],
+                    a_values=[
+                        LineAValue(quantity=row["a_value"]*u.Unit("s**-1"),
+                                   data_source=self.data_source)
+                    ],
+                    gf_values=[
+                        LineGFValue(quantity=row["gf_value"],
+                                    data_source=self.data_source)
+                    ]
+                )
+
+                self.session.add(line)
+
+    def ingest_collisions(self):
+
+        for rdr in self.ion_readers:
+
+            atomic_number = rdr.ion.Z
+            ion_charge = rdr.ion.Ion - 1
+            ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            lvl_index2id_df = self.get_lvl_index2id_df(ion)
+
+            for index, row in rdr.bound_collisions_df.iterrows():
+
+                # index: (lower_level_index, upper_level_index)
+                lower_level_index, upper_level_index = index
+
+                try:
+                    lower_level_id = int(lvl_index2id_df.loc[lower_level_index])
+                    upper_level_id = int(lvl_index2id_df.loc[upper_level_index])
+                except KeyError:
+                    raise IngesterError("Levels from this source have not been found."
+                                        "You must ingest levels before transitions")
+
+                # Create a new electron collision
+                e_col = ECollision(
+                    lower_level_id=lower_level_id,
+                    upper_level_id=upper_level_id,
+                    data_source=self.data_source,
+                    bt92_ttype=row["ttype"],
+                    bt92_cups=row["cups"],
+                    energies=[
+                        ECollisionEnergy(quantity=row["energy"]*u.rydberg,
+                                         data_source=self.data_source)
+                    ],
+                    gf_values=[
+                        ECollisionGFValue(quantity=row["gf_value"],
+                                          data_source=self.data_source)
+                    ]
+                )
+
+                e_col.temp_strengths = [
+                    ECollisionTempStrength(temp=temp, strength=strength)
+                    for temp, strength in zip(row["temperatures"], row["collision_strengths"])
+                    ]
+
+                self.session.add(e_col)
 
 
     def ingest(self, levels=True, lines=False, collisions=False):
 
         if levels:
             self.ingest_levels()
+            self.session.flush()
 
+        if lines:
+            self.ingest_lines()
+            self.session.flush()
+
+        if collisions:
+            self.ingest_collisions()
+            self.session.flush()
