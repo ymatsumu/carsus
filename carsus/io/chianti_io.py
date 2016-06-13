@@ -33,6 +33,20 @@ class ReaderError(ValueError):
 
 
 class ChiantiIonReader(object):
+    """
+        Class for ingesters for the Ionization Energies Data from the NIST Atomic Spectra Database
+        Attributes
+        ----------
+        ion: chianti.core.ion instance
+
+        Methods
+        -------
+        levels_df()
+            Return a DataFrame with the data for ion's levels
+
+        bound_levels_df()
+            Same as `levels_df()`, but only for bound levels (with energy < ionization_potential)
+    """
 
     elvlc_dict = {
         'lvl': 'level_index',
@@ -97,6 +111,24 @@ class ChiantiIonReader(object):
 
 
 class ChiantiIngester(object):
+    """
+        Class for ingesters for CHIANTI database
+        Attributes
+        ----------
+        session: SQLAlchemy session
+
+        data_source: DataSource instance
+            The data source of the ingester
+
+        ion_readers : list of ChiantiIonReader instances
+            (default value = masterlist_ions)
+
+        Methods
+        -------
+        ingest(session)
+            Persists data into the database
+    """
+
     masterlist_ions = masterlist_ions
 
     def __init__(self, session, ions_list=masterlist_ions, ds_short_name="chianti_v8.0.2"):
