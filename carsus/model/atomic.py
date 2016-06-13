@@ -99,13 +99,13 @@ class Level(Base):
     __tablename__ = "level"
 
     level_id = Column(Integer, primary_key=True)
-    level_index = Column(Integer, nullable=False)  # Index of this level from the data source
+
     # Ion CFK
     atomic_number = Column(Integer, nullable=False)
     ion_charge = Column(Integer, nullable=False)
 
     data_source_id = Column(Integer, ForeignKey('data_source.data_source_id'), nullable=False)
-
+    level_index = Column(Integer)  # Index of this level from its data source
     configuration = Column(String(50))
     L = Column(String(2))  # total orbital angular momentum
     J = Column(Float)  # total angular momentum
@@ -118,10 +118,8 @@ class Level(Base):
     ion = relationship("Ion", back_populates="levels")
     data_source = relationship("DataSource", back_populates="levels")
 
-    __table_args__ = (UniqueConstraint('level_index', 'atomic_number', 'ion_charge', 'data_source_id'),
-                      ForeignKeyConstraint(['atomic_number', 'ion_charge'],
-                                           ['ion.atomic_number', 'ion.ion_charge'])
-                      )
+    __table_args__ = (ForeignKeyConstraint(['atomic_number', 'ion_charge'],
+                                           ['ion.atomic_number', 'ion.ion_charge']),)
 
 
 class LevelQuantity(QuantityMixin, Base):
