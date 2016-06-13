@@ -3,6 +3,7 @@ from .meta import Base, UniqueMixin, QuantityMixin, DataSourceMixin
 from sqlalchemy.orm import relationship
 from sqlalchemy import Column, Integer, String, Float, ForeignKey,\
     UniqueConstraint, ForeignKeyConstraint, and_
+from sqlalchemy.ext.associationproxy import association_proxy
 from astropy import units as u
 
 
@@ -147,6 +148,158 @@ class LevelEnergy(LevelQuantity):
     }
 
 
+class Transition(Base):
+    __tablename__ = "transition"
+
+    transition_id = Column(Integer, primary_key=True)
+    type = Column(String(50))
+
+    lower_level_id = Column(Integer, ForeignKey('level.level_id'), nullable=False)
+    upper_level_id = Column(Integer, ForeignKey('level.level_id'), nullable=False)
+    data_source_id = Column(Integer, ForeignKey('data_source.data_source_id'), nullable=False)
+
+    lower_level = relationship("Level", foreign_keys=[lower_level_id])
+    upper_level = relationship("Level", foreign_keys=[upper_level_id])
+
+    data_source = relationship("DataSource", back_populates="transitions")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'transition',
+        'polymorphic_on': type
+    }
+
+
+class Line(Transition):
+    __tablename__ = "line"
+
+    line_id = Column(Integer, ForeignKey('transition.transition_id'), primary_key=True)
+
+    wavelengths = relationship("LineWavelength", back_populates="line")
+    a_values = relationship("LineAValue", back_populates="line")
+    gf_values = relationship("LineGFValue", back_populates="line")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'line'
+    }
+
+
+class LineQuantity(QuantityMixin, Base):
+    __tablename__ = "line_quantity"
+
+    line_qty_id = Column(Integer, primary_key=True)
+    line_id = Column(Integer, ForeignKey("line.line_id"))
+    type = Column(String(20))
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'line_qty',
+        'polymorphic_on': type
+    }
+
+
+class LineWavelength(LineQuantity):
+
+    unit = u.Angstrom
+
+    line = relationship("Line", back_populates="wavelengths")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'wavelength'
+    }
+
+
+class LineAValue(LineQuantity):
+
+    unit = u.Unit("s-1")
+
+    line = relationship("Line", back_populates="a_values")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'a_value'
+    }
+
+
+class LineGFValue(LineQuantity):
+
+    unit = u.dimensionless_unscaled
+
+    line = relationship("Line", back_populates="gf_values")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'gf_value'
+    }
+
+
+class ECollision(Transition):
+    __tablename__ = "e_collision"
+
+    e_col_id = Column(Integer, ForeignKey('transition.transition_id'), primary_key=True)
+    bt92_ttype = Column(Integer)  # BT92 Transition type
+    bt92_cups = Column(Float)  # BT92 Scaling parameter
+
+    energies = relationship("ECollisionEnergy", back_populates="e_collision")
+    gf_values = relationship("ECollisionGFValue", back_populates="e_collision")
+    temp_strengths = relationship("ECollisionTempStrength", back_populates="e_collision")
+
+    temp_strengths_tuple = association_proxy("temp_strengths", "as_tuple")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'e_collision'
+    }
+
+
+class ECollisionQuantity(QuantityMixin, Base):
+    __tablename__ = "e_collision_qty"
+
+    e_col_qty_id = Column(Integer, primary_key=Transition)
+    e_col_id = Column(Integer, ForeignKey("e_collision.e_col_id"))
+    type = Column(String(20))
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'e_collision_qty',
+        'polymorphic_on': type
+    }
+
+
+class ECollisionEnergy(ECollisionQuantity):
+
+    unit = u.eV
+
+    e_collision = relationship("ECollision", back_populates="energies")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'energy'
+    }
+
+
+class ECollisionGFValue(ECollisionQuantity):
+
+    unit = u.dimensionless_unscaled
+
+    e_collision = relationship("ECollision", back_populates="gf_values")
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'gf_value'
+    }
+
+
+class ECollisionTempStrength(Base):
+    __tablename__ = "e_collision_temp_strength"
+
+    e_col_temp_strength_id = Column(Integer, primary_key=True)
+    temp = Column(Float)
+    strength = Column(Float)
+    e_col_id = Column(Integer, ForeignKey("e_collision.e_col_id"))
+
+    e_collision = relationship("ECollision", back_populates="temp_strengths")
+
+    @property
+    def as_tuple(self):
+        return self.temp, self.strength
+
+    def __repr__(self):
+        return "<Temp: {}, Strength: {}>".format(self.temp, self.strength)
+
+
 class DataSource(UniqueMixin, Base):
     __tablename__ = "data_source"
 
@@ -165,6 +318,7 @@ class DataSource(UniqueMixin, Base):
     data_source_quality = Column(Integer)
 
     levels = relationship("Level", back_populates="data_source")
+    transitions = relationship("Transition", back_populates="data_source")
 
     def __repr__(self):
         return "<Data Source: {}>".format(self.short_name)

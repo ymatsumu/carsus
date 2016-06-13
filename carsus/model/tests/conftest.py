@@ -4,7 +4,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from carsus.model import Base, Atom, DataSource, AtomWeight,\
-    Ion, IonizationEnergy, Level, LevelEnergy
+    Ion, IonizationEnergy, Level, LevelEnergy, Line, LineAValue, LineWavelength, LineGFValue,\
+    ECollision, ECollisionGFValue, ECollisionEnergy, ECollisionTempStrength
 from astropy import units as u
 
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
@@ -93,8 +94,41 @@ def foo_engine():
             LevelEnergy(quantity=780.2*u.Unit("cm-1"), data_source=ch, method="m")
         ])
 
+    # lines
+    ne2_line0_ku = Line(
+        lower_level=ne2_lvl0_ku,
+        upper_level=ne2_lvl1_ku,
+        data_source=ku,
+        wavelengths=[
+            LineWavelength(quantity=155545.188*u.AA, data_source=ch)
+        ],
+        a_values=[
+            LineAValue(quantity=5.971e-03*u.Unit("s-1"), data_source=ch)
+        ],
+        gf_values=[
+            LineGFValue(quantity=8.792e-01, data_source=ch)
+        ]
+    )
+
+    # electron collisions
+    ne2_e_col0_ku = ECollision(
+        lower_level=ne2_lvl0_ku,
+        upper_level=ne2_lvl1_ku,
+        data_source=ku,
+        bt92_ttype=2,
+        bt92_cups=11.16,
+        energies=[
+            ECollisionEnergy(quantity=0.007108*u.rydberg, data_source=ku)
+        ],
+        temp_strengths=[
+            (ECollisionTempStrength(temp=0.0, strength=0.255)),
+            (ECollisionTempStrength(temp=0.07394, strength=0.266))
+        ]
+    )
+
     session.add_all([h, ne, nist, ku, ch, h0, ne1,
-                     ne2_lvl1_ch, ne2_lvl0_ku, ne2_lvl1_ku])
+                     ne2_lvl1_ch, ne2_lvl0_ku, ne2_lvl1_ku,
+                     ne2_line0_ku, ne2_e_col0_ku])
     session.commit()
     session.close()
     return engine
