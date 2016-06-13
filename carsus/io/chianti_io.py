@@ -34,7 +34,8 @@ class ReaderError(ValueError):
 
 class ChiantiIonReader(object):
     """
-        Class for ingesters for the Ionization Energies Data from the NIST Atomic Spectra Database
+        Class for reading ion data from the CHIANTI database
+
         Attributes
         ----------
         ion: chianti.core.ion instance
@@ -208,7 +209,8 @@ class ChiantiIonReader(object):
 
 class ChiantiIngester(object):
     """
-        Class for ingesters for CHIANTI database
+        Class for ingesting data from the CHIANTI database
+        
         Attributes
         ----------
         session: SQLAlchemy session
