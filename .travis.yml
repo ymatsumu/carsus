@@ -50,8 +50,7 @@ before_install:
     # install the CHIANTI database
     - mkdir $HOME/chianti
     - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
-    - gunzip $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
-    - tar -xvf $HOME/chianti/CHIANTI_8.0.2_data.tar
+    - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
     - export XUVTOP=$HOME/chianti
     - hash -r
     - conda update --yes conda
