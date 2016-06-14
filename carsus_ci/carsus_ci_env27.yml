@@ -13,6 +13,7 @@ dependencies:
 - SQLAlchemy=1.0.9
 - beautifulsoup4=4.4.0
 - html5lib
+- chiantipy
 
 # RTD requirements
 - sphinx=1.4.1
