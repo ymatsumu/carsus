@@ -34,6 +34,10 @@ matrix:
         - python: 2.7
           env: SETUP_CMD='test --remote-data'
 
+        # Test with slow tests
+        - python: 2.7
+          env: SETUP_CMD='test --runslow'
+
         # Do a coverage test in Python 2.
         - python: 2.7
           env: SETUP_CMD='test --coverage'
