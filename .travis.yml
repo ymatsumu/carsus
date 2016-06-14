@@ -66,7 +66,7 @@ install:
 
 script:
     - echo CC=$COMPILER python setup.py $SETUP_CMD
-    - if [[ $SETUP_CMD == 'test --args="--runslow"' ]]; then travis_wait mvn CC=$COMPILER python setup.py $SETUP_CMD; else CC=$COMPILER python setup.py $SETUP_CMD fi
+    - travis_wait mvn CC=$COMPILER python setup.py $SETUP_CMD
 
 after_success:
     - if [[ $SETUP_CMD == 'test --coverage' ]]; then coveralls; fi
