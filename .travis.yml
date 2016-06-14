@@ -21,6 +21,7 @@ env:
         - ASTROPY_USE_SYSTEM_PYTEST=1
         - SETUP_CMD='test'
         - MINICONDA_URL='http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh'
+        - CHIANTI_DATA_URL='http://www.chiantidatabase.org/download/CHIANTI_8.0.2_data.tar.gz'
 
 
 matrix:
@@ -46,6 +47,12 @@ before_install:
     - chmod +x miniconda.sh
     - bash miniconda.sh -b -p $HOME/miniconda
     - export PATH=$HOME/miniconda/bin:$PATH
+    # install the CHIANTI database
+    - mkdir $HOME/chianti/
+    - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
+    - gunzip $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
+    - tar -xvf $HOME/chianti/CHIANTI_8.0.2_data.tar
+    - export XUVTOP=HOME/chianti
     - hash -r
     - conda update --yes conda
 
