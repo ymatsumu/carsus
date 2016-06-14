@@ -36,7 +36,7 @@ matrix:
 
         # Test with slow tests
         - python: 2.7
-          env: SETUP_CMD='test --runslow'
+          env: SETUP_CMD='test --args="--runslow"'
 
         # Do a coverage test in Python 2.
         - python: 2.7
