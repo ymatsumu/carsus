@@ -66,7 +66,7 @@ install:
 
 script:
     - echo CC=$COMPILER python setup.py $SETUP_CMD
-    - travis_wait mvn CC=$COMPILER python setup.py $SETUP_CMD
+    - CC=$COMPILER python setup.py $SETUP_CMD
 
 after_success:
     - if [[ $SETUP_CMD == 'test --coverage' ]]; then coveralls; fi
