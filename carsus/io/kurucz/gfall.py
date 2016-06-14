@@ -4,9 +4,12 @@ import numpy as np
 import pandas as pd
 
 from astropy import units as u
+from pandas import read_sql_query
 from sqlalchemy import and_
 from sqlalchemy.orm.exc import NoResultFound
-from carsus.model import Atom, DataSource, Ion, Level, LevelEnergy
+from carsus.model import Atom, DataSource, Ion, Level, LevelEnergy,\
+    Line, LineWavelength, LineGFValue
+from carsus.io.base import IngesterError
 
 class GFALLReader(object):
     """
@@ -240,6 +243,7 @@ class GFALLReader(object):
             selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
 
         levels_df_idx = levels_df.reset_index()
+        levels_df_idx["level_index"] = levels_df_idx["level_index"].astype(int)  # convert to int
         levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
 
         lines = gfall_df[selected_columns].copy()
@@ -284,7 +288,21 @@ class GFALLIngester(object):
         self.session = session
         self.gfall_reader = GFALLReader(fname)
         self.data_source = DataSource.as_unique(self.session, short_name=ds_short_name)
+        if self.data_source.data_source_id is None:  # To get the id if a new data source was created
+            self.session.flush()
 
+    def get_lvl_index2id_df(self, ion):
+        """ Return a DataFrame that maps levels indexes to ids """
+
+        q_ion_lvls = self.session.query(Level.level_id.label("id"),
+                                        Level.level_index.label("index")). \
+            filter(and_(Level.ion == ion,
+                        Level.data_source == self.data_source))
+
+        lvl_index2id_df = read_sql_query(q_ion_lvls.selectable, self.session.bind,
+                                         index_col="index")
+
+        return lvl_index2id_df
 
     def ingest_levels(self, levels_df=None):
 
@@ -294,3 +312,74 @@ class GFALLIngester(object):
         for ion_index, ion_df in levels_df.groupby(level=["atomic_number", "ion_charge"]):
 
             atomic_number, ion_charge = ion_index
+            ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            for index, row in ion_df.iterrows():
+
+                level_index = index[2]  # index: (atomic_number, ion_charge, level_index)
+
+                ion.levels.append(
+                    Level(level_index=level_index,
+                          data_source=self.data_source,
+                          configuration=row["configuration"],
+                          term=row["term"],
+                          J=row["j"],
+                          energies=[
+                              LevelEnergy(quantity=row["energy"]*u.Unit("cm-1"),
+                                          method=row["method"],
+                                          data_source=self.data_source)
+                          ])
+                )
+
+    def ingest_lines(self, lines_df=None):
+
+        if lines_df is None:
+            lines_df = self.gfall_reader.lines_df
+
+        for ion_index, ion_df in lines_df.groupby(level=["atomic_number", "ion_charge"]):
+
+            atomic_number, ion_charge = ion_index
+            ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            lvl_index2id_df = self.get_lvl_index2id_df(ion)
+
+            for index, row in ion_df.iterrows():
+
+                # index: (atomic_number, ion_charge, lower_level_index, upper_level_index)
+                lower_level_index, upper_level_index = index[2:]
+
+                try:
+                    lower_level_id = int(lvl_index2id_df.loc[lower_level_index])
+                    upper_level_id = int(lvl_index2id_df.loc[upper_level_index])
+                except KeyError:
+                    raise IngesterError("Levels from this source have not been found."
+                                        "You must ingest levels before transitions")
+
+                # Create a new line
+                line = Line(
+                    lower_level_id=lower_level_id,
+                    upper_level_id=upper_level_id,
+                    data_source=self.data_source,
+                    wavelengths=[
+                        LineWavelength(quantity=row["wavelength"] * u.AA,
+                                       data_source=self.data_source)
+                    ],
+                    gf_values=[
+                        LineGFValue(quantity=row["gf"],
+                                    data_source=self.data_source)
+                    ]
+                )
+
+                self.session.add(line)
+
+    def ingest(self, levels=True, lines=True):
+
+        if levels:
+            self.ingest_levels()
+            self.session.flush()
+
+        if lines:
+            self.ingest_lines()
+            self.session.flush()
+
+
