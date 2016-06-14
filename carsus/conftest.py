@@ -3,6 +3,10 @@
 # no matter how it is invoked within the source tree.
 
 from astropy.tests.pytest_plugins import *
+from astropy.tests.pytest_plugins import (
+        pytest_addoption as _pytest_add_option
+    )
+
 from carsus import init_db
 from sqlalchemy.orm import Session
 
@@ -33,6 +37,11 @@ from sqlalchemy.orm import Session
 #     TESTED_VERSIONS[packagename] = version.version
 # except NameError:   # Needed to support Astropy <= 1.0.0
 #     pass
+
+def pytest_addoption(parser):
+    _pytest_add_option(parser)
+    parser.addoption("--runslow", action="store_true",
+                     help="include running slow tests during run")
 
 data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
 if not os.path.exists(data_dir):
