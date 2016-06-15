@@ -98,6 +98,10 @@ class NISTIonizationEnergiesParser(BaseParser):
                       'ionization_energy_method']] = ioniz_energies_df.apply(parse_ioniz_energy_str, axis=1)
         ioniz_energies_df.drop('ionization_energy_str', axis=1, inplace=True)
         ioniz_energies_df.set_index(['atomic_number', 'ion_charge'], inplace=True)
+
+        # discard null values
+        ioniz_energies_df = ioniz_energies_df[pd.notnull(ioniz_energies_df["ionization_energy_value"])]
+
         return ioniz_energies_df
 
 
