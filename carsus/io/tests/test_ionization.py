@@ -78,6 +78,10 @@ def expected_series(request):
     return pd.Series(data=data, name=name, index=index)
 
 
+def test_prepare_ioniz_energies_df_null_values(ioniz_energies_df):
+    assert all(pd.notnull(ioniz_energies_df["ionization_energy_value"]))
+
+
 def test_prepare_ioniz_energies_df(ioniz_energies_df, expected_series):
     series = ioniz_energies_df[expected_series.name]
     assert_series_equal(series, expected_series)
@@ -102,5 +106,5 @@ def test_ingest_test_data(index, value, uncert, test_session, ioniz_energies_ing
 @pytest.mark.remote_data
 def test_ingest_nist_asd_ion_data(test_session):
     ingester = NISTIonizationEnergiesIngester(test_session)
-    ingester.download('h-ne')
+    ingester.download('h-uuh')
     ingester.ingest()
