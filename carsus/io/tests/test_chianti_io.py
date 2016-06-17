@@ -22,6 +22,20 @@ def ch_ingester(test_session):
     return ingester
 
 
+@pytest.mark.parametrize("ion_name", ["ne_2", "n_5"])
+def test_chianti_bound_levels_df(ion_name):
+    ion_rdr = ChiantiIonReader(ion_name)
+    bound_levels_df = ion_rdr.bound_levels_df.reset_index()
+    assert bound_levels_df["level_index"].max() <= ion_rdr.last_bound_level
+
+
+@pytest.mark.parametrize("ion_name", ["ne_2", "n_5"])
+def test_chianti_bound_lines_df(ion_name):
+    ion_rdr = ChiantiIonReader(ion_name)
+    bound_lines_df = ion_rdr.bound_lines_df.reset_index()
+    assert bound_lines_df["upper_level_index"].max() <= ion_rdr.last_bound_level
+
+
 @pytest.mark.parametrize("level_index, energy, energy_theoretical",[
     (1, 0, 0),
     (21, 252953.5, 252954),
