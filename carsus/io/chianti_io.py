@@ -104,19 +104,19 @@ class ChiantiIonReader(object):
     def levels_df(self):
         if self._levels_df is None:
             self._read_levels()
-        return self._levels_df
+        return self._levels_df.copy()
 
     @property
     def lines_df(self):
         if self._lines_df is None:
             self._read_lines()
-        return self._lines_df
+        return self._lines_df.copy()
 
     @property
     def collisions_df(self):
         if self._collisions_df is None:
             self._read_collisions()
-        return self._collisions_df
+        return self._collisions_df.copy()
 
     @property
     def last_bound_level(self):
@@ -128,13 +128,27 @@ class ChiantiIonReader(object):
     def bound_levels_df(self):
         return self.levels_df.loc[:self.last_bound_level]
 
+    def filter_bound_transitions(self, transition_df):
+        """ Filter transitions DataFrames on bound levels.
+
+            The most succinct and accurate way to do this is to use slicing on multi index,
+            but due to some bug in pandas out-of-range rows are included in the resulting DataFrame.
+        """
+        transition_df.reset_index(inplace=True)
+        transition_df = transition_df.loc[transition_df["upper_level_index"] <= self.last_bound_level]
+        transition_df.set_index(["lower_level_index", "upper_level_index"], inplace=True)
+        transition_df.sort_index(inplace=True)
+        return transition_df
+
     @property
     def bound_lines_df(self):
-        return self.lines_df.loc[(slice(None), slice(1, self.last_bound_level)), :]
+        bound_lines_df = self.filter_bound_transitions(self.lines_df)
+        return bound_lines_df
 
     @property
     def bound_collisions_df(self):
-        return self.collisions_df.loc[(slice(None), slice(1, self.last_bound_level)), :]
+        bound_collision_df = self.filter_bound_transitions(self.collisions_df)
+        return bound_collision_df
 
     def _read_levels(self):
 
@@ -165,7 +179,6 @@ class ChiantiIonReader(object):
         self._levels_df.set_index("level_index", inplace=True)
         self._levels_df.sort_index(inplace=True)
 
-
     def _read_lines(self):
         if not hasattr(self.ion, 'Wgfa'):
             raise ReaderError("No lines data is available for ion {}".format(self.ion.Spectroscopic))
@@ -194,7 +207,6 @@ class ChiantiIonReader(object):
 
         self._lines_df.set_index(["lower_level_index", "upper_level_index"], inplace=True)
         self._lines_df.sort_index(inplace=True)
-
 
     def _read_collisions(self):
         if not hasattr(self.ion, 'Scups'):
