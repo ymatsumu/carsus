@@ -168,6 +168,7 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
     levels_df.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
     levels_df["level_number"] = levels_df.groupby(['atomic_number', 'ion_number'])['energy']. \
         transform(lambda x: np.arange(len(x))).values
+    levels_df["level_number"] = levels_df["level_number"].astype(np.int)
 
     # Create metastable flags
     # ToDO: It is assumed that all lines are ingested. That may not always be the case
