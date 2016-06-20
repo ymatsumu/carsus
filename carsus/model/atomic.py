@@ -3,7 +3,7 @@ from .meta import Base, UniqueMixin, QuantityMixin, DataSourceMixin
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import Column, Integer, String, Float, ForeignKey,\
-    UniqueConstraint, ForeignKeyConstraint, and_
+    UniqueConstraint, ForeignKeyConstraint, and_, cast
 from sqlalchemy.ext.associationproxy import association_proxy
 from astropy import units as u
 
@@ -124,6 +124,14 @@ class Level(Base):
     energies = relationship("LevelEnergy", back_populates="level")
     ion = relationship("Ion", back_populates="levels")
     data_source = relationship("DataSource", back_populates="levels")
+
+    @hybrid_property
+    def g(self):
+        return int(2 * self.J + 1)
+
+    @g.expression
+    def g(cls):
+        return cast(2 * cls.J + 1, Integer)
 
     __table_args__ = (ForeignKeyConstraint(['atomic_number', 'ion_charge'],
                                            ['ion.atomic_number', 'ion.ion_charge']),)
