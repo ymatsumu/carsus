@@ -69,6 +69,11 @@ def test_db_path(data_dir):
 
 
 @pytest.fixture(scope="session")
+def test_db_url(test_db_path):
+    return "sqlite:///" + test_db_path
+
+
+@pytest.fixture(scope="session")
 def gfall_fname():
     return os.path.join(os.path.dirname(__file__), 'data', 'gftest.all')  # Be III, B IV, N VI
 
