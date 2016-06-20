@@ -74,8 +74,8 @@ def test_db_url(test_db_path):
 
 
 @pytest.fixture(scope="session")
-def gfall_fname():
-    return os.path.join(os.path.dirname(__file__), 'data', 'gftest.all')  # Be III, B IV, N VI
+def gfall_fname(data_dir):
+    return os.path.join(data_dir, 'gftest.all')  # Be III, B IV, N VI
 
 
 @pytest.mark.remote_data
