@@ -39,8 +39,8 @@ def lines_df(gfall_rdr):
 
 
 @pytest.fixture()
-def gfall_ingester(test_session, gfall_fname):
-    return GFALLIngester(test_session, gfall_fname)
+def gfall_ingester(memory_session, gfall_fname):
+    return GFALLIngester(memory_session, gfall_fname)
 
 
 @pytest.mark.parametrize("index, wavelength, element_code, e_first, e_second",[

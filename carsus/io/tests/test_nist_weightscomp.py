@@ -77,8 +77,8 @@ def expected_df():
 
 
 @pytest.fixture
-def weightscomp_ingester(test_session):
-    ingester = NISTWeightsCompIngester(test_session)
+def weightscomp_ingester(memory_session):
+    ingester = NISTWeightsCompIngester(memory_session)
     ingester.parser(test_input)
     return ingester
 
@@ -96,9 +96,9 @@ def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
 
 
 @pytest.mark.parametrize("atomic_number, value, uncert", expected_tuples)
-def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, value, uncert, weightscomp_ingester, test_session):
+def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, value, uncert, weightscomp_ingester, memory_session):
     weightscomp_ingester.ingest()
-    atom_weight = test_session.query(AtomWeight).\
+    atom_weight = memory_session.query(AtomWeight).\
         filter(AtomWeight.atomic_number==atomic_number).\
         filter(AtomWeight.data_source==weightscomp_ingester.data_source).one()
     assert_almost_equal(atom_weight.quantity.value, value)
@@ -106,8 +106,8 @@ def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, value, unc
 
 
 @pytest.mark.remote_data
-def test_weightscomp_ingest_default_count(weightscomp_ingester, test_session):
+def test_weightscomp_ingest_default_count(weightscomp_ingester, memory_session):
     weightscomp_ingester.download()
     weightscomp_ingester.ingest()
-    assert test_session.query(AtomWeight).\
+    assert memory_session.query(AtomWeight).\
                filter(AtomWeight.data_source==weightscomp_ingester.data_source).count() == 94

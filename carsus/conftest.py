@@ -50,6 +50,13 @@ if not os.path.exists(data_dir):
 test_db_url = 'sqlite:///' + os.path.join(data_dir, 'test.db')
 
 
+@pytest.fixture
+def memory_session():
+    session = init_db(url="sqlite://")
+    session.commit()
+    return session
+
+
 @pytest.fixture(scope="session")
 def test_engine():
     session = init_db(url=test_db_url)
