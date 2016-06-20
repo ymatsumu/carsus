@@ -55,8 +55,8 @@ def memory_session():
     return session
 
 
-@pytest.fixture
-def data_dir(scope="session"):
+@pytest.fixture(scope="session")
+def data_dir():
     data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
