@@ -104,7 +104,7 @@ def test_engine(test_db_path, test_db_url):
         session.commit()
 
         # Ingest chianti levels and lines
-        chianti_ingester = ChiantiIngester(session, ions_list=["he_2", "n_5"])
+        chianti_ingester = ChiantiIngester(session, ions_list=["he_2", "n_6"])
         chianti_ingester.ingest(levels=True, lines=True)
         session.commit()
 
