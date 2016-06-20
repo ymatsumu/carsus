@@ -8,6 +8,10 @@ from astropy.tests.pytest_plugins import (
     )
 
 from carsus import init_db
+from carsus.io.nist import NISTWeightsCompIngester, NISTIonizationEnergiesIngester
+from carsus.io.kurucz import GFALLIngester
+from carsus.io.chianti_io import ChiantiIngester
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 ## exceptions
@@ -43,12 +47,6 @@ def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true",
                      help="include running slow tests during run")
 
-data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
-if not os.path.exists(data_dir):
-    os.makedirs(data_dir)
-
-test_db_url = 'sqlite:///' + os.path.join(data_dir, 'test.db')
-
 
 @pytest.fixture
 def memory_session():
@@ -57,12 +55,36 @@ def memory_session():
     return session
 
 
+@pytest.fixture
+def data_dir():
+    data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    return data_dir
+
+
+@pytest.fixture
+def test_db_path(data_dir):
+    return os.path.join(data_dir, 'test.db')
+
+
+@pytest.fixture
+def test_db_url(test_db_path):
+    return 'sqlite:///' + test_db_path
+
+
 @pytest.fixture(scope="session")
-def test_engine():
-    session = init_db(url=test_db_url)
-    session.commit()
-    session.close()
-    return session.get_bind()
+def test_engine(test_db_path, test_db_url):
+    if os.path.isfile(test_db_path):
+        engine = create_engine(test_db_url)
+    else:
+        session = init_db(url=test_db_url)
+        session.commit()
+
+        session.close()
+        session.get_bind()
+
+
 
 
 @pytest.fixture
