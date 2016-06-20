@@ -73,6 +73,7 @@ def gfall_fname():
     return os.path.join(os.path.dirname(__file__), 'data', 'gftest.all')  # Be III, B IV, N VI
 
 
+@pytest.mark.remote_data
 @pytest.fixture(scope="session")
 def test_engine(test_db_path, test_db_url):
 
