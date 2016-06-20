@@ -80,7 +80,7 @@ def gfall_fname(data_dir):
 
 @pytest.mark.remote_data
 @pytest.fixture(scope="session")
-def test_engine(test_db_path, test_db_url):
+def test_engine(test_db_path, test_db_url, gfall_fname):
 
     # If the database for testing exists then just create an engine
     if os.path.isfile(test_db_path):
