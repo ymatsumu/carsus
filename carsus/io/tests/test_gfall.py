@@ -10,11 +10,6 @@ from astropy import units as u
 
 
 @pytest.fixture()
-def gfall_fname():
-    return os.path.join(os.path.dirname(__file__), 'data', 'gftest.all')
-
-
-@pytest.fixture()
 def gfall_rdr(gfall_fname):
     return GFALLReader(gfall_fname)
 
@@ -39,8 +34,8 @@ def lines_df(gfall_rdr):
 
 
 @pytest.fixture()
-def gfall_ingester(test_session, gfall_fname):
-    return GFALLIngester(test_session, gfall_fname)
+def gfall_ingester(memory_session, gfall_fname):
+    return GFALLIngester(memory_session, gfall_fname)
 
 
 @pytest.mark.parametrize("index, wavelength, element_code, e_first, e_second",[
@@ -105,12 +100,12 @@ def test_gfall_reader_lines_df(lines_df, atomic_number, ion_charge,
     (4, 2, 11, 1128300.0*u.Unit("cm-1"), 2.0, "meas", "s3p", "*3P"),
     (7, 5, 7, 4006160.0*u.Unit("cm-1"), 0.0, "theor", "s3p", "*3P")
 ])
-def test_gfall_ingester_ingest_levels(test_session, gfall_ingester, atomic_number, ion_charge, level_index,
+def test_gfall_ingester_ingest_levels(memory_session, gfall_ingester, atomic_number, ion_charge, level_index,
                                 exp_energy, exp_j, exp_method, exp_configuration, exp_term):
     gfall_ingester.ingest(levels=True, lines=False)
-    ion = Ion.as_unique(test_session, atomic_number=atomic_number, ion_charge=ion_charge)
-    data_source = DataSource.as_unique(test_session, short_name="ku_latest")
-    level, energy = test_session.query(Level, LevelEnergy).\
+    ion = Ion.as_unique(memory_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    data_source = DataSource.as_unique(memory_session, short_name="ku_latest")
+    level, energy = memory_session.query(Level, LevelEnergy).\
         filter(and_(Level.ion==ion,
                     Level.level_index==level_index),
                     Level.data_source==data_source).\
@@ -127,20 +122,20 @@ def test_gfall_ingester_ingest_levels(test_session, gfall_ingester, atomic_numbe
     (4, 2, 0, 16, 8.8309*u.AA, 0.12705741),
     (4, 2, 6, 15, 74.6230*u.AA, 2.1330449131)
 ])
-def test_gfall_ingester_ingest_lines(test_session, gfall_ingester, atomic_number, ion_charge,
+def test_gfall_ingester_ingest_lines(memory_session, gfall_ingester, atomic_number, ion_charge,
                                      level_index_lower, level_index_upper, exp_wavelength, exp_gf_value):
     gfall_ingester.ingest(levels=True, lines=True)
-    ion = Ion.as_unique(test_session, atomic_number=atomic_number, ion_charge=ion_charge)
-    data_source = DataSource.as_unique(test_session, short_name="ku_latest")
-    lower_level = test_session.query(Level).\
+    ion = Ion.as_unique(memory_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    data_source = DataSource.as_unique(memory_session, short_name="ku_latest")
+    lower_level = memory_session.query(Level).\
         filter(and_(Level.data_source==data_source,
                     Level.ion==ion,
                     Level.level_index==level_index_lower)).one()
-    upper_level = test_session.query(Level). \
+    upper_level = memory_session.query(Level). \
         filter(and_(Level.data_source == data_source,
                     Level.ion == ion,
                     Level.level_index == level_index_upper)).one()
-    line = test_session.query(Line).\
+    line = memory_session.query(Line).\
         filter(and_(Line.data_source==data_source,
                     Line.lower_level==lower_level,
                     Line.upper_level==upper_level)).one()

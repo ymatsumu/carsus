@@ -63,8 +63,8 @@ def ioniz_energies_df(ioniz_energies_parser):
 
 
 @pytest.fixture
-def ioniz_energies_ingester(test_session):
-    ingester = NISTIonizationEnergiesIngester(test_session)
+def ioniz_energies_ingester(memory_session):
+    ingester = NISTIonizationEnergiesIngester(memory_session)
     ingester.parser(test_data)
     return ingester
 
@@ -91,12 +91,12 @@ def test_prepare_ioniz_energies_df(ioniz_energies_df, expected_series):
                          zip(expected_indices,
                              expected_ioniz_energy_value[1],
                              expected_ioniz_energy_uncert[1]))
-def test_ingest_test_data(index, value, uncert, test_session, ioniz_energies_ingester):
+def test_ingest_test_data(index, value, uncert, memory_session, ioniz_energies_ingester):
 
     ioniz_energies_ingester.ingest()
 
     atomic_number, ion_charge = index
-    ion = test_session.query(Ion).options(joinedload('ionization_energies')).get((atomic_number, ion_charge))
+    ion = memory_session.query(Ion).options(joinedload('ionization_energies')).get((atomic_number, ion_charge))
 
     ion_energy = ion.ionization_energies[0]
     assert_almost_equal(ion_energy.quantity.value, value)
@@ -104,7 +104,7 @@ def test_ingest_test_data(index, value, uncert, test_session, ioniz_energies_ing
 
 
 @pytest.mark.remote_data
-def test_ingest_nist_asd_ion_data(test_session):
-    ingester = NISTIonizationEnergiesIngester(test_session)
+def test_ingest_nist_asd_ion_data(memory_session):
+    ingester = NISTIonizationEnergiesIngester(memory_session)
     ingester.download('h-uuh')
     ingester.ingest()

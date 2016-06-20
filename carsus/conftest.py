@@ -8,6 +8,10 @@ from astropy.tests.pytest_plugins import (
     )
 
 from carsus import init_db
+from carsus.io.nist import NISTWeightsCompIngester, NISTIonizationEnergiesIngester
+from carsus.io.kurucz import GFALLIngester
+from carsus.io.chianti_io import ChiantiIngester
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 ## exceptions
@@ -43,19 +47,76 @@ def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true",
                      help="include running slow tests during run")
 
-data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
-if not os.path.exists(data_dir):
-    os.makedirs(data_dir)
 
-test_db_url = 'sqlite:///' + os.path.join(data_dir, 'test.db')
+@pytest.fixture
+def memory_session():
+    session = init_db(url="sqlite://")
+    session.commit()
+    return session
 
 
 @pytest.fixture(scope="session")
-def test_engine():
-    session = init_db(url=test_db_url)
-    session.commit()
-    session.close()
-    return session.get_bind()
+def data_dir():
+    data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    return data_dir
+
+
+@pytest.fixture(scope="session")
+def test_db_path(data_dir):
+    return os.path.join(data_dir, 'test.db')
+
+
+@pytest.fixture(scope="session")
+def test_db_url(test_db_path):
+    return "sqlite:///" + test_db_path
+
+
+@pytest.fixture(scope="session")
+def gfall_fname(data_dir):
+    return os.path.join(data_dir, 'gftest.all')  # Be III, B IV, N VI
+
+
+@pytest.mark.remote_data
+@pytest.fixture(scope="session")
+def test_engine(test_db_path, test_db_url):
+
+    # If the database for testing exists then just create an engine
+    if os.path.isfile(test_db_path):
+        engine = create_engine(test_db_url)
+
+    # Else create the database
+    else:
+        session = init_db(url=test_db_url)
+        session.commit()
+
+        # Ingest atomic weights
+        weightscomp_ingester = NISTWeightsCompIngester(session)
+        weightscomp_ingester.download()
+        weightscomp_ingester.ingest()
+        session.commit()
+
+        # Ingest ionization energies
+        ioniz_energies_ingester = NISTIonizationEnergiesIngester(session)
+        ioniz_energies_ingester.download()
+        ioniz_energies_ingester.ingest()
+        session.commit()
+
+        # Ingest kurucz levels and lines
+        gfall_ingester = GFALLIngester(session, gfall_fname)
+        gfall_ingester.ingest(levels=True, lines=True)
+        session.commit()
+
+        # Ingest chianti levels and lines
+        chianti_ingester = ChiantiIngester(session, ions_list=["he_2", "n_6"])
+        chianti_ingester.ingest(levels=True, lines=True)
+        session.commit()
+
+        session.close()
+        engine = session.get_bind()
+
+    return engine
 
 
 @pytest.fixture
