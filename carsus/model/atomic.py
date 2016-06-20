@@ -1,6 +1,7 @@
 from .meta import Base, UniqueMixin, QuantityMixin, DataSourceMixin
 
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import Column, Integer, String, Float, ForeignKey,\
     UniqueConstraint, ForeignKeyConstraint, and_
 from sqlalchemy.ext.associationproxy import association_proxy
@@ -65,6 +66,11 @@ class Ion(UniqueMixin, Base):
                                        back_populates='ion')
     levels = relationship("Level", back_populates="ion")
     atom = relationship("Atom", back_populates='ions')
+
+    @hybrid_property
+    def ion_number(self):
+        """ Ion number in spectroscopic notation"""
+        return self.ion_charge + 1
 
     def __repr__(self):
         return "<Ion Z={0} +{1}>".format(self.atomic_number, self.ion_charge)
