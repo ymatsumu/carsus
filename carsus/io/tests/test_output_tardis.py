@@ -5,6 +5,7 @@ from numpy.testing import assert_almost_equal
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
 
+
 @pytest.fixture
 def basic_atom_data(test_session):
     return BasicAtomData(test_session)
@@ -49,15 +50,6 @@ def test_create_basic_atom_data_max_atomic_number(test_session):
     basic_atom_df = basic_atom_data.basic_atom_df
     basic_atom_df.reset_index(inplace=True)
     assert basic_atom_df["atomic_number"].max() == 15
-
-
-@pytest.mark.parametrize("atomic_number, ion_number, exp_ioniz_energy", [
-    (8, 6, 138.1189),
-    (11, 1,  5.1390767)
-])
-def test_ion_data(ionization_df, atomic_number, ion_number, exp_ioniz_energy):
-    assert_almost_equal(ionization_df.loc[(atomic_number, ion_number)]["ionization_energy"],
-                        exp_ioniz_energy)
 
 
 @pytest.mark.parametrize("atomic_number, ion_number, exp_ioniz_energy", [
