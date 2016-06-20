@@ -10,11 +10,6 @@ from astropy import units as u
 
 
 @pytest.fixture()
-def gfall_fname():
-    return os.path.join(os.path.dirname(__file__), 'data', 'gftest.all')
-
-
-@pytest.fixture()
 def gfall_rdr(gfall_fname):
     return GFALLReader(gfall_fname)
 
