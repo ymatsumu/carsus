@@ -173,7 +173,6 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
     # Create metastable flags
     # ToDO: It is assumed that all lines are ingested. That may not always be the case
 
-
     levels_subq = session.query(Level).\
         filter(Level.level_id.in_(levels_df.index.values)).subquery()
     metastable_q = session.query(Line).\
@@ -207,125 +206,8 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
     levels_df = levels_df.join(metastable_flags)
     levels_df["metastable"] = levels_df["metastable"].isnull()
 
+    levels_df.reset_index(inplace=True)
     levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
     return levels_df
 
-
-class BaseData(object):
-    """
-        Base class for creating DataFrames with atomic data.
-
-        Parameters
-        -----------
-        session : SQLAlchemy session
-
-        Attributes
-        -----------
-        session : SQLAlchemy session=
-        config : dict
-            The configuration parameters
-
-    """
-    __metaclass__ = ABCMeta
-
-    def __init__(self, session, **kwargs):
-        self.session = session
-        self.config = kwargs
-
-
-class BasicAtomData(BaseData):
-    """
-        Class for creating DataFrames with basic atomic data.
-
-        Parameters
-        -----------
-        session : SQLAlchemy session
-        max_atomic_number : int
-            The maximum atomic number to be stored in basic_atom_df
-
-        Attributes
-        -----------
-        session : SQLAlchemy session
-        config : dict
-            The configuration parameters
-        basic_atom_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, symbol, name, weight[u]
-    """
-    def __init__(self, session, max_atomic_number=30):
-        self._basic_atom_df = None
-        super(BasicAtomData, self).__init__(session, max_atomic_number=max_atomic_number)
-
-    @property
-    def basic_atom_df(self):
-        if self._basic_atom_df is None:
-            self._basic_atom_df = create_basic_atom_df(self.session, **self.config)
-        return self._basic_atom_df
-
-
-class IonData(BaseData):
-    """
-        Class for creating DataFrames with ion data
-
-        Parameters
-        -----------
-        session : SQLAlchemy session
-
-        Attributes
-        -----------
-        session : SQLAlchemy session
-        config : dict
-            The configuration parameters
-        ionization_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, ion_number, ionization_energy[eV]
-    """
-    def __init__(self, session):
-        self._ionization_df = None
-        super(IonData, self).__init__(session)
-
-    @property
-    def ionization_df(self):
-        if self._ionization_df is None:
-            self._ionization_df = create_ionization_df(self.session, **self.config)
-        return self._ionization_df
-
-
-class LevelData(BaseData):
-    """
-        Class for creating DataFrames with level data
-
-        Parameters
-        -----------
-        session : SQLAlchemy session
-        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
-            The levels data for these ions will be taken from the CHIANTI database
-            (default: None)
-        chianti_short_name: str
-            The short name of the CHIANTI database, is set to None the latest version will be used
-            (default: None)
-        kurucz_short_name: str
-            The short name of the Kurucz database, is set to None the latest version will be used
-            (default: None)
-        metastable_loggf_threshold: int
-            log(gf) threshold for flagging levels that are connected by lines metastable
-            (default: -3)
-
-        Attributes
-        -----------
-        session : SQLAlchemy session
-        config : dict
-            The configuration parameters
-        levels_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
-    """
-    def __init__(self, session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
-                 metastable_loggf_threshold=-3):
-        self._levels_df = None
-        super(LevelData, self).__init__(session, chianti_species=chianti_species, chianti_short_name=chianti_short_name,
-            kurucz_short_name=kurucz_short_name, metastable_loggf_threshold=metastable_loggf_threshold)
-
-    @property
-    def levels_df(self):
-        if self._levels_df is None:
-            self._levels_df = create_levels_df(self.session, **self.config)
-        return self._levels_df
