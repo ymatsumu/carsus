@@ -73,7 +73,7 @@ def create_ionization_df(session):
 
 
 def create_levels_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
-                     metastable_loggf_threshold=-3):
+                     create_metastable_flags=True, metastable_loggf_threshold=-3):
     """
         Create a DataFrame with levels data.
         Parameters
@@ -88,8 +88,11 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
         kurucz_short_name: str
             The short name of the Kurucz database, is set to None the latest version will be used
             (default: None)
+        create_metastable_flags: bool
+            Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
+            (default: True)
         metastable_loggf_threshold: int
-            log(gf) threshold for flagging levels that are connected by lines metastable
+            log(gf) threshold for flagging metastable levels
             (default: -3)
         Returns
         -------
@@ -170,44 +173,45 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
         transform(lambda x: np.arange(len(x))).values
     levels_df["level_number"] = levels_df["level_number"].astype(np.int)
 
-    # Create metastable flags
-    # ToDO: It is assumed that all lines are ingested. That may not always be the case
+    if create_metastable_flags:
+        # Create metastable flags
+        # ToDO: It is assumed that all lines are ingested. That may not always be the case
 
-    levels_subq = session.query(Level).\
-        filter(Level.level_id.in_(levels_df.index.values)).subquery()
-    metastable_q = session.query(Line).\
-        join(levels_subq, Line.upper_level)
+        levels_subq = session.query(Level).\
+            filter(Level.level_id.in_(levels_df.index.values)).subquery()
+        metastable_q = session.query(Line).\
+            join(levels_subq, Line.upper_level)
 
-    metastable_data = list()
-    for line in metastable_q.options(joinedload(Line.gf_values)):
-        try:
-            # Currently it is assumed that each line has only one gf value
-            gf = line.gf_values[0].quantity  # Get the first gf value
-        except IndexError:
-            print "No gf value is available for line {0}".format(line.line_id)
-            continue
-        metastable_data.append((line.line_id, line.upper_level_id, gf))
+        metastable_data = list()
+        for line in metastable_q.options(joinedload(Line.gf_values)):
+            try:
+                # Currently it is assumed that each line has only one gf value
+                gf = line.gf_values[0].quantity  # Get the first gf value
+            except IndexError:
+                print "No gf value is available for line {0}".format(line.line_id)
+                continue
+            metastable_data.append((line.line_id, line.upper_level_id, gf))
 
-    metastable_dtype = [("line_id", np.int), ("upper_level_id", np.int), ("gf", np.float)]
-    metastable_data = np.array(metastable_data, dtype=metastable_dtype)
-    metastable_df = pd.DataFrame.from_records(metastable_data, index="line_id")
+        metastable_dtype = [("line_id", np.int), ("upper_level_id", np.int), ("gf", np.float)]
+        metastable_data = np.array(metastable_data, dtype=metastable_dtype)
+        metastable_df = pd.DataFrame.from_records(metastable_data, index="line_id")
 
-    # Filter loggf on the threshold value
-    metastable_df["loggf"] = np.log10(metastable_df["gf"])
-    metastable_df = metastable_df.loc[metastable_df["loggf"] > metastable_loggf_threshold]
+        # Filter loggf on the threshold value
+        metastable_df["loggf"] = np.log10(metastable_df["gf"])
+        metastable_df = metastable_df.loc[metastable_df["loggf"] > metastable_loggf_threshold]
 
-    # Count the remaining strong transitions
-    metastable_df_grouped = metastable_df.groupby("upper_level_id")
-    metastable_flags = metastable_df_grouped["upper_level_id"].count()
-    metastable_flags.name = "metastable"
+        # Count the remaining strong transitions
+        metastable_df_grouped = metastable_df.groupby("upper_level_id")
+        metastable_flags = metastable_df_grouped["upper_level_id"].count()
+        metastable_flags.name = "metastable"
 
-    # If there are no strong transitions for a level (the count is NaN) then the metastable flag is True
-    # else (the count is a natural number) the metastable flag is False
-    levels_df = levels_df.join(metastable_flags)
-    levels_df["metastable"] = levels_df["metastable"].isnull()
+        # If there are no strong transitions for a level (the count is NaN) then the metastable flag is True
+        # else (the count is a natural number) the metastable flag is False
+        levels_df = levels_df.join(metastable_flags)
+        levels_df["metastable"] = levels_df["metastable"].isnull()
 
+    # Create multiindex
     levels_df.reset_index(inplace=True)
     levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
     return levels_df
-
