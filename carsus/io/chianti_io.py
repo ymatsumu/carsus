@@ -264,11 +264,16 @@ class ChiantiIngester(object):
 
         q_ion_lvls = self.session.query(Level.level_id.label("id"),
                                         Level.level_index.label("index")). \
-                                  filter(and_(Level.ion == ion,
-                                              Level.data_source == self.data_source))
+            filter(and_(Level.ion == ion,
+                        Level.data_source == self.data_source))
 
-        lvl_index2id_df = read_sql_query(q_ion_lvls.selectable, self.session.bind,
-                                       index_col="index")
+        lvl_index2id_data = list()
+        for id, index in q_ion_lvls:
+            lvl_index2id_data.append((index, id))
+
+        lvl_index2id_dtype = [("index", np.int), ("id", np.int)]
+        lvl_index2id_data = np.array(lvl_index2id_data, dtype=lvl_index2id_dtype)
+        lvl_index2id_df = pd.DataFrame.from_records(lvl_index2id_data, index="index")
 
         return lvl_index2id_df
 

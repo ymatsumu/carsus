@@ -170,6 +170,34 @@ def test_line_quantities_query(foo_session, atomic_number, ion_charge, ds_short_
     assert_quantity_allclose(gf_value, expected_gf_value)
 
 
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index, exp_g", [
+    (10, 2, "ku", 1, 4),
+    (10, 2, "ku", 2, 2),
+])
+def test_level_g_hybrid_attribute(foo_session, atomic_number, ion_charge, ds_short_name, level_index, exp_g):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    level = foo_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == level_index)).one()
+    assert level.g == exp_g
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index, exp_g", [
+    (10, 2, "ku", 1, 4),
+    (10, 2, "ku", 2, 2),
+])
+def test_level_g_hybrid_attribute_expression(foo_session, atomic_number, ion_charge, ds_short_name, level_index, exp_g):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    g = foo_session.query(Level.g). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == level_index)).scalar()
+    assert g == exp_g
+
+
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, lower_level_index, upper_level_index,"
                          "expected_energy, expected_temp_strengths", [
                              (10, 2, "ku", 1, 2, 0.007108*u.rydberg, [(0.0, 0.255), (0.07394, 0.266)]),

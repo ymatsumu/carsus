@@ -20,8 +20,10 @@ env:
         - PANDAS_VERSION=0.16
         - ASTROPY_USE_SYSTEM_PYTEST=1
         - SETUP_CMD='test'
+        - TEST_MODE='normal'
         - MINICONDA_URL='http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh'
         - CHIANTI_DATA_URL='http://www.chiantidatabase.org/download/CHIANTI_8.0.2_data.tar.gz'
+        - CARSUS_DB_URL='https://github.com/tardis-sn/carsus-db.git'
 
 
 matrix:
@@ -37,6 +39,12 @@ matrix:
         # Test with slow tests
         - python: 2.7
           env: SETUP_CMD='test --args="--runslow"'
+
+#        # Test with the test database
+#        - python: 2.7
+#          env:
+#            - SETUP_CMD='test --args="--test-db=$HOME/carsus-db/test.db"'
+#            - TEST_MODE='with_test_db'
 
         # Do a coverage test in Python 2.
         - python: 2.7
@@ -56,8 +64,11 @@ before_install:
     - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
     - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
     - export XUVTOP=$HOME/chianti
+#    # clone carsus-db
+#    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs clone $CARSUS_DB_URL $HOME/carsus-db; fi
     - hash -r
     - conda update --yes conda
+
 
 install:
 
