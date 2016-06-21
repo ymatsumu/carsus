@@ -46,6 +46,8 @@ def pytest_addoption(parser):
     _pytest_add_option(parser)
     parser.addoption("--runslow", action="store_true",
                      help="include running slow tests during run")
+    parser.addoption("--test-db", dest='test-db', default=None,
+                     help="filename for the testing database")
 
 
 @pytest.fixture
@@ -57,20 +59,21 @@ def memory_session():
 
 @pytest.fixture(scope="session")
 def data_dir():
-    data_dir = os.path.join(os.path.dirname(__file__), 'tests', 'data')
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-    return data_dir
+    return os.path.join(os.path.dirname(__file__), 'tests', 'data')
 
 
 @pytest.fixture(scope="session")
-def test_db_path(data_dir):
-    return os.path.join(data_dir, 'test.db')
+def test_db_fname(request):
+    test_db_fname = request.config.getoption("--test-db")
+    if test_db_fname is None:
+        pytest.skip('--testing database was not specified')
+    else:
+        return os.path.expandvars(os.path.expanduser(test_db_fname))
 
 
 @pytest.fixture(scope="session")
-def test_db_url(test_db_path):
-    return "sqlite:///" + test_db_path
+def test_db_url(test_db_fname):
+    return "sqlite:///" + test_db_fname
 
 
 @pytest.fixture(scope="session")
@@ -78,45 +81,9 @@ def gfall_fname(data_dir):
     return os.path.join(data_dir, 'gftest.all')  # Be III, B IV, N VI
 
 
-@pytest.mark.remote_data
 @pytest.fixture(scope="session")
-def test_engine(test_db_path, test_db_url, gfall_fname):
-
-    # If the database for testing exists then just create an engine
-    if os.path.isfile(test_db_path):
-        engine = create_engine(test_db_url)
-
-    # Else create the database
-    else:
-        session = init_db(url=test_db_url)
-        session.commit()
-
-        # Ingest atomic weights
-        weightscomp_ingester = NISTWeightsCompIngester(session)
-        weightscomp_ingester.download()
-        weightscomp_ingester.ingest()
-        session.commit()
-
-        # Ingest ionization energies
-        ioniz_energies_ingester = NISTIonizationEnergiesIngester(session)
-        ioniz_energies_ingester.download()
-        ioniz_energies_ingester.ingest()
-        session.commit()
-
-        # Ingest kurucz levels and lines
-        gfall_ingester = GFALLIngester(session, gfall_fname)
-        gfall_ingester.ingest(levels=True, lines=True)
-        session.commit()
-
-        # Ingest chianti levels and lines
-        chianti_ingester = ChiantiIngester(session, ions_list=["he_2", "n_6"])
-        chianti_ingester.ingest(levels=True, lines=True)
-        session.commit()
-
-        session.close()
-        engine = session.get_bind()
-
-    return engine
+def test_engine(test_db_url):
+    return create_engine(test_db_url)
 
 
 @pytest.fixture
