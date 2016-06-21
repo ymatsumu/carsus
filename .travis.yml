@@ -59,16 +59,6 @@ before_install:
     - chmod +x miniconda.sh
     - bash miniconda.sh -b -p $HOME/miniconda
     - export PATH=$HOME/miniconda/bin:$PATH
-    # install the CHIANTI database
-    - mkdir $HOME/chianti
-    - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
-    - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
-    - export XUVTOP=$HOME/chianti
-    # install git lfs
-    - conda install -c ostrokach git-lfs=1.2.1
-    - git lfs install
-    # clone carsus-db
-    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs clone $CARSUS_DB_URL $HOME/carsus-db; fi
     - hash -r
     - conda update --yes conda
 
@@ -77,6 +67,16 @@ install:
 
     - conda env create -f carsus_ci/carsus_ci_env27.yml
     - source activate carsus-ci
+    # install the CHIANTI database
+    - mkdir $HOME/chianti
+    - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
+    - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
+    - export XUVTOP=$HOME/chianti
+    # install git lfs
+    - conda install -c ostrokach git-lfs=1.2.1 -y
+    - git lfs install
+    # clone carsus-db
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs clone $CARSUS_DB_URL $HOME/carsus-db; fi
 
 script:
     - echo CC=$COMPILER python setup.py $SETUP_CMD
