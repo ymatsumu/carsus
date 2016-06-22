@@ -1,7 +1,7 @@
 import pytest
 
 from carsus.io.output.tardis_op import create_basic_atom_df, create_ionization_df,\
-    create_levels_df, create_lines_df
+    create_levels_df, create_lines_df, create_collisions_df
 from carsus.model import DataSource
 from numpy.testing import assert_almost_equal
 from astropy import units as u
@@ -88,3 +88,8 @@ def test_create_lines_df(lines_df, atomic_number, ion_number, level_number_lower
     wavelength = lines_df.loc[(atomic_number, ion_number,
                                level_number_lower, level_number_upper)]["wavelength"]*u.Unit("angstrom")
     assert_quantity_allclose(wavelength, exp_wavelength)
+
+
+@with_test_db
+def test_create_collisions_df(test_session):
+    collisions_df = create_collisions_df(test_session, chianti_species=["He 2", "N 6"])

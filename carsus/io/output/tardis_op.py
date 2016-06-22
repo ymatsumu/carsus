@@ -1,12 +1,13 @@
 from pandas import read_sql_query
 from abc import ABCMeta
 from carsus.model import Atom, AtomWeight, Ion, IonizationEnergy,\
-    Line, LineWavelength, LineGFValue, LineAValue, Level, DataSource
+    Line, LineWavelength, LineGFValue, LineAValue, Level, DataSource, ECollision
 from sqlalchemy import and_, or_, tuple_, not_, union_all, literal
 from sqlalchemy.orm import aliased, joinedload, subqueryload
 from sqlalchemy.orm.exc import NoResultFound
 from astropy import constants as const
 from astropy import units as u
+from scipy import interpolate
 from tardis.util import species_string_to_tuple
 import numpy as np
 import pandas as pd
@@ -262,7 +263,7 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
         ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
         ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
     except NoResultFound:
-        print "Requested data sources does not exist!"
+        print "Requested data sources do not exist!"
         raise
 
     # Create levels_df to get level numbers
@@ -281,7 +282,7 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
         join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
 
     lines_data = list()
-    for line in lines_q.options(joinedload(Line.wavelengths)).options(joinedload(Line.gf_values)):
+    for line in lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)):
         try:
             # Try to get the first gf value
             gf = line.gf_values[0].quantity
@@ -297,12 +298,12 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
         lines_data.append((line.line_id, line.lower_level_id, line.upper_level_id,
                            line.data_source_id,  wavelength.value, gf.value))
 
-    # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
     lines_dtype = [("line_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
                    ("ds_id", np.int), ("wavelength", np.float), ("gf", np.float)]
     lines_data = np.array(lines_data, dtype=lines_dtype)
     lines_df = pd.DataFrame.from_records(lines_data, index="line_id")
 
+    # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
     ions_df = levels_df[["atomic_number", "ion_number"]]
 
     lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l"}).\
@@ -319,14 +320,14 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
     lines_df.reset_index(inplace=True)
     lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
-    # Compute absorption oscillator strength f_lu and emission oscillator strength f_ul
+    # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
     lines_df["f_lu"] = lines_df["gf"]/lines_df["g_l"]
     lines_df["f_ul"] = -lines_df["gf"]/lines_df["g_u"]
 
-    # Compute frequency
+    # Calculate frequency
     lines_df['nu'] = u.Unit('angstrom').to('Hz', lines_df['wavelength'], u.spectral())
 
-    # Compute Einstein coefficients
+    # Calculate Einstein coefficients
     einstein_coeff = (4 * np.pi**2 * const.e.gauss.value**2) / (const.m_e.cgs.value * const.c.cgs.value)
     lines_df['B_lu'] = einstein_coeff * lines_df['f_lu'] / (const.h.cgs.value * lines_df['nu'])
     lines_df['B_ul'] = einstein_coeff * lines_df['f_ul'] / (const.h.cgs.value * lines_df['nu'])
@@ -337,3 +338,155 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
 
     return lines_df
 
+
+def create_collisions_df(session, chianti_species, chianti_short_name=None, temperatures=None):
+    """
+        Create a DataFrame with lines data.
+
+        Parameters
+        ----------
+        session : SQLAlchemy session
+        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
+            The collision data for these ions will be taken from the CHIANTI database
+            (default: None)
+        chianti_short_name: str
+            The short name of the CHIANTI database, if set to None the latest version will be used
+            (default: None)
+        temperatures: np.array
+            If set to None, np.linspace(2000, 50000, 20) will be used
+            (default: None))
+
+        Returns
+        -------
+        collisions_df : pandas.DataFrame
+            DataFrame with columns:
+    """
+
+    if chianti_short_name is None:
+        chianti_short_name = "chianti_v8.0.2"
+
+    try:
+        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
+    except NoResultFound:
+        print "Chianti data source does not exist!"
+        raise
+
+    # Create levels_df to get level numbers
+    levels_df = create_levels_df(session, chianti_species=chianti_species,
+                                 chianti_short_name=chianti_short_name, create_metastable_flags=False)
+
+    # Set level_id as index
+    levels_df.reset_index(inplace=True)
+    levels_df.set_index("level_id", inplace=True)
+
+    levels_subq = session.query(Level.level_id.label("level_id")). \
+        filter(Level.level_id.in_(levels_df.index.values)).\
+        filter(Level.data_source == ch_ds).subquery()
+
+    collisions_q = session.query(ECollision). \
+        join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
+
+    collisions_data = list()
+    for e_col in collisions_q.options(joinedload(ECollision.gf_values),
+                                      joinedload(ECollision.temp_strengths)):
+
+        # Try to get the first gf value
+        try:
+            gf = e_col.gf_values[0].quantity
+        except IndexError:
+            print "No gf is available for electron collision {0}".format(e_col.e_col_id)
+            continue
+
+        btemp, bscups = (list(ts) for ts in zip(*e_col.temp_strengths_tuple))
+
+        collisions_data.append((e_col.e_col_id, e_col.lower_level_id, e_col.upper_level_id,
+            e_col.data_source_id, btemp, bscups, e_col.bt92_ttype, e_col.bt92_cups, gf.value))
+
+    collisions_dtype = [("e_col_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
+                        ("ds_id", np.int),  ("btemp", 'O'), ("bscups", 'O'), ("ttype", np.int),
+                        ("cups", np.float), ("gf", np.float)]
+
+    collisions_data = np.array(collisions_data, dtype=collisions_dtype)
+    collisions_df = pd.DataFrame.from_records(collisions_data, index="e_col_id")
+
+    # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
+    ions_df = levels_df[["atomic_number", "ion_number"]]
+
+    lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
+                          loc[:, ["level_number_lower", "g_l", "energy_lower"]]
+    upper_levels_df = levels_df.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+                          loc[:, ["level_number_upper", "g_u", "energy_upper"]]
+
+    collisions_df = collisions_df.join(ions_df, on="lower_level_id")
+    collisions_df = collisions_df.join(lower_levels_df, on="lower_level_id")
+    collisions_df = collisions_df.join(upper_levels_df, on="upper_level_id")
+
+    # Calculate delta_e
+    kb_ev = const.k_B.cgs.to('eV / K').value
+    collisions_df["delta_e"] = (collisions_df["energy_upper"] - collisions_df["energy_lower"])/kb_ev
+
+    # Calculate collisional stengths
+    if temperatures is None:
+        temperatures = np.linspace(2000, 50000, 20)
+    else:
+        temperatures = np.array(temperatures)
+
+    def calculate_collisional_strength(row, temperatures):
+        """
+            Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38)
+        """
+        c = row["cups"]
+        x_knots = np.linspace(0, 1, len(row["btemp"]))
+        y_knots = row["bscups"]
+        delta_e = row["delta_e"]
+        g_u = row["g_u"]
+
+        ttype = row["ttype"]
+        if ttype > 5: ttype -= 5
+
+        kt = kb_ev * temperatures
+
+        spline_tck = interpolate.splrep(x_knots, y_knots)
+
+        if ttype == 1:
+            x = 1 - np.log(c) / np.log(kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func * np.log(kt / delta_e + np.exp(1))
+
+        elif ttype == 2:
+            x = (kt / delta_e) / (kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func
+
+        elif ttype == 3:
+            x = (kt / delta_e) / (kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func / (kt / delta_e + 1)
+
+        elif ttype == 4:
+            x = 1 - np.log(c) / np.log(kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func * np.log(kt / delta_e + c)
+
+        elif ttype == 5:
+            raise ValueError('Not sure what to do with ttype=5')
+
+        #### 1992A&A...254..436B Equation 20 & 22 #####
+
+        col_strg_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
+        return tuple(col_strg_ul)
+
+    collisions_df["col_strg_ul"] = collisions_df.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+
+    # Calculate g_ratio
+    collisions_df["g_ratio"] = collisions_df["g_l"] / collisions_df["g_u"]
+
+    # Drop the unwanted columns
+    collisions_df.drop(["lower_level_id", "upper_level_id", "btemp", "bscups",
+                        "ttype", "energy_lower", "energy_upper", "gf"],  axis=1, inplace=True)
+
+    # Set multiindex
+    collisions_df.reset_index(inplace=True)
+    collisions_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+
+    return collisions_df
