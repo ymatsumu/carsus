@@ -100,44 +100,56 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
             DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
     """
 
-    if chianti_short_name is None:
-        chianti_short_name = "chianti_v8.0.2"
-
     if kurucz_short_name is None:
         kurucz_short_name = "ku_latest"
 
     try:
-        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
         ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
     except NoResultFound:
-        print "Requested data sources does not exist!"
+        print "Kurucz data source does not exist!"
         raise
 
-    # Get a list of tuples (atomic_number, ion_charge) for the chianti species
-    chianti_species = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_species]
+    if not chianti_species:
+        kurucz_levels_q = session.query(Level).\
+            filter(Level.data_source == ku_ds)
 
-    # To select ions we create a CTE (Common Table Expression), because sqlite doesn't support composite IN statements
-    chianti_species_cte = union_all(
-        *[session.query(
-            literal(atomic_number).label("atomic_number"),
-            literal(ion_charge).label("ion_charge"))
-          for atomic_number, ion_charge in chianti_species]
-    ).cte("chianti_species_cte")
+        levels_q = kurucz_levels_q
 
-    # To select chianti ions we join on the CTE
-    chianti_levels_q = session.query(Level).\
-        join(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
-                                       Level.ion_charge == chianti_species_cte.c.ion_charge)).\
-        filter(Level.data_source == ch_ds)
+    else:
+        if chianti_short_name is None:
+            chianti_short_name = "chianti_v8.0.2"
 
-    # To select kurucz ions we do an outerjoin on the CTE and select rows that don't have a match from the CTE
-    kurucz_levels_q = session.query(Level).\
-        outerjoin(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
-                                       Level.ion_charge == chianti_species_cte.c.ion_charge)).\
-        filter(chianti_species_cte.c.atomic_number.is_(None)).\
-        filter(Level.data_source == ku_ds)
+        try:
+            ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
+        except NoResultFound:
+            print "Chianti data source does not exist!"
+            raise
 
-    levels_q = kurucz_levels_q.union(chianti_levels_q)
+        # Get a list of tuples (atomic_number, ion_charge) for the chianti species
+        chianti_species = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_species]
+
+        # To select ions we create a CTE (Common Table Expression), because sqlite doesn't support composite IN statements
+        chianti_species_cte = union_all(
+            *[session.query(
+                literal(atomic_number).label("atomic_number"),
+                literal(ion_charge).label("ion_charge"))
+              for atomic_number, ion_charge in chianti_species]
+        ).cte("chianti_species_cte")
+
+        # To select chianti ions we join on the CTE
+        chianti_levels_q = session.query(Level).\
+            join(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
+                                           Level.ion_charge == chianti_species_cte.c.ion_charge)).\
+            filter(Level.data_source == ch_ds)
+
+        # To select kurucz ions we do an outerjoin on the CTE and select rows that don't have a match from the CTE
+        kurucz_levels_q = session.query(Level).\
+            outerjoin(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
+                                           Level.ion_charge == chianti_species_cte.c.ion_charge)).\
+            filter(chianti_species_cte.c.atomic_number.is_(None)).\
+            filter(Level.data_source == ku_ds)
+
+        levels_q = kurucz_levels_q.union(chianti_levels_q)
 
     # Get the levels data
     levels_data = list()
@@ -215,3 +227,5 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
     levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
     return levels_df
+
+

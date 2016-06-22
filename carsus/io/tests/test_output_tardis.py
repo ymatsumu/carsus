@@ -1,7 +1,8 @@
 import pytest
 
 from carsus.io.output.tardis_op import create_basic_atom_df, create_ionization_df,\
-    create_levels_df
+    create_levels_df, create_lines_df
+from carsus.model import DataSource
 from numpy.testing import assert_almost_equal
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
@@ -63,3 +64,11 @@ def test_create_levels_df(levels_df, atomic_number, ion_number, level_number, ex
     energy = levels_df.loc[(atomic_number, ion_number, level_number)]["energy"]*u.eV
     energy = energy.to(u.Unit("cm-1"), equivalencies=u.spectral())
     assert_quantity_allclose(energy, exp_energy)
+
+
+@with_test_db
+def test_create_levels_df_wo_chianti_species(test_session):
+    levels_df = create_levels_df(test_session)
+    chianti_ds_id = test_session.query(DataSource.data_source_id).\
+        filter(DataSource.short_name=="chianti_v8.0.2").scalar()
+    assert all(levels_df["ds_id"]!=chianti_ds_id)
