@@ -29,6 +29,11 @@ def levels_df(test_session):
     return create_levels_df(test_session, chianti_species=["He 2", "N 6"])
 
 
+@pytest.fixture
+def lines_df(test_session):
+    return create_lines_df(test_session, chianti_species=["He 2", "N 6"])
+
+
 @with_test_db
 @pytest.mark.parametrize("atomic_number, exp_weight", [
     (2, 4.002602),
@@ -72,3 +77,14 @@ def test_create_levels_df_wo_chianti_species(test_session):
     chianti_ds_id = test_session.query(DataSource.data_source_id).\
         filter(DataSource.short_name=="chianti_v8.0.2").scalar()
     assert all(levels_df["ds_id"]!=chianti_ds_id)
+
+
+@with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength",[
+    (7, 6, 0, 1, 29.5343 * u.Unit("angstrom")),
+    (4, 3, 0, 3, 10.1693 * u.Unit("angstrom"))
+])
+def test_create_lines_df(lines_df, atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength):
+    wavelength = lines_df.loc[(atomic_number, ion_number,
+                               level_number_lower, level_number_upper)]["wavelength"]*u.Unit("angstrom")
+    assert_quantity_allclose(wavelength, exp_wavelength)
