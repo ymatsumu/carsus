@@ -5,7 +5,8 @@ from carsus.model import Atom, AtomWeight, Ion, IonizationEnergy,\
 from sqlalchemy import and_, or_, tuple_, not_, union_all, literal
 from sqlalchemy.orm import aliased, joinedload, subqueryload
 from sqlalchemy.orm.exc import NoResultFound
-from astropy import constants
+from astropy import constants as const
+from astropy import units as u
 from tardis.util import species_string_to_tuple
 import numpy as np
 import pandas as pd
@@ -202,7 +203,7 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
             except IndexError:
                 print "No gf value is available for line {0}".format(line.line_id)
                 continue
-            metastable_data.append((line.line_id, line.upper_level_id, gf))
+            metastable_data.append((line.line_id, line.upper_level_id, gf.value))
 
         metastable_dtype = [("line_id", np.int), ("upper_level_id", np.int), ("gf", np.float)]
         metastable_data = np.array(metastable_data, dtype=metastable_dtype)
@@ -228,4 +229,111 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
 
     return levels_df
 
+
+def create_lines_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None):
+    """
+        Create a DataFrame with lines data.
+        Parameters
+        ----------
+        session : SQLAlchemy session
+        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
+            The lines data for these ions will be taken from the CHIANTI database
+            (default: None)
+        chianti_short_name: str
+            The short name of the CHIANTI database, if set to None the latest version will be used
+            (default: None)
+        kurucz_short_name: str
+            The short name of the Kurucz database, if set to None the latest version will be used
+            (default: None)
+        Returns
+        -------
+        lines_df : pandas.DataFrame
+            DataFrame with columns: atomic_number, ion_number, level_number_lower, level_number_upper,
+            wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
+    """
+
+    if chianti_short_name is None:
+        chianti_short_name = "chianti_v8.0.2"
+
+    if kurucz_short_name is None:
+        kurucz_short_name = "ku_latest"
+
+    try:
+        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
+        ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
+    except NoResultFound:
+        print "Requested data sources does not exist!"
+        raise
+
+    # Create levels_df to get level numbers
+    levels_df = create_levels_df(session, chianti_species=chianti_species,
+                                 chianti_short_name=chianti_short_name, kurucz_short_name=kurucz_short_name,
+                                 create_metastable_flags=False)
+
+    # Set level_id as index
+    levels_df.reset_index(inplace=True)
+    levels_df.set_index("level_id", inplace=True)
+
+    levels_subq = session.query(Level.level_id.label("level_id")). \
+        filter(Level.level_id.in_(levels_df.index.values)).subquery()
+
+    lines_q = session.query(Line).\
+        join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
+
+    lines_data = list()
+    for line in lines_q.options(joinedload(Line.wavelengths)).options(joinedload(Line.gf_values)):
+        try:
+            # Try to get the first gf value
+            gf = line.gf_values[0].quantity
+        except IndexError:
+            print "No gf value is available for line {0}".format(line.line_id)
+            continue
+        try:
+            # Try to get the first wavelength
+            wavelength = line.wavelengths[0].quantity
+        except IndexError:
+            print "No wavelength is available for line {0}".format(line.line_id)
+            continue
+        lines_data.append((line.line_id, line.lower_level_id, line.upper_level_id,
+                           line.data_source_id,  wavelength.value, gf.value))
+
+    # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
+    lines_dtype = [("line_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
+                   ("ds_id", np.int), ("wavelength", np.float), ("gf", np.float)]
+    lines_data = np.array(lines_data, dtype=lines_dtype)
+    lines_df = pd.DataFrame.from_records(lines_data, index="line_id")
+
+    ions_df = levels_df[["atomic_number", "ion_number"]]
+
+    lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l"}).\
+        loc[:,["level_number_lower", "g_l"]]
+    upper_levels_df = levels_df.rename(columns={"level_number": "level_number_upper", "g": "g_u"}).\
+        loc[:,["level_number_upper", "g_u"]]
+
+    lines_df = lines_df.join(ions_df, on="lower_level_id")
+    lines_df = lines_df.join(lower_levels_df, on="lower_level_id")
+    lines_df = lines_df.join(upper_levels_df, on="upper_level_id")
+
+    lines_df.drop(["lower_level_id", "upper_level_id"], axis=1, inplace=True)
+
+    lines_df.reset_index(inplace=True)
+    lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+
+    # Compute absorption oscillator strength f_lu and emission oscillator strength f_ul
+    lines_df["f_lu"] = lines_df["gf"]/lines_df["g_l"]
+    lines_df["f_ul"] = -lines_df["gf"]/lines_df["g_u"]
+
+    # Compute frequency
+    lines_df['nu'] = u.Unit('angstrom').to('Hz', lines_df['wavelength'], u.spectral())
+
+    # Compute Einstein coefficients
+    einstein_coeff = (4 * np.pi**2 * const.e.gauss.value**2) / (const.m_e.cgs.value * const.c.cgs.value)
+    lines_df['B_lu'] = einstein_coeff * lines_df['f_lu'] / (const.h.cgs.value * lines_df['nu'])
+    lines_df['B_ul'] = einstein_coeff * lines_df['f_ul'] / (const.h.cgs.value * lines_df['nu'])
+    lines_df['A_ul'] = -2 * einstein_coeff * lines_df['nu']**2 / const.c.cgs.value**2 * lines_df['f_ul']
+
+    # Drop the unwanted columns
+    lines_df.drop(["g_l", "g_u", "gf"], axis=1, inplace=True)
+
+    return lines_df
 
