@@ -1,16 +1,14 @@
-from pandas import read_sql_query
-from abc import ABCMeta
-from carsus.model import Atom, AtomWeight, Ion, IonizationEnergy,\
-    Line, LineWavelength, LineGFValue, LineAValue, Level, DataSource, ECollision
-from sqlalchemy import and_, or_, tuple_, not_, union_all, literal
-from sqlalchemy.orm import aliased, joinedload, subqueryload
+import numpy as np
+import pandas as pd
+
+from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
+from sqlalchemy import and_, union_all, literal
+from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.exc import NoResultFound
 from astropy import constants as const
 from astropy import units as u
 from scipy import interpolate
 from tardis.util import species_string_to_tuple
-import numpy as np
-import pandas as pd
 
 
 def create_basic_atom_df(session, max_atomic_number=30):
