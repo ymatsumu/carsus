@@ -270,8 +270,8 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
                                      chianti_short_name=chianti_short_name, create_metastable_flags=False)
 
     # Set level_id as index
-    levels_df.reset_index(inplace=True)
-    levels_df.set_index("level_id", inplace=True)
+    levels_df = levels_df.reset_index()
+    levels_df = levels_df.set_index("level_id")
 
     levels_subq = session.query(Level.level_id.label("level_id")). \
         filter(Level.level_id.in_(levels_df.index.values)).subquery()
@@ -312,8 +312,6 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
     lines_df = lines_df.join(ions_df, on="lower_level_id")
     lines_df = lines_df.join(lower_levels_df, on="lower_level_id")
     lines_df = lines_df.join(upper_levels_df, on="upper_level_id")
-
-    lines_df.drop(["lower_level_id", "upper_level_id"], axis=1, inplace=True)
 
     lines_df.reset_index(inplace=True)
     lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
@@ -375,8 +373,8 @@ def create_collisions_df(session, chianti_species, levels_df=None, chianti_short
                                      chianti_short_name=chianti_short_name, create_metastable_flags=False)
 
     # Set level_id as index
-    levels_df.reset_index(inplace=True)
-    levels_df.set_index("level_id", inplace=True)
+    levels_df = levels_df.reset_index()
+    levels_df = levels_df.set_index("level_id")
 
     levels_subq = session.query(Level.level_id.label("level_id")). \
         filter(Level.level_id.in_(levels_df.index.values)).\
@@ -489,5 +487,94 @@ def create_collisions_df(session, chianti_species, levels_df=None, chianti_short
     collisions_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
     return collisions_df
+
+
+def create_macro_atom_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
+                         levels_df=None, lines_df=None):
+    """
+        Create a DataFrame with macro atom data.
+        Parameters
+        ----------
+        session : SQLAlchemy session
+        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
+            The lines data for these ions will be taken from the CHIANTI database
+            (default: None)
+        chianti_short_name: str
+            The short name of the CHIANTI database, if set to None the latest version will be used
+            (default: None)
+        kurucz_short_name: str
+            The short name of the Kurucz database, if set to None the latest version will be used
+            (default: None)
+        Returns
+        -------
+        macro_atom_df : pandas.DataFrame
+            DataFrame with columns:
+        macro_atom_references : pandas.DataFrame
+            DataFrame with columns:
+
+    """
+
+    if chianti_short_name is None:
+        chianti_short_name = "chianti_v8.0.2"
+
+    if kurucz_short_name is None:
+        kurucz_short_name = "ku_latest"
+
+    try:
+        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
+        ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
+    except NoResultFound:
+        print "Requested data sources do not exist!"
+        raise
+
+    if levels_df is None:
+        levels_df = create_levels_df(session, chianti_species=chianti_species,
+                         chianti_short_name=chianti_short_name, create_metastable_flags=False)
+
+    if lines_df is None:
+        lines_df = create_lines_df(session, chianti_species=chianti_species,
+                         chianti_short_name=chianti_short_name, levels_df=levels_df)
+
+    # Set level_id as index
+    levels_df = levels_df.reset_index()
+    levels_df = levels_df.set_index("level_id")
+
+    lvl_energy_lower_df = levels_df.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
+    lvl_energy_upper_df = levels_df.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
+
+    lines_df = lines_df.join(lvl_energy_lower_df, on="lower_level_id")
+    lines_df = lines_df.join(lvl_energy_upper_df, on="upper_level_id")
+
+    macro_atom_data = list()
+    macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
+                        ("source_level_number", np.int), ("target_level_number", np.int),
+                        ("transition_line_id", np.int), ("transition_type", np.int), ("transition_probability", np.float)]
+
+    for index, row in lines_df.iterrows():
+        atomic_number, ion_number, level_number_lower, level_number_upper = index
+        nu = row["nu"]
+        f_ul, f_lu =  row["f_ul"], row["f_lu"]
+        e_lower, e_upper = row["energy_lower"], row["energy_upper"]
+        line_id = row["line_id"]
+
+        transition_probabilities_dict = dict()  # type : probability
+        transition_probabilities_dict[-1] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
+        transition_probabilities_dict[0] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * e_lower
+        transition_probabilities_dict[1] = f_lu * e_lower / (const.h.cgs.value * nu)
+
+        macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
+                                line_id, -1, transition_probabilities_dict[-1]))
+        macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
+                                line_id, 0, transition_probabilities_dict[0]))
+        macro_atom_data.append((atomic_number, ion_number, level_number_lower, level_number_upper,
+                                line_id, 1, transition_probabilities_dict[1]))
+
+    macro_atom_data = np.array(macro_atom_data, dtype=macro_atom_dtype)
+    macro_atom_df = pd.DataFrame(macro_atom_data)
+
+
+
+
+
 
 
