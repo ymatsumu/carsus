@@ -229,7 +229,7 @@ def create_levels_df(session, chianti_species=None, chianti_short_name=None, kur
     return levels_df
 
 
-def create_lines_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None):
+def create_lines_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None, levels_df=None):
     """
         Create a DataFrame with lines data.
         Parameters
@@ -264,10 +264,10 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
         print "Requested data sources do not exist!"
         raise
 
-    # Create levels_df to get level numbers
-    levels_df = create_levels_df(session, chianti_species=chianti_species,
-                                 chianti_short_name=chianti_short_name, kurucz_short_name=kurucz_short_name,
-                                 create_metastable_flags=False)
+    if levels_df is None:
+        # Create levels_df to get level numbers
+        levels_df = create_levels_df(session, chianti_species=chianti_species,
+                                     chianti_short_name=chianti_short_name, create_metastable_flags=False)
 
     # Set level_id as index
     levels_df.reset_index(inplace=True)
@@ -337,7 +337,7 @@ def create_lines_df(session, chianti_species=None, chianti_short_name=None, kuru
     return lines_df
 
 
-def create_collisions_df(session, chianti_species, chianti_short_name=None, temperatures=None):
+def create_collisions_df(session, chianti_species, levels_df=None, chianti_short_name=None, temperatures=None):
     """
         Create a DataFrame with lines data.
 
@@ -369,9 +369,10 @@ def create_collisions_df(session, chianti_species, chianti_short_name=None, temp
         print "Chianti data source does not exist!"
         raise
 
-    # Create levels_df to get level numbers
-    levels_df = create_levels_df(session, chianti_species=chianti_species,
-                                 chianti_short_name=chianti_short_name, create_metastable_flags=False)
+    if levels_df is None:
+        # Create levels_df to get level numbers
+        levels_df = create_levels_df(session, chianti_species=chianti_species,
+                                     chianti_short_name=chianti_short_name, create_metastable_flags=False)
 
     # Set level_id as index
     levels_df.reset_index(inplace=True)
@@ -488,3 +489,5 @@ def create_collisions_df(session, chianti_species, chianti_short_name=None, temp
     collisions_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
     return collisions_df
+
+
