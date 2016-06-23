@@ -481,7 +481,7 @@ def create_collisions_df(session, chianti_species, chianti_short_name=None, temp
 
     # Drop the unwanted columns
     collisions_df.drop(["lower_level_id", "upper_level_id", "btemp", "bscups",
-                        "ttype", "energy_lower", "energy_upper", "gf"],  axis=1, inplace=True)
+                        "ttype", "energy_lower", "energy_upper", "gf", "g_l", "g_u", "cups"],  axis=1, inplace=True)
 
     # Set multiindex
     collisions_df.reset_index(inplace=True)
