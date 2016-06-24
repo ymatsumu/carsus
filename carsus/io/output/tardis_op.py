@@ -10,6 +10,10 @@ from astropy import units as u
 from scipy import interpolate
 from tardis.util import species_string_to_tuple
 
+P_EMISSION_DOWN = -1
+P_INTERNAL_DOWN = 0
+P_INTERNAL_UP = 1
+
 
 def create_basic_atom_df(session, max_atomic_number=30):
     """
@@ -553,21 +557,21 @@ def create_macro_atom_df(session, chianti_species=None, chianti_short_name=None,
     for index, row in lines_df.iterrows():
         atomic_number, ion_number, level_number_lower, level_number_upper = index
         nu = row["nu"]
-        f_ul, f_lu =  row["f_ul"], row["f_lu"]
+        f_ul, f_lu = row["f_ul"], row["f_lu"]
         e_lower, e_upper = row["energy_lower"], row["energy_upper"]
         line_id = row["line_id"]
 
         transition_probabilities_dict = dict()  # type : probability
-        transition_probabilities_dict[-1] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
-        transition_probabilities_dict[0] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * e_lower
-        transition_probabilities_dict[1] = f_lu * e_lower / (const.h.cgs.value * nu)
+        transition_probabilities_dict[P_EMISSION_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
+        transition_probabilities_dict[P_INTERNAL_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * e_lower
+        transition_probabilities_dict[P_INTERNAL_UP] = f_lu * e_lower / (const.h.cgs.value * nu)
 
         macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
-                                line_id, -1, transition_probabilities_dict[-1]))
+                                line_id, P_EMISSION_DOWN, transition_probabilities_dict[P_EMISSION_DOWN]))
         macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
-                                line_id, 0, transition_probabilities_dict[0]))
+                                line_id, P_INTERNAL_DOWN, transition_probabilities_dict[P_INTERNAL_DOWN]))
         macro_atom_data.append((atomic_number, ion_number, level_number_lower, level_number_upper,
-                                line_id, 1, transition_probabilities_dict[1]))
+                                line_id, P_INTERNAL_UP, transition_probabilities_dict[P_INTERNAL_UP]))
 
     macro_atom_data = np.array(macro_atom_data, dtype=macro_atom_dtype)
     macro_atom_df = pd.DataFrame(macro_atom_data)
