@@ -69,12 +69,12 @@ class AtomData(object):
 
     def create_basic_atom_df(self):
         """
-            Create a DataFrame with basic atomic data.
+        Create a DataFrame with basic atomic data.
 
-            Returns
-            -------
-            basic_atom_df : pandas.DataFrame
-                DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
+        Returns
+        -------
+        basic_atom_df : pandas.DataFrame
+            DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
         """
         basic_atom_q = self.session.query(Atom).order_by(Atom.atomic_number)
 
@@ -109,36 +109,49 @@ class AtomData(object):
         basic_atom_df = basic_atom_df.loc[:max_atomic_number]
         return basic_atom_df
 
+    @property
+    def ionization_df(self):
+        if not self._ionization_df:
+            self._ionization_df = self.create_ionization_df()
+        return self._ionization_df
 
-
-
-def create_ionization_df(session):
-    """
+    def create_ionization_df(self):
+        """
         Create a DataFrame with ionization data.
-
-        Parameters
-        ----------
-        session : SQLAlchemy session
 
         Returns
         -------
         ionization_df : pandas.DataFrame
            DataFrame with columns: atomic_number, ion_number, ionization_energy[eV]
-    """
-    ionization_q = session.query(Ion).\
-        order_by(Ion.atomic_number, Ion.ion_charge)
+        """
+        ionization_q = self.session.query(Ion).\
+            order_by(Ion.atomic_number, Ion.ion_charge)
 
-    ionization_data = list()
-    for ion in ionization_q.options(joinedload(Ion.ionization_energies)):
-        ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
-        ionization_data.append((ion.atomic_number, ion.ion_number, ionization_energy))
+        ionization_data = list()
+        for ion in ionization_q.options(joinedload(Ion.ionization_energies)):
+            ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
+            ionization_data.append((ion.atomic_number, ion.ion_number, ionization_energy))
 
-    ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
-    ionization_data = np.array(ionization_data, dtype=ionization_dtype)
+        ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
+        ionization_data = np.array(ionization_data, dtype=ionization_dtype)
 
-    ionization_df = pd.DataFrame.from_records(ionization_data, index=["atomic_number", "ion_number"])
+        ionization_df = pd.DataFrame.from_records(ionization_data, index=["atomic_number", "ion_number"])
 
-    return ionization_df
+        return ionization_df
+
+    def prepare_ionization_df(self):
+        """
+        Prepare ionization_df for TARDIS
+
+        Returns
+        -------
+        ionization_df : pandas.DataFrame
+           DataFrame with index: atomic_number, ion_number
+                    and columns: ionization_energy[eV]
+
+        """
+        ionization_df = self.ionization_df.set_index(["atomic_number", "ion_charge"])
+        return ionization_df
 
 
 def create_levels_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
