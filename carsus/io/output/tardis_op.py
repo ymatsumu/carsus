@@ -31,10 +31,13 @@ class AtomData(object):
     kurucz_short_name: str
         The short name of the Kurucz database, if set to None the latest version will be used
         (default: None)
+    temperatures: np.array
+        The temperatures for calculating collision strengths
 
     """
 
-    def __init__(self, session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None):
+    def __init__(self, session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
+                 temperatures=None):
 
         self.session = session
 
@@ -46,11 +49,11 @@ class AtomData(object):
             print "Kurucz data source does not exist!"
             raise
 
-        self.chianti_species = chianti_species
-        if self.chianti_species is not None:
+
+        if chianti_species is not None:
 
             # Get a list of tuples (atomic_number, ion_charge) for the chianti species
-            self.chianti_species = [tuple(species_string_to_tuple(species_str)) for species_str in self.chianti_species]
+            chianti_species = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_species]
 
             if chianti_short_name is None:
                 chianti_short_name = "chianti_v8.0.2"
@@ -59,11 +62,22 @@ class AtomData(object):
             except NoResultFound:
                 print "Chianti data source does not exist!"
                 raise
+        self.chianti_species = chianti_species
+
+        # Calculate collisional stengths
+        if temperatures is None:
+            temperatures = np.linspace(2000, 50000, 20)
+        else:
+            temperatures = np.array(temperatures)
+        self.temperatures = temperatures
 
         self._basic_atom_df = None
         self._ionization_df = None
         self._levels_df = None
         self._lines_df = None
+        self._collisions_df = None
+        self._macro_atom_df = None
+        self._macro_atom_ref_df = None
 
     @property
     def basic_atom_df(self):
@@ -413,312 +427,272 @@ class AtomData(object):
 
         return lines_df
 
-    
+    @property
+    def collisions_df(self):
+        if self._collisions_df is None:
+            self._collistions_df = self.create_collisions_df()
+        return self._collistions_df
 
 
-def create_collisions_df(session, chianti_species, levels_df=None, chianti_short_name=None, temperatures=None):
-    """
-        Create a DataFrame with lines data.
-
-        Parameters
-        ----------
-        session : SQLAlchemy session
-        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
-            The collision data for these ions will be taken from the CHIANTI database
-            (default: None)
-        chianti_short_name: str
-            The short name of the CHIANTI database, if set to None the latest version will be used
-            (default: None)
-        temperatures: np.array
-            If set to None, np.linspace(2000, 50000, 20) will be used
-            (default: None))
-
-        Returns
-        -------
-        collisions_df : pandas.DataFrame
-            DataFrame with columns:
-    """
-
-    if chianti_short_name is None:
-        chianti_short_name = "chianti_v8.0.2"
-
-    try:
-        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
-    except NoResultFound:
-        print "Chianti data source does not exist!"
-        raise
-
-    if levels_df is None:
-        # Create levels_df to get level numbers
-        levels_df = create_levels_df(session, chianti_species=chianti_species,
-                                     chianti_short_name=chianti_short_name, create_metastable_flags=False)
-
-    # Set level_id as index
-    levels_df = levels_df.reset_index()
-    levels_df = levels_df.set_index("level_id")
-
-    levels_subq = session.query(Level.level_id.label("level_id")). \
-        filter(Level.level_id.in_(levels_df.index.values)).\
-        filter(Level.data_source == ch_ds).subquery()
-
-    collisions_q = session.query(ECollision). \
-        join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
-
-    collisions_data = list()
-    for e_col in collisions_q.options(joinedload(ECollision.gf_values),
-                                      joinedload(ECollision.temp_strengths)):
-
-        # Try to get the first gf value
-        try:
-            gf = e_col.gf_values[0].quantity
-        except IndexError:
-            print "No gf is available for electron collision {0}".format(e_col.e_col_id)
-            continue
-
-        btemp, bscups = (list(ts) for ts in zip(*e_col.temp_strengths_tuple))
-
-        collisions_data.append((e_col.e_col_id, e_col.lower_level_id, e_col.upper_level_id,
-            e_col.data_source_id, btemp, bscups, e_col.bt92_ttype, e_col.bt92_cups, gf.value))
-
-    collisions_dtype = [("e_col_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
-                        ("ds_id", np.int),  ("btemp", 'O'), ("bscups", 'O'), ("ttype", np.int),
-                        ("cups", np.float), ("gf", np.float)]
-
-    collisions_data = np.array(collisions_data, dtype=collisions_dtype)
-    collisions_df = pd.DataFrame.from_records(collisions_data, index="e_col_id")
-
-    # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
-    ions_df = levels_df[["atomic_number", "ion_number"]]
-
-    lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
-                          loc[:, ["level_number_lower", "g_l", "energy_lower"]]
-    upper_levels_df = levels_df.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
-                          loc[:, ["level_number_upper", "g_u", "energy_upper"]]
-
-    collisions_df = collisions_df.join(ions_df, on="lower_level_id")
-    collisions_df = collisions_df.join(lower_levels_df, on="lower_level_id")
-    collisions_df = collisions_df.join(upper_levels_df, on="upper_level_id")
-
-    # Calculate delta_e
-    kb_ev = const.k_B.cgs.to('eV / K').value
-    collisions_df["delta_e"] = (collisions_df["energy_upper"] - collisions_df["energy_lower"])/kb_ev
-
-    # Calculate collisional stengths
-    if temperatures is None:
-        temperatures = np.linspace(2000, 50000, 20)
-    else:
-        temperatures = np.array(temperatures)
-
-    def calculate_collisional_strength(row, temperatures):
+    def create_collisions_df(self):
         """
-            Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38)
+            Create a DataFrame with collisions data.
+
+            Returns
+            -------
+            collisions_df : pandas.DataFrame
+                DataFrame with indes: e_col_id,
+                and columns:
         """
-        c = row["cups"]
-        x_knots = np.linspace(0, 1, len(row["btemp"]))
-        y_knots = row["bscups"]
-        delta_e = row["delta_e"]
-        g_u = row["g_u"]
 
-        ttype = row["ttype"]
-        if ttype > 5: ttype -= 5
+        levels_df = self.levels_df.copy()
 
-        kt = kb_ev * temperatures
+        levels_subq = self.session.query(Level.level_id.label("level_id")). \
+            filter(Level.level_id.in_(levels_df.index.values)).\
+            filter(Level.data_source == self.ch_ds).subquery()
 
-        spline_tck = interpolate.splrep(x_knots, y_knots)
+        collisions_q = self.session.query(ECollision). \
+            join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
 
-        if ttype == 1:
-            x = 1 - np.log(c) / np.log(kt / delta_e + c)
-            y_func = interpolate.splev(x, spline_tck)
-            upsilon = y_func * np.log(kt / delta_e + np.exp(1))
+        collisions_data = list()
+        for e_col in collisions_q.options(joinedload(ECollision.gf_values),
+                                          joinedload(ECollision.temp_strengths)):
 
-        elif ttype == 2:
-            x = (kt / delta_e) / (kt / delta_e + c)
-            y_func = interpolate.splev(x, spline_tck)
-            upsilon = y_func
+            # Try to get the first gf value
+            try:
+                gf = e_col.gf_values[0].quantity
+            except IndexError:
+                print "No gf is available for electron collision {0}".format(e_col.e_col_id)
+                continue
 
-        elif ttype == 3:
-            x = (kt / delta_e) / (kt / delta_e + c)
-            y_func = interpolate.splev(x, spline_tck)
-            upsilon = y_func / (kt / delta_e + 1)
+            btemp, bscups = (list(ts) for ts in zip(*e_col.temp_strengths_tuple))
 
-        elif ttype == 4:
-            x = 1 - np.log(c) / np.log(kt / delta_e + c)
-            y_func = interpolate.splev(x, spline_tck)
-            upsilon = y_func * np.log(kt / delta_e + c)
+            collisions_data.append((e_col.e_col_id, e_col.lower_level_id, e_col.upper_level_id,
+                e_col.data_source_id, btemp, bscups, e_col.bt92_ttype, e_col.bt92_cups, gf.value))
 
-        elif ttype == 5:
-            raise ValueError('Not sure what to do with ttype=5')
+        collisions_dtype = [("e_col_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
+                            ("ds_id", np.int),  ("btemp", 'O'), ("bscups", 'O'), ("ttype", np.int),
+                            ("cups", np.float), ("gf", np.float)]
 
-        #### 1992A&A...254..436B Equation 20 & 22 #####
+        collisions_data = np.array(collisions_data, dtype=collisions_dtype)
+        collisions_df = pd.DataFrame.from_records(collisions_data, index="e_col_id")
 
-        col_strg_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
-        return tuple(col_strg_ul)
+        # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
+        ions_df = levels_df[["atomic_number", "ion_number"]]
 
-    collisions_df["col_strg_ul"] = collisions_df.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+        lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
+                              loc[:, ["level_number_lower", "g_l", "energy_lower"]]
+        upper_levels_df = levels_df.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+                              loc[:, ["level_number_upper", "g_u", "energy_upper"]]
 
-    # Calculate g_ratio
-    collisions_df["g_ratio"] = collisions_df["g_l"] / collisions_df["g_u"]
+        collisions_df = collisions_df.join(ions_df, on="lower_level_id")
+        collisions_df = collisions_df.join(lower_levels_df, on="lower_level_id")
+        collisions_df = collisions_df.join(upper_levels_df, on="upper_level_id")
 
-    # Drop the unwanted columns
-    collisions_df.drop(["lower_level_id", "upper_level_id", "btemp", "bscups",
-                        "ttype", "energy_lower", "energy_upper", "gf", "g_l", "g_u", "cups"],  axis=1, inplace=True)
+        # Calculate delta_e
+        kb_ev = const.k_B.cgs.to('eV / K').value
+        collisions_df["delta_e"] = (collisions_df["energy_upper"] - collisions_df["energy_lower"])/kb_ev
 
-    # Set multiindex
-    collisions_df.reset_index(inplace=True)
-    collisions_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        def calculate_collisional_strength(row, temperatures):
+            """
+                Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38)
+            """
+            c = row["cups"]
+            x_knots = np.linspace(0, 1, len(row["btemp"]))
+            y_knots = row["bscups"]
+            delta_e = row["delta_e"]
+            g_u = row["g_u"]
 
-    return collisions_df
+            ttype = row["ttype"]
+            if ttype > 5: ttype -= 5
 
+            kt = kb_ev * temperatures
 
-def create_macro_atom_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
-                         levels_df=None, lines_df=None):
-    """
-        Create a DataFrame with macro atom data.
-        Parameters
-        ----------
-        session : SQLAlchemy session
-        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
-            The lines data for these ions will be taken from the CHIANTI database
-            (default: None)
-        chianti_short_name: str
-            The short name of the CHIANTI database, if set to None the latest version will be used
-            (default: None)
-        kurucz_short_name: str
-            The short name of the Kurucz database, if set to None the latest version will be used
-            (default: None)
-        Returns
-        -------
-        macro_atom_df : pandas.DataFrame
-            DataFrame with columns:
+            spline_tck = interpolate.splrep(x_knots, y_knots)
 
-    """
+            if ttype == 1:
+                x = 1 - np.log(c) / np.log(kt / delta_e + c)
+                y_func = interpolate.splev(x, spline_tck)
+                upsilon = y_func * np.log(kt / delta_e + np.exp(1))
 
-    if chianti_short_name is None:
-        chianti_short_name = "chianti_v8.0.2"
+            elif ttype == 2:
+                x = (kt / delta_e) / (kt / delta_e + c)
+                y_func = interpolate.splev(x, spline_tck)
+                upsilon = y_func
 
-    if kurucz_short_name is None:
-        kurucz_short_name = "ku_latest"
+            elif ttype == 3:
+                x = (kt / delta_e) / (kt / delta_e + c)
+                y_func = interpolate.splev(x, spline_tck)
+                upsilon = y_func / (kt / delta_e + 1)
 
-    try:
-        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
-        ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
-    except NoResultFound:
-        print "Requested data sources do not exist!"
-        raise
+            elif ttype == 4:
+                x = 1 - np.log(c) / np.log(kt / delta_e + c)
+                y_func = interpolate.splev(x, spline_tck)
+                upsilon = y_func * np.log(kt / delta_e + c)
 
-    if levels_df is None:
-        levels_df = create_levels_df(session, chianti_species=chianti_species,
-                         chianti_short_name=chianti_short_name, create_metastable_flags=False)
+            elif ttype == 5:
+                raise ValueError('Not sure what to do with ttype=5')
 
-    if lines_df is None:
-        lines_df = create_lines_df(session, chianti_species=chianti_species,
-                         chianti_short_name=chianti_short_name, levels_df=levels_df)
+            #### 1992A&A...254..436B Equation 20 & 22 #####
 
-    # Set level_id as index
-    levels_df = levels_df.reset_index()
-    levels_df = levels_df.set_index("level_id")
+            c_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
+            return tuple(c_ul)
 
-    lvl_energy_lower_df = levels_df.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
-    lvl_energy_upper_df = levels_df.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
+        collisions_df["c_ul"] = collisions_df.apply(calculate_collisional_strength, axis=1, args=(self.temperatures,))
 
-    lines_df = lines_df.join(lvl_energy_lower_df, on="lower_level_id")
-    lines_df = lines_df.join(lvl_energy_upper_df, on="upper_level_id")
+        # Calculate g_ratio
+        collisions_df["g_ratio"] = collisions_df["g_l"] / collisions_df["g_u"]
 
-    macro_atom_data = list()
-    macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
-                        ("source_level_number", np.int), ("target_level_number", np.int),
-                        ("transition_line_id", np.int), ("transition_type", np.int), ("transition_probability", np.float)]
+        return collisions_df
 
-    for index, row in lines_df.iterrows():
-        atomic_number, ion_number, level_number_lower, level_number_upper = index
-        nu = row["nu"]
-        f_ul, f_lu = row["f_ul"], row["f_lu"]
-        e_lower, e_upper = row["energy_lower"], row["energy_upper"]
-        line_id = row["line_id"]
+    def prepare_collisions_df(self):
+        """
+            Prepare collisions_df for TARDIS
 
-        transition_probabilities_dict = dict()  # type : probability
-        transition_probabilities_dict[P_EMISSION_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
-        transition_probabilities_dict[P_INTERNAL_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * e_lower
-        transition_probabilities_dict[P_INTERNAL_UP] = f_lu * e_lower / (const.h.cgs.value * nu)
+            Returns
+            -------
+            collisions_df : pandas.DataFrame
+                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
+                and columns: e_col_id, delta_e, g_ratio, c_ul
+        """
 
-        macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
-                                line_id, P_EMISSION_DOWN, transition_probabilities_dict[P_EMISSION_DOWN]))
-        macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
-                                line_id, P_INTERNAL_DOWN, transition_probabilities_dict[P_INTERNAL_DOWN]))
-        macro_atom_data.append((atomic_number, ion_number, level_number_lower, level_number_upper,
-                                line_id, P_INTERNAL_UP, transition_probabilities_dict[P_INTERNAL_UP]))
+        collisions_df = self.collisions_df.copy()
 
-    macro_atom_data = np.array(macro_atom_data, dtype=macro_atom_dtype)
-    macro_atom_df = pd.DataFrame(macro_atom_data)
+        # Drop the unwanted columns
+        collisions_df.drop(["lower_level_id", "upper_level_id", "ds_id", "btemp", "bscups",
+                            "ttype", "energy_lower", "energy_upper", "gf", "g_l", "g_u", "cups"],  axis=1, inplace=True)
 
-    # Set multiindex and sort to get the block for each source level
-    macro_atom_df.set_index(["atomic_number", "ion_number", "source_level_number", "target_level_number"], inplace=True)
-    macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        # Set multiindex
+        collisions_df.reset_index(inplace=True)
+        collisions_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
-    return macro_atom_df
+        return collisions_df
 
+    @property
+    def macro_atom_df(self):
+        if self._macro_atom_df is None:
+            self._macro_atom_df = self.create_macro_atom_df()
+        return self._macro_atom_df
 
-def create_macro_atom_ref_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
-                         levels_df=None, lines_df=None):
-    """
-        Create a DataFrame with macro atom data.
-        Parameters
-        ----------
-        session : SQLAlchemy session
-        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
-            The lines data for these ions will be taken from the CHIANTI database
-            (default: None)
-        chianti_short_name: str
-            The short name of the CHIANTI database, if set to None the latest version will be used
-            (default: None)
-        kurucz_short_name: str
-            The short name of the Kurucz database, if set to None the latest version will be used
-            (default: None)
-        Returns
-        -------
-        macro_atom_ref_df : pandas.DataFrame
-            DataFrame with multiindex: atomic_number, ion_number, source_level_number
-            ande columns: level_id, count_down, count_up, count_total
-    """
+    def create_macro_atom_df(self):
+        """
+            Create a DataFrame with macro atom data.
 
-    if chianti_short_name is None:
-        chianti_short_name = "chianti_v8.0.2"
+            Returns
+            -------
+            macro_atom_df : pandas.DataFrame
+                DataFrame with columns: atomic_number, ion_number, source_level_number, target_level_number,
+                transition_line_id, transition_type, transition_probability
 
-    if kurucz_short_name is None:
-        kurucz_short_name = "ku_latest"
+            Notes:
+                Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
 
-    try:
-        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
-        ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
-    except NoResultFound:
-        print "Requested data sources do not exist!"
-        raise
+        """
 
-    if levels_df is None:
-        levels_df = create_levels_df(session, chianti_species=chianti_species,
-                                     chianti_short_name=chianti_short_name, create_metastable_flags=False)
+        levels_df = self.levels_df.copy()
+        lines_df = self.lines_df.copy()
 
-    if lines_df is None:
-        lines_df = create_lines_df(session, chianti_species=chianti_species,
-                                   chianti_short_name=chianti_short_name, levels_df=levels_df)
+        lvl_energy_lower_df = levels_df.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
+        lvl_energy_upper_df = levels_df.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
 
-    levels_df = levels_df.reset_index()
-    levels_df = levels_df.set_index("level_id")
+        lines_df = lines_df.join(lvl_energy_lower_df, on="lower_level_id")
+        lines_df = lines_df.join(lvl_energy_upper_df, on="upper_level_id")
 
-    macro_atom_ref_df = levels_df.rename(columns={"level_number": "source_level_number"}).\
-                                   loc[:, ["atomic_number", "ion_number", "source_level_number"]]
+        macro_atom_data = list()
+        macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
+                            ("source_level_number", np.int), ("target_level_number", np.int),
+                            ("transition_line_id", np.int), ("transition_type", np.int), ("transition_probability", np.float)]
 
-    count_down = lines_df.groupby("upper_level_id").size()
-    count_down.name = "count_down"
+        for line_id, row in lines_df.iterrows():
+            atomic_number, ion_number = row["atomic_number"], row["ion_number"]
+            level_number_lower, level_number_upper = row["level_number_lower"], row["level_number_upper"]
+            nu = row["nu"]
+            f_ul, f_lu = row["f_ul"], row["f_lu"]
+            e_lower, e_upper = row["energy_lower"], row["energy_upper"]
 
-    count_up = lines_df.groupby("lower_level_id").size()
-    count_up.name = "count_up"
+            transition_probabilities_dict = dict()  # type : probability
+            transition_probabilities_dict[P_EMISSION_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
+            transition_probabilities_dict[P_INTERNAL_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * e_lower
+            transition_probabilities_dict[P_INTERNAL_UP] = f_lu * e_lower / (const.h.cgs.value * nu)
 
-    macro_atom_ref_df = macro_atom_ref_df.join(count_down).join(count_up)
-    macro_atom_ref_df.fillna(0, inplace=True)
-    macro_atom_ref_df["count_total"] = 2*macro_atom_ref_df["count_down"] + macro_atom_ref_df["count_up"]
+            macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
+                                    line_id, P_EMISSION_DOWN, transition_probabilities_dict[P_EMISSION_DOWN]))
+            macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
+                                    line_id, P_INTERNAL_DOWN, transition_probabilities_dict[P_INTERNAL_DOWN]))
+            macro_atom_data.append((atomic_number, ion_number, level_number_lower, level_number_upper,
+                                    line_id, P_INTERNAL_UP, transition_probabilities_dict[P_INTERNAL_UP]))
 
-    macro_atom_ref_df.reset_index(inplace=True)
-    macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_data = np.array(macro_atom_data, dtype=macro_atom_dtype)
+        macro_atom_df = pd.DataFrame(macro_atom_data)
 
-    return macro_atom_ref_df
+        return macro_atom_df
+
+    def prepare_macro_atom_df(self):
+        """
+            Prepare macro_atom_df for TARDIS
+
+            Returns
+            -------
+            macro_atom_df : pandas.DataFrame
+                DataFrame with muliindex: atomic_number, ion_number, source_level_number, target_level_number
+                and columns: transition_line_id, transition_type, transition_probability
+
+            Notes:
+                Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
+
+        """
+        macro_atom_df = self.macro_atom_df.set_index(["atomic_number", "ion_number", "source_level_number", "target_level_number"])
+        macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        return macro_atom_df
+
+    @property
+    def macro_atom_ref_df(self):
+        if self._macro_atom_ref_df is None:
+            self._macro_atom_ref_df = self.create_macro_atom_ref_df()
+        return self._macro_atom_ref_df
+
+    def create_macro_atom_ref_df(self):
+        """
+            Create a DataFrame with macro atom reference data.
+
+            Returns
+            -------
+            macro_atom_ref_df : pandas.DataFrame
+                DataFrame with index: level_id,
+                and columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total
+        """
+
+        levels_df = self.levels_df.copy()
+        lines_df = self.lines_df.copy()
+
+        macro_atom_ref_df = levels_df.rename(columns={"level_number": "source_level_number"}).\
+                                       loc[:, ["atomic_number", "ion_number", "source_level_number"]]
+
+        count_down = lines_df.groupby("upper_level_id").size()
+        count_down.name = "count_down"
+
+        count_up = lines_df.groupby("lower_level_id").size()
+        count_up.name = "count_up"
+
+        macro_atom_ref_df = macro_atom_ref_df.join(count_down).join(count_up)
+        macro_atom_ref_df.fillna(0, inplace=True)
+        macro_atom_ref_df["count_total"] = 2*macro_atom_ref_df["count_down"] + macro_atom_ref_df["count_up"]
+
+        return macro_atom_ref_df
+
+    def prepare_macro_atom_ref_df(self):
+        """
+            Prepare macro_atom_ref_df for TARDIS
+
+            Returns
+            -------
+            macro_atom_ref_df : pandas.DataFrame
+                DataFrame with multiindex: atomic_number, ion_number, source_level_number
+                and columns: level_id, count_down, count_up, count_total
+        """
+        macro_atom_ref_df = self.macro_atom_ref_df.copy()
+
+        macro_atom_ref_df.reset_index(inplace=True)
+        macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+
+        return macro_atom_ref_df
