@@ -11,7 +11,7 @@ TEST_DB_FNAME = os.path.join(DATA_DIR, 'test.db')
 GFALL_FNAME = os.path.join(DATA_DIR, "gftest.all")
 
 
-def create_test_db(test_db_fname=None, gfall_fname=None):
+def create_test_db(test_db_fname=TEST_DB_FNAME, gfall_fname=GFALL_FNAME):
     """
     Create a database for testing
 
@@ -22,11 +22,6 @@ def create_test_db(test_db_fname=None, gfall_fname=None):
     gfall_fname : str
         Filename for the GFALL file
     """
-    if test_db_fname is None:
-        test_db_fname = TEST_DB_FNAME
-
-    if gfall_fname is None:
-        gfall_fname = GFALL_FNAME
 
     test_db_f = open(test_db_fname, "w")
     test_db_f.close()
@@ -52,9 +47,13 @@ def create_test_db(test_db_fname=None, gfall_fname=None):
     gfall_ingester.ingest(levels=True, lines=True)
     session.commit()
 
-    # Ingest chianti levels and lines
+    # Ingest chianti levels, lines and electron collisions
     chianti_ingester = ChiantiIngester(session, ions_list=["he_2", "n_6"])
-    chianti_ingester.ingest(levels=True, lines=True)
+    chianti_ingester.ingest(levels=True, lines=True, collisions=True)
     session.commit()
 
     session.close()
+
+
+if __name__ == "__main__":
+    create_test_db()
