@@ -576,6 +576,12 @@ def create_macro_atom_df(session, chianti_species=None, chianti_short_name=None,
     macro_atom_data = np.array(macro_atom_data, dtype=macro_atom_dtype)
     macro_atom_df = pd.DataFrame(macro_atom_data)
 
+    # Set multiindex and sort to get the block for each source level
+    macro_atom_df.set_index(["atomic_number", "ion_number", "source_level_number", "target_level_number"], inplace=True)
+    macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+
+    return macro_atom_df
+
 
 
 
