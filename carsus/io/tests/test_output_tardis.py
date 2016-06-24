@@ -1,8 +1,6 @@
 import pytest
 
-from carsus.io.output.tardis_op import create_basic_atom_df, create_ionization_df,\
-    create_levels_df, create_lines_df, create_collisions_df, create_macro_atom_df,\
-    create_macro_atom_ref_df
+from carsus.io.output.tardis_op import AtomData
 from carsus.model import DataSource
 from numpy.testing import assert_almost_equal
 from astropy import units as u
@@ -16,23 +14,41 @@ with_test_db = pytest.mark.skipif(
 
 
 @pytest.fixture
-def basic_atom_df(test_session):
-    return create_basic_atom_df(test_session)
+def atom_data(test_session):
+    atom_data = AtomData(test_session, chianti_species=["He 2", "N 6"])
+    return atom_data
+
+@pytest.fixture
+def basic_atom_df(atom_data):
+    return atom_data.prepare_basic_atom_df()
 
 
 @pytest.fixture
-def ionization_df(test_session):
-    return create_ionization_df(test_session)
+def ionization_df(atom_data):
+    return atom_data.prepare_ionization_df()
 
 
 @pytest.fixture
-def levels_df(test_session):
-    return create_levels_df(test_session, chianti_species=["He 2", "N 6"])
+def levels_df(atom_data):
+    return atom_data.prepare_levels_df()
 
 
 @pytest.fixture
-def lines_df(test_session):
-    return create_lines_df(test_session, chianti_species=["He 2", "N 6"])
+def lines_df(atom_data):
+    return atom_data.prepare_lines_df()
+
+@pytest.fixture
+def collisions_df(atom_data):
+    return atom_data.prepare_collisions_df()
+
+@pytest.fixture
+def macro_atom_df(atom_data):
+    return atom_data.prepare_macro_atom_df()
+
+
+@pytest.fixture
+def macro_atom_ref_df(atom_data):
+    return atom_data.prepare_macro_atom_ref_df()
 
 
 @with_test_db
@@ -45,8 +61,8 @@ def test_create_basic_atom_df(basic_atom_df, atomic_number, exp_weight):
                         exp_weight)
 
 @with_test_db
-def test_create_basic_atom_df_max_atomic_number(test_session):
-    basic_atom_df = create_basic_atom_df(test_session, max_atomic_number=15)
+def test_create_basic_atom_df_max_atomic_number(atom_data):
+    basic_atom_df = atom_data.prepare_basic_atom_df(max_atomic_number=15)
     basic_atom_df.reset_index(inplace=True)
     assert basic_atom_df["atomic_number"].max() == 15
 
@@ -74,7 +90,8 @@ def test_create_levels_df(levels_df, atomic_number, ion_number, level_number, ex
 
 @with_test_db
 def test_create_levels_df_wo_chianti_species(test_session):
-    levels_df = create_levels_df(test_session)
+    atom_data = AtomData(test_session)
+    levels_df = atom_data.levels_df
     chianti_ds_id = test_session.query(DataSource.data_source_id).\
         filter(DataSource.short_name=="chianti_v8.0.2").scalar()
     assert all(levels_df["ds_id"]!=chianti_ds_id)
@@ -90,17 +107,16 @@ def test_create_lines_df(lines_df, atomic_number, ion_number, level_number_lower
                                level_number_lower, level_number_upper)]["wavelength"]*u.Unit("angstrom")
     assert_quantity_allclose(wavelength, exp_wavelength)
 
-
+# ToDo: Implement real tests
 @with_test_db
-def test_create_collisions_df(test_session):
-    collisions_df = create_collisions_df(test_session, chianti_species=["He 2", "N 6"])
-
-
-@with_test_db
-def test_create_macro_atom_df(test_session):
-    macro_atom_df = create_macro_atom_df(test_session, chianti_species=["He 2", "N 6"])
+def test_create_collisions_df(collisions_df):
+    assert True
 
 
 @with_test_db
-def test_create_macro_atom_ref_df(test_session):
-    macro_atom_ref_df = create_macro_atom_ref_df(test_session, chianti_species=["He 2", "N 6"])
+def test_create_macro_atom_df(macro_atom_df):
+    assert True
+
+@with_test_db
+def test_create_macro_atom_ref_df(macro_atom_ref_df):
+    assert True
