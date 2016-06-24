@@ -513,8 +513,6 @@ def create_macro_atom_df(session, chianti_species=None, chianti_short_name=None,
         -------
         macro_atom_df : pandas.DataFrame
             DataFrame with columns:
-        macro_atom_references : pandas.DataFrame
-            DataFrame with columns:
 
     """
 
@@ -583,8 +581,67 @@ def create_macro_atom_df(session, chianti_species=None, chianti_short_name=None,
     return macro_atom_df
 
 
+def create_macro_atom_ref_df(session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
+                         levels_df=None, lines_df=None):
+    """
+        Create a DataFrame with macro atom data.
+        Parameters
+        ----------
+        session : SQLAlchemy session
+        chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
+            The lines data for these ions will be taken from the CHIANTI database
+            (default: None)
+        chianti_short_name: str
+            The short name of the CHIANTI database, if set to None the latest version will be used
+            (default: None)
+        kurucz_short_name: str
+            The short name of the Kurucz database, if set to None the latest version will be used
+            (default: None)
+        Returns
+        -------
+        macro_atom_ref_df : pandas.DataFrame
+            DataFrame with multiindex: atomic_number, ion_number, source_level_number
+            ande columns: level_id, count_down, count_up, count_total
+    """
 
+    if chianti_short_name is None:
+        chianti_short_name = "chianti_v8.0.2"
 
+    if kurucz_short_name is None:
+        kurucz_short_name = "ku_latest"
 
+    try:
+        ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
+        ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
+    except NoResultFound:
+        print "Requested data sources do not exist!"
+        raise
 
+    if levels_df is None:
+        levels_df = create_levels_df(session, chianti_species=chianti_species,
+                                     chianti_short_name=chianti_short_name, create_metastable_flags=False)
 
+    if lines_df is None:
+        lines_df = create_lines_df(session, chianti_species=chianti_species,
+                                   chianti_short_name=chianti_short_name, levels_df=levels_df)
+
+    levels_df = levels_df.reset_index()
+    levels_df = levels_df.set_index("level_id")
+
+    macro_atom_ref_df = levels_df.rename(columns={"level_number": "source_level_number"}).\
+                                   loc[:, ["atomic_number", "ion_number", "source_level_number"]]
+
+    count_down = lines_df.groupby("upper_level_id").size()
+    count_down.name = "count_down"
+
+    count_up = lines_df.groupby("lower_level_id").size()
+    count_up.name = "count_up"
+
+    macro_atom_ref_df = macro_atom_ref_df.join(count_down).join(count_up)
+    macro_atom_ref_df.fillna(0, inplace=True)
+    macro_atom_ref_df["count_total"] = 2*macro_atom_ref_df["count_down"] + macro_atom_ref_df["count_up"]
+
+    macro_atom_ref_df.reset_index(inplace=True)
+    macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+
+    return macro_atom_ref_df
