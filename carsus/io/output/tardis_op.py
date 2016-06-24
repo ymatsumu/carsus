@@ -15,36 +15,101 @@ P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
 
-def create_basic_atom_df(session, max_atomic_number=30):
+class AtomData(object):
     """
-        Create a DataFrame with basic atomic data.
+    Class for creating the atomic dataframes for TARDIS
+
+    Parameters:
+    ------------
+    session: SQLAlchemy session
+    chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
+            The levels data for these ions will be taken from the CHIANTI database
+            (default: None)
+    chianti_short_name: str
+        The short name of the CHIANTI database, if set to None the latest version will be used
+        (default: None)
+    kurucz_short_name: str
+        The short name of the Kurucz database, if set to None the latest version will be used
+        (default: None)
+
+    """
+
+    def __init__(self, session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None):
+
+        self.session = session
+
+        if kurucz_short_name is None:
+            kurucz_short_name = "ku_latest"
+        try:
+            self.ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
+        except NoResultFound:
+            print "Kurucz data source does not exist!"
+            raise
+
+        self.chianti_species = chianti_species
+        if self.chianti_species:
+            if chianti_short_name is None:
+                chianti_short_name = "chianti_v8.0.2"
+            try:
+                self.ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
+            except NoResultFound:
+                print "Chianti data source does not exist!"
+                raise
+
+        self._basic_atom_df = None
+        self._ionization_df = None
+        self._levels_df = None
+        self._lines_df = None
+
+    @property
+    def basic_atom_df(self):
+        if self._basic_atom_df is None:
+            self._basic_atom_df = self.create_basic_atom_df()
+        return self._basic_atom_df
+
+    def create_basic_atom_df(self):
+        """
+            Create a DataFrame with basic atomic data.
+
+            Returns
+            -------
+            basic_atom_df : pandas.DataFrame
+                DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
+        """
+        basic_atom_q = self.session.query(Atom).order_by(Atom.atomic_number)
+
+        basic_atom_data = list()
+        for atom in basic_atom_q.options(joinedload(Atom.weights)):
+            weight = atom.weights[0].quantity.value if atom.weights else None  # Get the first weight from the collection
+            basic_atom_data.append((atom.atomic_number, atom.symbol, atom.name, weight))
+
+        basic_atom_dtype = [("atomic_number", np.int), ("symbol", "|S5"), ("name", "|S150"),
+                            ("weight", np.float)]
+        basic_atom_data = np.array(basic_atom_data, dtype=basic_atom_dtype)
+        basic_atom_df = pd.DataFrame.from_records(basic_atom_data)
+
+        return basic_atom_df
+
+    def prepare_basic_atom_df(self, max_atomic_number=30):
+        """
+        Prepare the basic_atom_df for TARDIS
         Parameters
         ----------
-        session : SQLAlchemy session
         max_atomic_number: int
             The maximum atomic number to be stored in basic_atom_df
+            (default: 30)
 
         Returns
         -------
         basic_atom_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, symbol, name, weight[u]
-    """
-    basic_atom_q = session.query(Atom).\
-        filter(Atom.atomic_number <= max_atomic_number).\
-        order_by(Atom.atomic_number)
+               DataFrame with index: atomic_number
+                        and columns: symbol, name, weight[u]
+        """
+        basic_atom_df = self.basic_atom_df.set_index("atomic_number")
+        basic_atom_df = basic_atom_df.loc[:max_atomic_number]
+        return basic_atom_df
 
-    basic_atom_data = list()
-    for atom in basic_atom_q.options(joinedload(Atom.weights)):
-        weight = atom.weights[0].quantity.value if atom.weights else None  # Get the first weight from the collection
-        basic_atom_data.append((atom.atomic_number, atom.symbol, atom.name, weight))
 
-    basic_atom_dtype = [("atomic_number", np.int), ("symbol", "|S5"), ("name", "|S150"),
-                        ("weight", np.float)]
-    basic_atom_data = np.array(basic_atom_data, dtype=basic_atom_dtype)
-
-    basic_atom_df = pd.DataFrame.from_records(basic_atom_data, index="atomic_number")
-
-    return basic_atom_df
 
 
 def create_ionization_df(session):
