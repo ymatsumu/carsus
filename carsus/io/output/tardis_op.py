@@ -34,6 +34,26 @@ class AtomData(object):
     temperatures: np.array
         The temperatures for calculating collision strengths
 
+    Attributes:
+    ------------
+    basic_atom_df
+    ionization_df
+    levels_df
+    lines_df
+    collisions_df
+    macro_atom_df
+    macro_atom_ref_df
+
+    Methods:
+    ---------
+    prepare_basic_atom_df
+    prepare_ionization_df
+    prepare_levels_df
+    prepare_lines_df
+    prepare_collisions_df
+    prepare_macro_atom_df
+    prepare_macro_atom_ref_df
+
     """
 
     def __init__(self, session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
