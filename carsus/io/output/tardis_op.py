@@ -110,6 +110,11 @@ class AtomData(object):
             "metastable_loggf_threshold": levels_metastable_loggf_threshold
         }
 
+        if collisions_temperatures is None:
+            collisions_temperatures = np.linspace(2000, 50000, 20)
+        else:
+            collisions_temperatures = np.array(collisions_temperatures)
+
         self.collisions_param = {
             "temperatures": collisions_temperatures
         }
@@ -151,7 +156,7 @@ class AtomData(object):
             self._basic_atom_df = self.create_basic_atom_df(**self.basic_atom_param)
         return self._basic_atom_df
 
-    def create_basic_atom_df(self, max_atomic_number=30):
+    def create_basic_atom_df(self, max_atomic_number):
         """
         Create a DataFrame with basic atomic data.
 
@@ -159,7 +164,6 @@ class AtomData(object):
         ----------
         max_atomic_number: int
             The maximum atomic number to be stored in basic_atom_df
-            (default: 30)
 
         Returns
         -------
@@ -253,7 +257,7 @@ class AtomData(object):
             self._levels_df = self.create_levels_df()
         return self._levels_df
 
-    def create_levels_df(self, create_metastable_flags=True, metastable_loggf_threshold=-3):
+    def create_levels_df(self, create_metastable_flags, metastable_loggf_threshold):
         """
             Create a DataFrame with levels data.
 
@@ -261,10 +265,8 @@ class AtomData(object):
             ----------
             create_metastable_flags: bool
                 Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
-                (default: True)
             metastable_loggf_threshold: int
                 log(gf) threshold for flagging metastable levels
-                (default: -3)
 
             Returns
             -------
@@ -519,7 +521,7 @@ class AtomData(object):
             self._collistions_df = self.create_collisions_df(**self.collisions_param)
         return self._collistions_df
 
-    def create_collisions_df(self, temperatures=None):
+    def create_collisions_df(self, temperatures):
         """
             Create a DataFrame with collisions data.
 
@@ -527,7 +529,6 @@ class AtomData(object):
             -----------
             temperatures: np.array
                 The temperatures for calculating collision strengths
-                (default: None)
 
             Returns
             -------
@@ -535,11 +536,6 @@ class AtomData(object):
                 DataFrame with indes: e_col_id,
                 and columns:
         """
-
-        if temperatures is None:
-            temperatures = np.linspace(2000, 50000, 20)
-        else:
-            temperatures = np.array(temperatures)
 
         levels_df = self.levels_df.copy()
 
