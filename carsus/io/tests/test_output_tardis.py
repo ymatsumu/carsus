@@ -1,9 +1,11 @@
 import pytest
 import os
+import pandas as pd
+import numpy as np
 
 from carsus.io.output.tardis_op import AtomData
 from carsus.model import DataSource
-from numpy.testing import assert_almost_equal
+from numpy.testing import assert_almost_equal, assert_allclose
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
 
@@ -56,14 +58,17 @@ def macro_atom_ref_df_prepared(atom_data):
 
 
 @pytest.fixture
-def hdf5_path(request, data_dir):
-    hdf5_path = os.path.join(data_dir, "test_hdf.hdf5")
+def hdf_store(request, data_dir, atom_data):
+    hdf_path = os.path.join(data_dir, "test_hdf.hdf5")
+    atom_data.to_hdf(hdf_path)
+    hdf_store = pd.HDFStore(hdf_path)
 
     def fin():
-      os.remove(hdf5_path)
+        hdf_store.close()
+        os.remove(hdf_path)
     request.addfinalizer(fin)
 
-    return hdf5_path
+    return hdf_store
 
 
 @with_test_db
@@ -143,5 +148,6 @@ def test_prepare_macro_atom_ref_df(macro_atom_ref_df_prepared):
 
 
 @with_test_db
-def test_atom_data_to_hdf(atom_data, hdf5_path):
-    atom_data.to_hdf(hdf5_path)
+def test_atom_data_to_hdf_collisions_df_attrs(hdf_store):
+    collisions_temperatures = hdf_store.get_storer("collisions_df").attrs["temperatures"]
+    assert_allclose(collisions_temperatures, np.linspace(2000, 50000, 20))
