@@ -857,7 +857,7 @@ class AtomData(object):
                 store.put("macro_atom_ref_df", self.macro_atom_ref_df_prepared)
 
             # Set the root attributes
-
+            # It seems that the only way to set the root attributes is to use `_v_attrs`
             store.root._v_attrs["database_version"] = "v0.9"
 
             print "Signing AtomData with MD5 and UUID1"
