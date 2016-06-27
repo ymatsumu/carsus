@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
+import hashlib
+import uuid
 
+from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from sqlalchemy import and_, union_all, literal
 from sqlalchemy.orm import joinedload
@@ -22,6 +25,15 @@ class AtomData(object):
     Parameters:
     ------------
     session: SQLAlchemy session
+    basic_atom_max_atomic_number: int
+        The maximum atomic number to be stored in basic_atom_df
+            (default: 30)
+    levels_create_metastable_flags: bool
+        Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
+        (default: True)
+    levels_metastable_loggf_threshold: int
+        log(gf) threshold for flagging metastable levels
+        (default: -3)
     chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
             The levels data for these ions will be taken from the CHIANTI database
             (default: None)
@@ -36,6 +48,13 @@ class AtomData(object):
 
     Attributes:
     ------------
+    session: SQLAlchemy session
+    basic_atom_param: dict
+        The parameters for creating basic_atom_df
+    levels_param: dict
+        The parameters for creating levels_df
+    collisions_df: dict
+        The parameters for creating collisins_df
     basic_atom_df
     ionization_df
     levels_df
@@ -43,9 +62,23 @@ class AtomData(object):
     collisions_df
     macro_atom_df
     macro_atom_ref_df
+    basic_atom_df_prepared
+    ionization_df_prepared
+    levels_df_prepared
+    lines_df_prepared
+    collisions_df_prepared
+    macro_atom_df_prepared
+    macro_atom_ref_df_prepared
 
     Methods:
     ---------
+    create_basic_atom_df
+    create_ionization_df
+    create_levels_df
+    create_lines_df
+    create_collisions_df
+    create_macro_atom_df
+    create_macro_atom_ref_df
     prepare_basic_atom_df
     prepare_ionization_df
     prepare_levels_df
@@ -56,11 +89,29 @@ class AtomData(object):
 
     """
 
-    def __init__(self, session, chianti_species=None, chianti_short_name=None, kurucz_short_name=None,
-                 temperatures=None):
+    def __init__(self, session,
+                 basic_atom_max_atomic_number=30, levels_create_metastable_flags=True,
+                 levels_metastable_loggf_threshold=-3, chianti_species=None,
+                 chianti_short_name=None, kurucz_short_name=None,
+                 collisions_temperatures=None):
 
         self.session = session
 
+        # Set the parameters for the dataframes
+        self.basic_atom_param = {
+            "max_atomic_number": basic_atom_max_atomic_number
+        }
+
+        self.levels_param = {
+            "create_metastable_flags": levels_create_metastable_flags,
+            "metastable_loggf_threshold": levels_metastable_loggf_threshold
+        }
+
+        self.collisions_param = {
+            "temperatures": collisions_temperatures
+        }
+
+        # Query the data sources
         if kurucz_short_name is None:
             kurucz_short_name = "ku_latest"
         try:
@@ -68,7 +119,6 @@ class AtomData(object):
         except NoResultFound:
             print "Kurucz data source does not exist!"
             raise
-
 
         if chianti_species is not None:
 
@@ -84,13 +134,6 @@ class AtomData(object):
                 raise
         self.chianti_species = chianti_species
 
-        # Calculate collisional stengths
-        if temperatures is None:
-            temperatures = np.linspace(2000, 50000, 20)
-        else:
-            temperatures = np.array(temperatures)
-        self.temperatures = temperatures
-
         self._basic_atom_df = None
         self._ionization_df = None
         self._levels_df = None
@@ -102,19 +145,27 @@ class AtomData(object):
     @property
     def basic_atom_df(self):
         if self._basic_atom_df is None:
-            self._basic_atom_df = self.create_basic_atom_df()
+            self._basic_atom_df = self.create_basic_atom_df(**self.basic_atom_param)
         return self._basic_atom_df
 
-    def create_basic_atom_df(self):
+    def create_basic_atom_df(self, max_atomic_number=30):
         """
         Create a DataFrame with basic atomic data.
+
+        Parameters
+        ----------
+        max_atomic_number: int
+            The maximum atomic number to be stored in basic_atom_df
+            (default: 30)
 
         Returns
         -------
         basic_atom_df : pandas.DataFrame
             DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
         """
-        basic_atom_q = self.session.query(Atom).order_by(Atom.atomic_number)
+        basic_atom_q = self.session.query(Atom). \
+            filter(Atom.atomic_number <= max_atomic_number).\
+            order_by(Atom.atomic_number)
 
         basic_atom_data = list()
         for atom in basic_atom_q.options(joinedload(Atom.weights)):
@@ -128,14 +179,13 @@ class AtomData(object):
 
         return basic_atom_df
 
-    def prepare_basic_atom_df(self, max_atomic_number=30):
+    @property
+    def basic_atom_df_prepared(self):
+        return self.prepare_basic_atom_df()
+
+    def prepare_basic_atom_df(self):
         """
         Prepare the basic_atom_df for TARDIS
-        Parameters
-        ----------
-        max_atomic_number: int
-            The maximum atomic number to be stored in basic_atom_df
-            (default: 30)
 
         Returns
         -------
@@ -144,7 +194,6 @@ class AtomData(object):
                         and columns: symbol, name, weight[u]
         """
         basic_atom_df = self.basic_atom_df.set_index("atomic_number")
-        basic_atom_df = basic_atom_df.loc[:max_atomic_number]
         return basic_atom_df
 
     @property
@@ -177,6 +226,10 @@ class AtomData(object):
 
         return ionization_df
 
+    @property
+    def ionization_df_prepared(self):
+        return self.prepare_ionization_df()
+
     def prepare_ionization_df(self):
         """
         Prepare ionization_df for TARDIS
@@ -197,9 +250,18 @@ class AtomData(object):
             self._levels_df = self.create_levels_df()
         return self._levels_df
 
-    def create_levels_df(self):
+    def create_levels_df(self, create_metastable_flags=True, metastable_loggf_threshold=-3):
         """
             Create a DataFrame with levels data.
+
+            Parameters
+            ----------
+            create_metastable_flags: bool
+                Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
+                (default: True)
+            metastable_loggf_threshold: int
+                log(gf) threshold for flagging metastable levels
+                (default: -3)
 
             Returns
             -------
@@ -273,35 +335,13 @@ class AtomData(object):
             transform(lambda x: np.arange(len(x))).values
         levels_df["level_number"] = levels_df["level_number"].astype(np.int)
 
-        return levels_df
-
-    def prepare_levels_df(self, create_metastable_flags=True, metastable_loggf_threshold=-3):
-        """
-        Prepare levels_df for TARDIS
-
-        Parameters
-        ----------
-        create_metastable_flags: bool
-            Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
-            (default: True)
-        metastable_loggf_threshold: int
-            log(gf) threshold for flagging metastable levels
-            (default: -3)
-        Returns
-        -------
-        levels_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
-        """
-
-        levels_df = self.levels_df.copy()
-
         if create_metastable_flags:
             # Create metastable flags
             # ToDO: It is assumed that all lines are ingested. That may not always be the case
 
-            levels_subq = self.session.query(Level).\
+            levels_subq = self.session.query(Level). \
                 filter(Level.level_id.in_(levels_df.index.values)).subquery()
-            metastable_q = self.session.query(Line).\
+            metastable_q = self.session.query(Line). \
                 join(levels_subq, Line.upper_level)
 
             metastable_data = list()
@@ -332,6 +372,24 @@ class AtomData(object):
             levels_df = levels_df.join(metastable_flags)
             levels_df["metastable"] = levels_df["metastable"].isnull()
 
+        return levels_df
+
+    @property
+    def levels_df_prepared(self):
+        return self.prepare_levels_df()
+
+    def prepare_levels_df(self):
+        """
+        Prepare levels_df for TARDIS
+
+        Returns
+        -------
+        levels_df : pandas.DataFrame
+            DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
+        """
+
+        levels_df = self.levels_df.copy()
+
         # Create multiindex
         levels_df.reset_index(inplace=True)
         levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
@@ -340,7 +398,6 @@ class AtomData(object):
         levels_df.drop(["level_id", "ds_id"], axis=1, inplace=True)
 
         return levels_df
-
 
     @property
     def lines_df(self):
@@ -416,6 +473,10 @@ class AtomData(object):
 
         return lines_df
 
+    @property
+    def lines_df_prepared(self):
+        return self.prepare_lines_df()
+
     def prepare_lines_df(self):
         """
             Prepare lines_df for TARDIS
@@ -450,13 +511,18 @@ class AtomData(object):
     @property
     def collisions_df(self):
         if self._collisions_df is None:
-            self._collistions_df = self.create_collisions_df()
+            self._collistions_df = self.create_collisions_df(**self.collisions_param)
         return self._collistions_df
 
-
-    def create_collisions_df(self):
+    def create_collisions_df(self, temperatures=None):
         """
             Create a DataFrame with collisions data.
+
+            Parameters
+            -----------
+            temperatures: np.array
+                The temperatures for calculating collision strengths
+                (default: None)
 
             Returns
             -------
@@ -464,6 +530,11 @@ class AtomData(object):
                 DataFrame with indes: e_col_id,
                 and columns:
         """
+
+        if temperatures is None:
+            temperatures = np.linspace(2000, 50000, 20)
+        else:
+            temperatures = np.array(temperatures)
 
         levels_df = self.levels_df.copy()
 
@@ -558,12 +629,16 @@ class AtomData(object):
             c_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
             return tuple(c_ul)
 
-        collisions_df["c_ul"] = collisions_df.apply(calculate_collisional_strength, axis=1, args=(self.temperatures,))
+        collisions_df["c_ul"] = collisions_df.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
 
         # Calculate g_ratio
         collisions_df["g_ratio"] = collisions_df["g_l"] / collisions_df["g_u"]
 
         return collisions_df
+
+    @property
+    def collisions_df_prepared(self):
+        return self.prepare_collisions_df()
 
     def prepare_collisions_df(self):
         """
@@ -647,6 +722,10 @@ class AtomData(object):
 
         return macro_atom_df
 
+    @property
+    def macro_atom_df_prepared(self):
+        return self.prepare_macro_atom_df()
+
     def prepare_macro_atom_df(self):
         """
             Prepare macro_atom_df for TARDIS
@@ -700,6 +779,10 @@ class AtomData(object):
 
         return macro_atom_ref_df
 
+    @property
+    def macro_atom_ref_df_prepared(self):
+        return self.prepare_macro_atom_ref_df()
+
     def prepare_macro_atom_ref_df(self):
         """
             Prepare macro_atom_ref_df for TARDIS
@@ -716,3 +799,74 @@ class AtomData(object):
         macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
 
         return macro_atom_ref_df
+
+    def to_hdf(self, hdf5_path, store_basic_atom=True, store_ionization=True,
+               store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
+               store_macro_atom_ref=True):
+        """
+            Store the dataframes in an HDF5 file
+
+            Parameters
+            ------------
+            hdf5_path: str
+                The path of the HDF5 file
+            store_basic_atom: bool
+                Store the basic atom DataFrame
+                (default: True)
+            store_ionization: bool
+                Store the ionzation DataFrame
+                (default: True)
+            store_levels: bool
+                Store the levels DataFrame
+                (default: True)
+            store_lines: bool
+                Store the lines DataFrame
+                (default: True)
+            store_collisions: bool
+                Store the electron collisions DataFrame
+                (default: True)
+            store_macro_atom: bool
+                Store the macro_atom DataFrame
+                (default: True)
+            store_macro_atom_ref: bool
+                Store the macro_atom_references DataFrame
+                (default: True)
+        """
+
+        with HDFStore(hdf5_path) as store:
+
+            if store_basic_atom:
+                store.put("basic_atom_df", self.basic_atom_df_prepared)
+
+            if store_ionization:
+                store.put("ionization_df", self.ionization_df_prepared)
+
+            if store_levels:
+                store.put("levels_df", self.levels_df_prepared)
+
+            if store_lines:
+                store.put("lines_df", self.lines_df_prepared)
+
+            if store_collisions:
+                store.put("collisions_df", self.collisions_df_prepared)
+
+            if store_macro_atom:
+                store.put("macro_atom_df", self.macro_atom_df_prepared)
+
+            if store_macro_atom_ref:
+                store.put("macro_atom_ref_df", self.macro_atom_ref_df_prepared)
+
+            # Set the root attributes
+            # It seems that the only way to set the root attributes is to use `_v_attrs`
+            store.root._v_attrs["database_version"] = "v0.9"
+
+            print "Signing AtomData with MD5 and UUID1"
+
+            md5_hash = hashlib.md5()
+            for key in store.keys():
+                md5_hash.update(store[key].values.data)
+
+            uuid1 = uuid.uuid1().hex
+
+            store.root._v_attrs['md5'] = md5_hash.hexdigest()
+            store.root._v_attrs['uuid1'] = uuid1
