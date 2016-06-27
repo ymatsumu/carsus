@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from sqlalchemy import and_, union_all, literal
 from sqlalchemy.orm import joinedload
@@ -796,3 +797,59 @@ class AtomData(object):
         macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
 
         return macro_atom_ref_df
+
+    def to_hdf(self, hdf5_path, store_basic_atom=True, store_ionization=True,
+               store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
+               store_macro_atom_ref=True):
+        """
+            Store the dataframes in an HDF5 file
+
+            Parameters
+            ------------
+            hdf5_path: str
+                The path of the HDF5 file
+            store_basic_atom: bool
+                Store the basic atom DataFrame
+                (default: True)
+            store_ionization: bool
+                Store the ionzation DataFrame
+                (default: True)
+            store_levels: bool
+                Store the levels DataFrame
+                (default: True)
+            store_lines: bool
+                Store the lines DataFrame
+                (default: True)
+            store_collisions: bool
+                Store the electron collisions DataFrame
+                (default: True)
+            store_macro_atom: bool
+                Store the macro_atom DataFrame
+                (default: True)
+            store_macro_atom_ref: bool
+                Store the macro_atom_references DataFrame
+                (default: True)
+        """
+
+        with HDFStore(hdf5_path) as store:
+
+            if store_basic_atom:
+                store["basic_atom_df"] = self.basic_atom_df_prepared
+
+            if store_ionization:
+                store["ionization_df"] = self.ionization_df_prepared
+
+            if store_levels:
+                store["levels_df"] = self.levels_df_prepared
+
+            if store_lines:
+                store["lines_df"] = self.lines_df_prepared
+
+            if store_collisions:
+                store["collisions_df"] = self.collisions_df_prepared
+
+            if store_macro_atom:
+                store["macro_atom_df"] = self.macro_atom_df_prepared
+
+            if store_macro_atom_ref:
+                store["macro_atom_ref_df"] = self.macro_atom_ref_df_prepared

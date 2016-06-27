@@ -1,4 +1,5 @@
 import pytest
+import os
 
 from carsus.io.output.tardis_op import AtomData
 from carsus.model import DataSource
@@ -52,6 +53,17 @@ def macro_atom_df_prepared(atom_data):
 @pytest.fixture
 def macro_atom_ref_df_prepared(atom_data):
     return atom_data.macro_atom_ref_df_prepared
+
+
+@pytest.fixture
+def hdf5_path(request, data_dir):
+    hdf5_path = os.path.join(data_dir, "test_hdf.hdf5")
+
+    def fin():
+      os.remove(hdf5_path)
+    request.addfinalizer(fin)
+
+    return hdf5_path
 
 
 @with_test_db
@@ -128,3 +140,8 @@ def test_prepare_macro_atom_df(macro_atom_df_prepared):
 @with_test_db
 def test_prepare_macro_atom_ref_df(macro_atom_ref_df_prepared):
     assert True
+
+
+@with_test_db
+def test_atom_data_to_hdf(atom_data, hdf5_path):
+    atom_data.to_hdf(hdf5_path)
