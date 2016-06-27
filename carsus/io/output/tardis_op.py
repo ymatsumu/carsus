@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import hashlib
+import uuid
 
 from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
@@ -853,3 +855,18 @@ class AtomData(object):
 
             if store_macro_atom_ref:
                 store["macro_atom_ref_df"] = self.macro_atom_ref_df_prepared
+
+            # Set the root attributes
+
+            store.root._v_attrs["database_version"] = "v0.9"
+
+            print "Signing AtomData with MD5 and UUID1"
+
+            md5_hash = hashlib.md5()
+            for key in store.keys():
+                md5_hash.update(store[key].values.data)
+
+            uuid1 = uuid.uuid1().hex
+
+            store.root._v_attrs['md5'] = md5_hash.hexdigest()
+            store.root._v_attrs['uuid1'] = uuid1
