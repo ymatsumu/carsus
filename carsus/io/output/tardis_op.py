@@ -850,6 +850,7 @@ class AtomData(object):
 
             if store_collisions:
                 store.put("collisions_df", self.collisions_df_prepared)
+                store.get_storer("collisions_df").attrs["temperatures"] = self.collisions_param["temperatures"]
 
             if store_macro_atom:
                 store.put("macro_atom_df", self.macro_atom_df_prepared)
