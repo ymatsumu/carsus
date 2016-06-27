@@ -836,25 +836,25 @@ class AtomData(object):
         with HDFStore(hdf5_path) as store:
 
             if store_basic_atom:
-                store["basic_atom_df"] = self.basic_atom_df_prepared
+                store.put("basic_atom_df", self.basic_atom_df_prepared)
 
             if store_ionization:
-                store["ionization_df"] = self.ionization_df_prepared
+                store.put("ionization_df", self.ionization_df_prepared)
 
             if store_levels:
-                store["levels_df"] = self.levels_df_prepared
+                store.put("levels_df", self.levels_df_prepared)
 
             if store_lines:
-                store["lines_df"] = self.lines_df_prepared
+                store.put("lines_df", self.lines_df_prepared)
 
             if store_collisions:
-                store["collisions_df"] = self.collisions_df_prepared
+                store.put("collisions_df", self.collisions_df_prepared)
 
             if store_macro_atom:
-                store["macro_atom_df"] = self.macro_atom_df_prepared
+                store.put("macro_atom_df", self.macro_atom_df_prepared)
 
             if store_macro_atom_ref:
-                store["macro_atom_ref_df"] = self.macro_atom_ref_df_prepared
+                store.put("macro_atom_ref_df", self.macro_atom_ref_df_prepared)
 
             # Set the root attributes
 
