@@ -254,7 +254,7 @@ class AtomData(object):
     @property
     def levels_df(self):
         if self._levels_df is None:
-            self._levels_df = self.create_levels_df()
+            self._levels_df = self.create_levels_df(**self.levels_param)
         return self._levels_df
 
     def create_levels_df(self, create_metastable_flags, metastable_loggf_threshold):
