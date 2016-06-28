@@ -227,7 +227,7 @@ class AtomData(object):
         ionization_data = list()
         for ion in ionization_q.options(joinedload(Ion.ionization_energies)):
             ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
-            ionization_data.append((ion.atomic_number, ion.ion_number, ionization_energy))
+            ionization_data.append((ion.atomic_number, ion.ion_charge, ionization_energy))
 
         ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
         ionization_data = np.array(ionization_data, dtype=ionization_dtype)
@@ -250,8 +250,20 @@ class AtomData(object):
            DataFrame with index: atomic_number, ion_number
                     and columns: ionization_energy[eV]
 
+        Notes
+        ------
+        In TARDIS `ion_number` describes the final ion state,
+        e.g. H I - H II is described with ion_number = 1
+        On the other hand, in carsus `ion_number` describes the lower ion state,
+        e.g. H I - H II is described with ion_number = 0
+        For this reason we add 1 to `ion_number` in this prepare method.
         """
-        ionization_df = self.ionization_df.set_index(["atomic_number", "ion_number"])
+        ionization_df = self.ionization_df.copy()
+
+        # See the Notes section:
+        ionization_df["ion_number"] += 1
+
+        ionization_df.set_index(["atomic_number", "ion_number"], inplace=True)
         return ionization_df
 
     @property
@@ -329,13 +341,9 @@ class AtomData(object):
 
         # Create a dataframe with the levels data
         levels_dtype = [("level_id", np.int), ("atomic_number", np.int),
-                        ("ion_charge", np.int), ("energy", np.float), ("g", np.int), ("ds_id", np.int)]
+                        ("ion_number", np.int), ("energy", np.float), ("g", np.int), ("ds_id", np.int)]
         levels_data = np.array(levels_data, dtype=levels_dtype)
         levels_df = pd.DataFrame.from_records(levels_data, index="level_id")
-
-        # Replace ion_charge with ion_number in the spectroscopic notation
-        levels_df["ion_number"] = levels_df["ion_charge"] + 1
-        levels_df.drop("ion_charge", axis=1, inplace=True)
 
         # Create level numbers
         levels_df.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
