@@ -492,7 +492,7 @@ class AtomData(object):
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
         lines_df["f_lu"] = lines_df["gf"]/lines_df["g_l"]
-        lines_df["f_ul"] = -lines_df["gf"]/lines_df["g_u"]
+        lines_df["f_ul"] = lines_df["gf"]/lines_df["g_u"]
 
         # Calculate frequency
         lines_df['nu'] = u.Unit('angstrom').to('Hz', lines_df['wavelength'], u.spectral())
@@ -501,7 +501,7 @@ class AtomData(object):
         einstein_coeff = (4 * np.pi**2 * const.e.gauss.value**2) / (const.m_e.cgs.value * const.c.cgs.value)
         lines_df['B_lu'] = einstein_coeff * lines_df['f_lu'] / (const.h.cgs.value * lines_df['nu'])
         lines_df['B_ul'] = einstein_coeff * lines_df['f_ul'] / (const.h.cgs.value * lines_df['nu'])
-        lines_df['A_ul'] = -2 * einstein_coeff * lines_df['nu']**2 / const.c.cgs.value**2 * lines_df['f_ul']
+        lines_df['A_ul'] = 2 * einstein_coeff * lines_df['nu']**2 / const.c.cgs.value**2 * lines_df['f_ul']
 
         return lines_df
 
