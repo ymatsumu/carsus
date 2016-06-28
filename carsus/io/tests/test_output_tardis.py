@@ -72,13 +72,12 @@ def hdf_store(request, data_dir, atom_data):
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, exp_weight", [
+@pytest.mark.parametrize("atomic_number, exp_mass", [
     (2, 4.002602),
     (11, 22.98976928)
 ])
-def test_prepare_basic_atom_df(basic_atom_df_prepared, atomic_number, exp_weight):
-    assert_almost_equal(basic_atom_df_prepared.loc[atomic_number]["weight"],
-                        exp_weight)
+def test_prepare_basic_atom_df(basic_atom_df_prepared, atomic_number, exp_mass):
+    assert_almost_equal(basic_atom_df_prepared.loc[atomic_number]["mass"], exp_mass)
 
 
 @with_test_db

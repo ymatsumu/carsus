@@ -198,9 +198,12 @@ class AtomData(object):
         -------
         basic_atom_df : pandas.DataFrame
                DataFrame with index: atomic_number
-                        and columns: symbol, name, weight[u]
+                        and columns: symbol, name, mass[u]
         """
         basic_atom_df = self.basic_atom_df.set_index("atomic_number")
+
+        # Rename the `weight` column to `mass`
+        basic_atom_df.rename(columns={"weight": "mass"}, inplace=True)
         return basic_atom_df
 
     @property
