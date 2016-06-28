@@ -745,14 +745,22 @@ class AtomData(object):
             Returns
             -------
             macro_atom_df : pandas.DataFrame
-                DataFrame with muliindex: atomic_number, ion_number, source_level_number, target_level_number
+                DataFrame with muliindex: atomic_number, ion_number, source_level_number, destination_level_number
                 and columns: transition_line_id, transition_type, transition_probability
 
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
 
         """
-        macro_atom_df = self.macro_atom_df.set_index(["atomic_number", "ion_number", "source_level_number", "target_level_number"])
+        macro_atom_df = self.macro_atom_df.copy()
+
+        # ToDo: choose between `target_level_number` and `destination_level_number`
+        # Rename `target_level_number` to `destination_level_number` used in TARDIS
+        # Personally, I think `target_level_number` is better so I use it in Carsus.
+        macro_atom_df.rename(columns={"target_level_number": "destination_level_number"}, inplace=True)
+
+        macro_atom_df.set_index(["atomic_number", "ion_number",
+                                 "source_level_number", "destination_level_number"], inplace=True)
         macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
         return macro_atom_df
 
