@@ -168,7 +168,9 @@ class AtomData(object):
         Returns
         -------
         basic_atom_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
+            DataFrame containing the *basic atomic data* with:
+            index: none;
+            columns: atomic_number, symbol, name, weight[u].
         """
         basic_atom_q = self.session.query(Atom). \
             filter(Atom.atomic_number <= max_atomic_number).\
@@ -197,13 +199,16 @@ class AtomData(object):
         Returns
         -------
         basic_atom_df : pandas.DataFrame
-               DataFrame with index: atomic_number
-                        and columns: symbol, name, mass[u]
+            DataFrame containing the *basic atomic data* with:
+                index: atomic_number;
+                columns: symbol, name, mass[u].
         """
+        # Set index
         basic_atom_df = self.basic_atom_df.set_index("atomic_number")
 
         # Rename the `weight` column to `mass`
         basic_atom_df.rename(columns={"weight": "mass"}, inplace=True)
+
         return basic_atom_df
 
     @property
@@ -219,7 +224,9 @@ class AtomData(object):
         Returns
         -------
         ionization_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, ion_number, ionization_energy[eV]
+            DataFrame containing the *ionization data* with:
+                index: none;
+                columns: atomic_number, ion_number, ionization_energy[eV]
         """
         ionization_q = self.session.query(Ion).\
             order_by(Ion.atomic_number, Ion.ion_charge)
@@ -247,8 +254,9 @@ class AtomData(object):
         Returns
         -------
         ionization_df : pandas.DataFrame
-           DataFrame with index: atomic_number, ion_number
-                    and columns: ionization_energy[eV]
+            DataFrame containing the *ionization data* with:
+                index: atomic_number, ion_number;
+                columns: ionization_energy[eV].
 
         Notes
         ------
@@ -260,10 +268,12 @@ class AtomData(object):
         """
         ionization_df = self.ionization_df.copy()
 
-        # See the Notes section:
+        # See the Notes section
         ionization_df["ion_number"] += 1
 
+        # Set index
         ionization_df.set_index(["atomic_number", "ion_number"], inplace=True)
+
         return ionization_df
 
     @property
@@ -286,8 +296,9 @@ class AtomData(object):
             Returns
             -------
             levels_df : pandas.DataFrame
-                DataFrame with index: level_id
-                         and columns: atomic_number, ion_number, level_number, energy[eV], g[1]
+                DataFrame containing the *levels data* with:
+                    index: level_id
+                    columns: atomic_number, ion_number, level_number, energy[eV], g[1]
         """
 
         if self.chianti_species is None:
@@ -402,14 +413,16 @@ class AtomData(object):
         Returns
         -------
         levels_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
+            DataFrame containing the *levels data* with:
+                index: none;
+                columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable.
         """
 
         levels_df = self.levels_df.copy()
 
-        # Create multiindex
+        # Set index
         levels_df.reset_index(inplace=True)
-        levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
+        # levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
         # Drop the unwanted columns
         levels_df.drop(["level_id", "ds_id"], axis=1, inplace=True)
@@ -429,9 +442,10 @@ class AtomData(object):
             Returns
             -------
             lines_df : pandas.DataFrame
-                DataFrame with index: line_id
-                and columns: atomic_number, ion_number, level_number_lower, level_number_upper,
-                             wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
+                DataFrame containing the *levels data* with:
+                    index: line_id;
+                    columns: atomic_number, ion_number, level_number_lower, level_number_upper,
+                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
         levels_df = self.levels_df.copy()
 
@@ -513,13 +527,16 @@ class AtomData(object):
             Returns
             -------
             lines_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
-                and columns: line_id, wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
+                DataFrame containing the *levels data* with:
+                    index: none;
+                    columns: lind_id, atomic_number, ion_number, level_number_lower, level_number_upper,
+                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
 
-        #Set the multiindex
+        #Set the index
         lines_df = self.lines_df.reset_index()
-        lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        # lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+
 
         # Drop the unwanted columns
         lines_df.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id", "ds_id"], axis=1, inplace=True)
@@ -544,8 +561,7 @@ class AtomData(object):
             Returns
             -------
             collisions_df : pandas.DataFrame
-                DataFrame with indes: e_col_id,
-                and columns:
+                DataFrame with the *electron collisions data* with:
         """
 
         levels_df = self.levels_df.copy()
@@ -659,8 +675,9 @@ class AtomData(object):
             Returns
             -------
             collisions_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
-                and columns: e_col_id, delta_e, g_ratio, c_ul
+                DataFrame with the *electron collisions data* with:
+                    index: atomic_number, ion_number, level_number_lower, level_number_upper;
+                    columns: e_col_id, delta_e, g_ratio, c_ul.
         """
 
         collisions_df = self.collisions_df.copy()
@@ -688,8 +705,10 @@ class AtomData(object):
             Returns
             -------
             macro_atom_df : pandas.DataFrame
-                DataFrame with columns: atomic_number, ion_number, source_level_number, target_level_number,
-                transition_line_id, transition_type, transition_probability
+                DataFrame with the *macro atom data* with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, target_level_number,
+                        transition_line_id, transition_type, transition_probability.
 
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
@@ -745,8 +764,10 @@ class AtomData(object):
             Returns
             -------
             macro_atom_df : pandas.DataFrame
-                DataFrame with muliindex: atomic_number, ion_number, source_level_number, destination_level_number
-                and columns: transition_line_id, transition_type, transition_probability
+                DataFrame with the *macro atom data* with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, destination_level_number,
+                        transition_line_id, transition_type, transition_probability.
 
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
@@ -759,9 +780,10 @@ class AtomData(object):
         # Personally, I think `target_level_number` is better so I use it in Carsus.
         macro_atom_df.rename(columns={"target_level_number": "destination_level_number"}, inplace=True)
 
-        macro_atom_df.set_index(["atomic_number", "ion_number",
-                                 "source_level_number", "destination_level_number"], inplace=True)
-        macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        # macro_atom_df.set_index(["atomic_number", "ion_number",
+        #                          "source_level_number", "destination_level_number"], inplace=True)
+        # macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_df.sort_values(["atomic_number", "ion_number", "source_level_number"], inplace=True)
         return macro_atom_df
 
     @property
@@ -777,8 +799,9 @@ class AtomData(object):
             Returns
             -------
             macro_atom_ref_df : pandas.DataFrame
-                DataFrame with index: level_id,
-                and columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total
+                DataFrame with the *macro atom references* with:
+                    index: level_id;
+                    columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
 
         levels_df = self.levels_df.copy()
@@ -810,13 +833,14 @@ class AtomData(object):
             Returns
             -------
             macro_atom_ref_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, source_level_number
-                and columns: level_id, count_down, count_up, count_total
+                DataFrame with the *macro atom references* with:
+                    index: no_index;
+                    columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
         macro_atom_ref_df = self.macro_atom_ref_df.copy()
 
-        macro_atom_ref_df.reset_index(inplace=True)
-        macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_ref_df.reset_index(drop=True, inplace=True)
+        # macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
 
         return macro_atom_ref_df
 
