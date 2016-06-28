@@ -4,6 +4,7 @@ import hashlib
 import uuid
 
 from pandas import HDFStore
+from carsus.util import carsus_data_dir
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit
 from sqlalchemy import and_, union_all, literal
@@ -19,6 +20,9 @@ P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
 LINES_MAXRQ = 10000  # for yield_limit
+
+ZETA_DATAFILE = carsus_data_dir("knox_long_recombination_zeta.dat")
+
 
 
 class AtomData(object):
@@ -96,7 +100,7 @@ class AtomData(object):
                  basic_atom_max_atomic_number=30, levels_create_metastable_flags=True,
                  levels_metastable_loggf_threshold=-3, chianti_species=None,
                  chianti_short_name=None, kurucz_short_name=None,
-                 collisions_temperatures=None):
+                 collisions_temperatures=None, zeta_datafile=None):
 
         self.session = session
 
@@ -142,6 +146,11 @@ class AtomData(object):
                 raise
         self.chianti_species = chianti_species
 
+        if zeta_datafile is None:
+            self.zeta_datafile = ZETA_DATAFILE
+        else:
+            self.zeta_datafile = zeta_datafile
+
         self._basic_atom_df = None
         self._ionization_df = None
         self._levels_df = None
@@ -149,6 +158,7 @@ class AtomData(object):
         self._collisions_df = None
         self._macro_atom_df = None
         self._macro_atom_ref_df = None
+        self._zeta_data = None
 
     @property
     def basic_atom_df(self):
@@ -844,9 +854,22 @@ class AtomData(object):
 
         return macro_atom_ref_df
 
+    @property
+    def zeta_data(self):
+        if self._zeta_data is None:
+            self._zeta_data = self.create_zeta_data(self.zeta_datafile)
+        return self._zeta_data
+
+    def create_zeta_data(self, zeta_datafile):
+        zeta_data = np.loadtxt(zeta_datafile, usecols=xrange(1, 23), dtype=np.float64)
+        t_rads = np.arange(2000, 42000, 2000)
+        return pd.DataFrame(zeta_data[:,2:],
+                            index=pd.MultiIndex.from_arrays(zeta_data[:,:2].transpose().astype(int)),
+                            columns=t_rads)
+
     def to_hdf(self, hdf5_path, store_basic_atom=True, store_ionization=True,
                store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
-               store_macro_atom_ref=True):
+               store_macro_atom_ref=True, store_zeta_data=True):
         """
             Store the dataframes in an HDF5 file
 
@@ -875,6 +898,8 @@ class AtomData(object):
             store_macro_atom_ref: bool
                 Store the macro_atom_references DataFrame
                 (default: True)
+            store_zeta_data: bool
+                Store `zeta_data`
         """
 
         with HDFStore(hdf5_path) as store:
@@ -900,6 +925,9 @@ class AtomData(object):
 
             if store_macro_atom_ref:
                 store.put("macro_atom_ref_df", self.macro_atom_ref_df_prepared)
+
+            if store_zeta_data:
+                store.put("zeta_data", self.zeta_data)
 
             # Set the root attributes
             # It seems that the only way to set the root attributes is to use `_v_attrs`
