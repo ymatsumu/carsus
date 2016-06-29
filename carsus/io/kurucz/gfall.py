@@ -210,9 +210,10 @@ class GFALLReader(object):
         levels["level_index"] = levels.groupby(['atomic_number', 'ion_charge'])['j'].\
             transform(lambda x: np.arange(len(x))).values
 
-        levels[["configuration", "term"]] = levels["label"].str.split(expand=True)
-        levels["configuration"] = levels["configuration"].str.strip()
-        levels["term"] = levels["term"].str.strip()
+        # ToDo: The commented block below does not work with all lines. Find a way to parse it.
+        # levels[["configuration", "term"]] = levels["label"].str.split(expand=True)
+        # levels["configuration"] = levels["configuration"].str.strip()
+        # levels["term"] = levels["term"].str.strip()
 
         levels.set_index(["atomic_number", "ion_charge", "level_index"], inplace=True)
         return levels
@@ -326,8 +327,6 @@ class GFALLIngester(object):
                 ion.levels.append(
                     Level(level_index=level_index,
                           data_source=self.data_source,
-                          configuration=row["configuration"],
-                          term=row["term"],
                           J=row["j"],
                           energies=[
                               LevelEnergy(quantity=row["energy"]*u.Unit("cm-1"),

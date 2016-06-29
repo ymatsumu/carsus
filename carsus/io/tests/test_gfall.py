@@ -67,19 +67,17 @@ def test_gfall_reader_gfall_df(gfall_df, index, wavelength, atomic_number, ion_c
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index, "
-                         "energy, j, method, configuration, term",[
-    (4, 2, 0, 0.0, 0.0, "meas", "1s2", "1S"),
-    (4, 2, 11, 1128300.0, 2.0, "meas", "s3p", "*3P"),
-    (7, 5, 7, 4006160.0, 0.0,  "theor", "s3p",  "*3P")
+                         "energy, j, method",[
+    (4, 2, 0, 0.0, 0.0, "meas"),
+    (4, 2, 11, 1128300.0, 2.0, "meas"),
+    (7, 5, 7, 4006160.0, 0.0,  "theor")
 ])
 def test_gfall_reader_levels_df(levels_df, atomic_number, ion_charge, level_index,
-                                energy, j, method, configuration, term):
+                                energy, j, method):
     row = levels_df.loc[(atomic_number, ion_charge, level_index)]
     assert_almost_equal(row["energy"], energy)
     assert_almost_equal(row["j"], j)
     assert row["method"] == method
-    assert row["configuration"] == configuration
-    assert row["term"] == term
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index_lower, level_index_upper,"
@@ -95,13 +93,13 @@ def test_gfall_reader_lines_df(lines_df, atomic_number, ion_charge,
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index, "
-                          "exp_energy, exp_j, exp_method, exp_configuration, exp_term", [
-    (4, 2, 0, 0.0*u.Unit("cm-1"), 0.0, "meas", "1s2", "1S"),
-    (4, 2, 11, 1128300.0*u.Unit("cm-1"), 2.0, "meas", "s3p", "*3P"),
-    (7, 5, 7, 4006160.0*u.Unit("cm-1"), 0.0, "theor", "s3p", "*3P")
+                          "exp_energy, exp_j, exp_method", [
+    (4, 2, 0, 0.0*u.Unit("cm-1"), 0.0, "meas"),
+    (4, 2, 11, 1128300.0*u.Unit("cm-1"), 2.0, "meas"),
+    (7, 5, 7, 4006160.0*u.Unit("cm-1"), 0.0, "theor")
 ])
 def test_gfall_ingester_ingest_levels(memory_session, gfall_ingester, atomic_number, ion_charge, level_index,
-                                exp_energy, exp_j, exp_method, exp_configuration, exp_term):
+                                exp_energy, exp_j, exp_method):
     gfall_ingester.ingest(levels=True, lines=False)
     ion = Ion.as_unique(memory_session, atomic_number=atomic_number, ion_charge=ion_charge)
     data_source = DataSource.as_unique(memory_session, short_name="ku_latest")
@@ -110,8 +108,6 @@ def test_gfall_ingester_ingest_levels(memory_session, gfall_ingester, atomic_num
                     Level.level_index==level_index),
                     Level.data_source==data_source).\
         join(Level.energies).one()
-    assert level.configuration == exp_configuration
-    assert level.term == exp_term
     assert_almost_equal(level.J, exp_j)
     assert_quantity_allclose(energy.quantity, exp_energy.to(u.eV, equivalencies=u.spectral()))
     assert energy.method == exp_method
