@@ -5,6 +5,7 @@ import uuid
 
 from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
+from carsus.model.meta import yield_limit
 from sqlalchemy import and_, union_all, literal
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.exc import NoResultFound
@@ -16,6 +17,8 @@ from tardis.util import species_string_to_tuple
 P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
+
+LINES_MAXRQ = 10000  # for yield_limit
 
 
 class AtomData(object):
@@ -345,7 +348,8 @@ class AtomData(object):
                 join(levels_subq, Line.upper_level)
 
             metastable_data = list()
-            for line in metastable_q.options(joinedload(Line.gf_values)):
+            for line in yield_limit(metastable_q.options(joinedload(Line.gf_values)),
+                                    Line.line_id, maxrq=LINES_MAXRQ):
                 try:
                     # Currently it is assumed that each line has only one gf value
                     gf = line.gf_values[0].quantity  # Get the first gf value
@@ -425,7 +429,8 @@ class AtomData(object):
             join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
 
         lines_data = list()
-        for line in lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)):
+        for line in yield_limit(lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)),
+                                Line.line_id, maxrq=LINES_MAXRQ):
             try:
                 # Try to get the first gf value
                 gf = line.gf_values[0].quantity
