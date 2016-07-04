@@ -1,4 +1,3 @@
-import chianti.core as ch
 import pandas as pd
 import numpy as np
 import pickle
@@ -15,6 +14,7 @@ from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
 
 if os.getenv('XUVTOP'):
+    import chianti.core as ch
     masterlist_ions_path = os.path.join(
         os.getenv('XUVTOP'), "masterlist", "masterlist_ions.pkl"
     )
