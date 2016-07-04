@@ -38,12 +38,14 @@ matrix:
 
         # Test with slow tests
         - python: 2.7
-          env: SETUP_CMD='test --args="--runslow"'
+          env:
+            - SETUP_CMD='test --args="--runslow"'
+            - INSTALL_CHIANTI=true
 
         # Test with the test database
         - python: 2.7
           env:
-            - SETUP_CMD='test --args="--test-db=$HOME/carsus-db/test.db"'
+            - SETUP_CMD='test --args="--test-db=$HOME/carsus-db/test_databases/test.db"'
             - TEST_MODE='with_test_db'
 
         # Do a coverage test in Python 2.
@@ -72,13 +74,15 @@ install:
     - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
     - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
     - export XUVTOP=$HOME/chianti
-    # install git lfs
-    - conda install -c ostrokach git-lfs=1.2.1 -y
-    - git lfs install
-    # clone carsus-db
-    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs clone $CARSUS_DB_URL $HOME/carsus-db; fi
+    # Fetch the testing database from carsus-db
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then conda install -c ostrokach git-lfs=1.2.1 -y; fi
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs install --skip-smudge; fi
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then git clone $CARSUS_DB_URL $HOME/carsus-db; fi
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then cd $HOME/carsus-db; fi
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs pull --include="test_databases/test.db" origin; fi
 
 script:
+    - cd $TRAVIS_BUILD_DIR
     - echo CC=$COMPILER python setup.py $SETUP_CMD
     - CC=$COMPILER python setup.py $SETUP_CMD
 
