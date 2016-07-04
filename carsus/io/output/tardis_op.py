@@ -4,6 +4,7 @@ import hashlib
 import uuid
 
 from pandas import HDFStore
+from carsus.util import carsus_data_dir
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit
 from sqlalchemy import and_, union_all, literal
@@ -19,6 +20,9 @@ P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
 LINES_MAXRQ = 10000  # for yield_limit
+
+ZETA_DATAFILE = carsus_data_dir("knox_long_recombination_zeta.dat")
+
 
 
 class AtomData(object):
@@ -96,7 +100,7 @@ class AtomData(object):
                  basic_atom_max_atomic_number=30, levels_create_metastable_flags=True,
                  levels_metastable_loggf_threshold=-3, chianti_species=None,
                  chianti_short_name=None, kurucz_short_name=None,
-                 collisions_temperatures=None):
+                 collisions_temperatures=None, zeta_datafile=None):
 
         self.session = session
 
@@ -109,6 +113,11 @@ class AtomData(object):
             "create_metastable_flags": levels_create_metastable_flags,
             "metastable_loggf_threshold": levels_metastable_loggf_threshold
         }
+
+        if collisions_temperatures is None:
+            collisions_temperatures = np.linspace(2000, 50000, 20)
+        else:
+            collisions_temperatures = np.array(collisions_temperatures)
 
         self.collisions_param = {
             "temperatures": collisions_temperatures
@@ -137,6 +146,11 @@ class AtomData(object):
                 raise
         self.chianti_species = chianti_species
 
+        if zeta_datafile is None:
+            self.zeta_datafile = ZETA_DATAFILE
+        else:
+            self.zeta_datafile = zeta_datafile
+
         self._basic_atom_df = None
         self._ionization_df = None
         self._levels_df = None
@@ -144,6 +158,7 @@ class AtomData(object):
         self._collisions_df = None
         self._macro_atom_df = None
         self._macro_atom_ref_df = None
+        self._zeta_data = None
 
     @property
     def basic_atom_df(self):
@@ -151,7 +166,7 @@ class AtomData(object):
             self._basic_atom_df = self.create_basic_atom_df(**self.basic_atom_param)
         return self._basic_atom_df
 
-    def create_basic_atom_df(self, max_atomic_number=30):
+    def create_basic_atom_df(self, max_atomic_number):
         """
         Create a DataFrame with basic atomic data.
 
@@ -159,12 +174,13 @@ class AtomData(object):
         ----------
         max_atomic_number: int
             The maximum atomic number to be stored in basic_atom_df
-            (default: 30)
 
         Returns
         -------
         basic_atom_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
+            DataFrame containing the *basic atomic data* with:
+            index: none;
+            columns: atomic_number, symbol, name, weight[u].
         """
         basic_atom_q = self.session.query(Atom). \
             filter(Atom.atomic_number <= max_atomic_number).\
@@ -193,10 +209,16 @@ class AtomData(object):
         Returns
         -------
         basic_atom_df : pandas.DataFrame
-               DataFrame with index: atomic_number
-                        and columns: symbol, name, weight[u]
+            DataFrame containing the *basic atomic data* with:
+                index: atomic_number;
+                columns: symbol, name, mass[u].
         """
+        # Set index
         basic_atom_df = self.basic_atom_df.set_index("atomic_number")
+
+        # Rename the `weight` column to `mass`
+        basic_atom_df.rename(columns={"weight": "mass"}, inplace=True)
+
         return basic_atom_df
 
     @property
@@ -212,7 +234,9 @@ class AtomData(object):
         Returns
         -------
         ionization_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, ion_number, ionization_energy[eV]
+            DataFrame containing the *ionization data* with:
+                index: none;
+                columns: atomic_number, ion_number, ionization_energy[eV]
         """
         ionization_q = self.session.query(Ion).\
             order_by(Ion.atomic_number, Ion.ion_charge)
@@ -220,7 +244,7 @@ class AtomData(object):
         ionization_data = list()
         for ion in ionization_q.options(joinedload(Ion.ionization_energies)):
             ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
-            ionization_data.append((ion.atomic_number, ion.ion_number, ionization_energy))
+            ionization_data.append((ion.atomic_number, ion.ion_charge, ionization_energy))
 
         ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
         ionization_data = np.array(ionization_data, dtype=ionization_dtype)
@@ -240,20 +264,35 @@ class AtomData(object):
         Returns
         -------
         ionization_df : pandas.DataFrame
-           DataFrame with index: atomic_number, ion_number
-                    and columns: ionization_energy[eV]
+            DataFrame containing the *ionization data* with:
+                index: atomic_number, ion_number;
+                columns: ionization_energy[eV].
 
+        Notes
+        ------
+        In TARDIS `ion_number` describes the final ion state,
+        e.g. H I - H II is described with ion_number = 1
+        On the other hand, in carsus `ion_number` describes the lower ion state,
+        e.g. H I - H II is described with ion_number = 0
+        For this reason we add 1 to `ion_number` in this prepare method.
         """
-        ionization_df = self.ionization_df.set_index(["atomic_number", "ion_number"])
+        ionization_df = self.ionization_df.copy()
+
+        # See the Notes section
+        ionization_df["ion_number"] += 1
+
+        # Set index
+        ionization_df.set_index(["atomic_number", "ion_number"], inplace=True)
+
         return ionization_df
 
     @property
     def levels_df(self):
         if self._levels_df is None:
-            self._levels_df = self.create_levels_df()
+            self._levels_df = self.create_levels_df(**self.levels_param)
         return self._levels_df
 
-    def create_levels_df(self, create_metastable_flags=True, metastable_loggf_threshold=-3):
+    def create_levels_df(self, create_metastable_flags, metastable_loggf_threshold):
         """
             Create a DataFrame with levels data.
 
@@ -261,16 +300,15 @@ class AtomData(object):
             ----------
             create_metastable_flags: bool
                 Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
-                (default: True)
             metastable_loggf_threshold: int
                 log(gf) threshold for flagging metastable levels
-                (default: -3)
 
             Returns
             -------
             levels_df : pandas.DataFrame
-                DataFrame with index: level_id
-                         and columns: atomic_number, ion_number, level_number, energy[eV], g[1]
+                DataFrame containing the *levels data* with:
+                    index: level_id
+                    columns: atomic_number, ion_number, level_number, energy[eV], g[1]
         """
 
         if self.chianti_species is None:
@@ -324,13 +362,9 @@ class AtomData(object):
 
         # Create a dataframe with the levels data
         levels_dtype = [("level_id", np.int), ("atomic_number", np.int),
-                        ("ion_charge", np.int), ("energy", np.float), ("g", np.int), ("ds_id", np.int)]
+                        ("ion_number", np.int), ("energy", np.float), ("g", np.int), ("ds_id", np.int)]
         levels_data = np.array(levels_data, dtype=levels_dtype)
         levels_df = pd.DataFrame.from_records(levels_data, index="level_id")
-
-        # Replace ion_charge with ion_number in the spectroscopic notation
-        levels_df["ion_number"] = levels_df["ion_charge"] + 1
-        levels_df.drop("ion_charge", axis=1, inplace=True)
 
         # Create level numbers
         levels_df.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
@@ -389,14 +423,16 @@ class AtomData(object):
         Returns
         -------
         levels_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
+            DataFrame containing the *levels data* with:
+                index: none;
+                columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable.
         """
 
         levels_df = self.levels_df.copy()
 
-        # Create multiindex
+        # Set index
         levels_df.reset_index(inplace=True)
-        levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
+        # levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
         # Drop the unwanted columns
         levels_df.drop(["level_id", "ds_id"], axis=1, inplace=True)
@@ -416,9 +452,10 @@ class AtomData(object):
             Returns
             -------
             lines_df : pandas.DataFrame
-                DataFrame with index: line_id
-                and columns: atomic_number, ion_number, level_number_lower, level_number_upper,
-                             wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
+                DataFrame containing the *levels data* with:
+                    index: line_id;
+                    columns: atomic_number, ion_number, level_number_lower, level_number_upper,
+                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
         levels_df = self.levels_df.copy()
 
@@ -465,7 +502,7 @@ class AtomData(object):
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
         lines_df["f_lu"] = lines_df["gf"]/lines_df["g_l"]
-        lines_df["f_ul"] = -lines_df["gf"]/lines_df["g_u"]
+        lines_df["f_ul"] = lines_df["gf"]/lines_df["g_u"]
 
         # Calculate frequency
         lines_df['nu'] = u.Unit('angstrom').to('Hz', lines_df['wavelength'], u.spectral())
@@ -474,7 +511,7 @@ class AtomData(object):
         einstein_coeff = (4 * np.pi**2 * const.e.gauss.value**2) / (const.m_e.cgs.value * const.c.cgs.value)
         lines_df['B_lu'] = einstein_coeff * lines_df['f_lu'] / (const.h.cgs.value * lines_df['nu'])
         lines_df['B_ul'] = einstein_coeff * lines_df['f_ul'] / (const.h.cgs.value * lines_df['nu'])
-        lines_df['A_ul'] = -2 * einstein_coeff * lines_df['nu']**2 / const.c.cgs.value**2 * lines_df['f_ul']
+        lines_df['A_ul'] = 2 * einstein_coeff * lines_df['nu']**2 / const.c.cgs.value**2 * lines_df['f_ul']
 
         return lines_df
 
@@ -500,13 +537,16 @@ class AtomData(object):
             Returns
             -------
             lines_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
-                and columns: line_id, wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
+                DataFrame containing the *levels data* with:
+                    index: none;
+                    columns: lind_id, atomic_number, ion_number, level_number_lower, level_number_upper,
+                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
 
-        #Set the multiindex
+        #Set the index
         lines_df = self.lines_df.reset_index()
-        lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        # lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+
 
         # Drop the unwanted columns
         lines_df.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id", "ds_id"], axis=1, inplace=True)
@@ -519,7 +559,7 @@ class AtomData(object):
             self._collistions_df = self.create_collisions_df(**self.collisions_param)
         return self._collistions_df
 
-    def create_collisions_df(self, temperatures=None):
+    def create_collisions_df(self, temperatures):
         """
             Create a DataFrame with collisions data.
 
@@ -527,19 +567,12 @@ class AtomData(object):
             -----------
             temperatures: np.array
                 The temperatures for calculating collision strengths
-                (default: None)
 
             Returns
             -------
             collisions_df : pandas.DataFrame
-                DataFrame with indes: e_col_id,
-                and columns:
+                DataFrame with the *electron collisions data* with:
         """
-
-        if temperatures is None:
-            temperatures = np.linspace(2000, 50000, 20)
-        else:
-            temperatures = np.array(temperatures)
 
         levels_df = self.levels_df.copy()
 
@@ -652,8 +685,9 @@ class AtomData(object):
             Returns
             -------
             collisions_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
-                and columns: e_col_id, delta_e, g_ratio, c_ul
+                DataFrame with the *electron collisions data* with:
+                    index: atomic_number, ion_number, level_number_lower, level_number_upper;
+                    columns: e_col_id, delta_e, g_ratio, c_ul.
         """
 
         collisions_df = self.collisions_df.copy()
@@ -681,8 +715,10 @@ class AtomData(object):
             Returns
             -------
             macro_atom_df : pandas.DataFrame
-                DataFrame with columns: atomic_number, ion_number, source_level_number, target_level_number,
-                transition_line_id, transition_type, transition_probability
+                DataFrame with the *macro atom data* with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, target_level_number,
+                        transition_line_id, transition_type, transition_probability.
 
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
@@ -738,15 +774,26 @@ class AtomData(object):
             Returns
             -------
             macro_atom_df : pandas.DataFrame
-                DataFrame with muliindex: atomic_number, ion_number, source_level_number, target_level_number
-                and columns: transition_line_id, transition_type, transition_probability
+                DataFrame with the *macro atom data* with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, destination_level_number,
+                        transition_line_id, transition_type, transition_probability.
 
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
 
         """
-        macro_atom_df = self.macro_atom_df.set_index(["atomic_number", "ion_number", "source_level_number", "target_level_number"])
-        macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_df = self.macro_atom_df.copy()
+
+        # ToDo: choose between `target_level_number` and `destination_level_number`
+        # Rename `target_level_number` to `destination_level_number` used in TARDIS
+        # Personally, I think `target_level_number` is better so I use it in Carsus.
+        macro_atom_df.rename(columns={"target_level_number": "destination_level_number"}, inplace=True)
+
+        # macro_atom_df.set_index(["atomic_number", "ion_number",
+        #                          "source_level_number", "destination_level_number"], inplace=True)
+        # macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_df.sort_values(["atomic_number", "ion_number", "source_level_number"], inplace=True)
         return macro_atom_df
 
     @property
@@ -762,8 +809,9 @@ class AtomData(object):
             Returns
             -------
             macro_atom_ref_df : pandas.DataFrame
-                DataFrame with index: level_id,
-                and columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total
+                DataFrame with the *macro atom references* with:
+                    index: level_id;
+                    columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
 
         levels_df = self.levels_df.copy()
@@ -795,19 +843,33 @@ class AtomData(object):
             Returns
             -------
             macro_atom_ref_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, source_level_number
-                and columns: level_id, count_down, count_up, count_total
+                DataFrame with the *macro atom references* with:
+                    index: no_index;
+                    columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
         macro_atom_ref_df = self.macro_atom_ref_df.copy()
 
-        macro_atom_ref_df.reset_index(inplace=True)
-        macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_ref_df.reset_index(drop=True, inplace=True)
+        # macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
 
         return macro_atom_ref_df
 
+    @property
+    def zeta_data(self):
+        if self._zeta_data is None:
+            self._zeta_data = self.create_zeta_data(self.zeta_datafile)
+        return self._zeta_data
+
+    def create_zeta_data(self, zeta_datafile):
+        zeta_data = np.loadtxt(zeta_datafile, usecols=xrange(1, 23), dtype=np.float64)
+        t_rads = np.arange(2000, 42000, 2000)
+        return pd.DataFrame(zeta_data[:,2:],
+                            index=pd.MultiIndex.from_arrays(zeta_data[:,:2].transpose().astype(int)),
+                            columns=t_rads)
+
     def to_hdf(self, hdf5_path, store_basic_atom=True, store_ionization=True,
                store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
-               store_macro_atom_ref=True):
+               store_macro_atom_ref=True, store_zeta_data=True):
         """
             Store the dataframes in an HDF5 file
 
@@ -836,6 +898,8 @@ class AtomData(object):
             store_macro_atom_ref: bool
                 Store the macro_atom_references DataFrame
                 (default: True)
+            store_zeta_data: bool
+                Store `zeta_data`
         """
 
         with HDFStore(hdf5_path) as store:
@@ -854,12 +918,16 @@ class AtomData(object):
 
             if store_collisions:
                 store.put("collisions_df", self.collisions_df_prepared)
+                store.get_storer("collisions_df").attrs["temperatures"] = self.collisions_param["temperatures"]
 
             if store_macro_atom:
                 store.put("macro_atom_df", self.macro_atom_df_prepared)
 
             if store_macro_atom_ref:
                 store.put("macro_atom_ref_df", self.macro_atom_ref_df_prepared)
+
+            if store_zeta_data:
+                store.put("zeta_data", self.zeta_data)
 
             # Set the root attributes
             # It seems that the only way to set the root attributes is to use `_v_attrs`
