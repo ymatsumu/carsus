@@ -82,7 +82,7 @@ install:
     - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs pull --include="test_databases/test.db" origin; fi
 
 script:
-    - cd /home/travis/build/mishinma/carsus
+    - cd $TRAVIS_BUILD_DIR
     - echo CC=$COMPILER python setup.py $SETUP_CMD
     - CC=$COMPILER python setup.py $SETUP_CMD
 
