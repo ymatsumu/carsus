@@ -1,11 +1,9 @@
 import pytest
 import os
-import pandas as pd
-import numpy as np
 
 from carsus.io.output.tardis_op import AtomData
 from carsus.model import DataSource
-from numpy.testing import assert_almost_equal, assert_allclose
+from numpy.testing import assert_almost_equal
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
 
@@ -58,26 +56,24 @@ def macro_atom_ref_df_prepared(atom_data):
 
 
 @pytest.fixture
-def hdf_store(request, data_dir, atom_data):
-    hdf_path = os.path.join(data_dir, "test_hdf.hdf5")
-    atom_data.to_hdf(hdf_path)
-    hdf_store = pd.HDFStore(hdf_path)
+def hdf5_path(request, data_dir):
+    hdf5_path = os.path.join(data_dir, "test_hdf.hdf5")
 
     def fin():
-        hdf_store.close()
-        os.remove(hdf_path)
+      os.remove(hdf5_path)
     request.addfinalizer(fin)
 
-    return hdf_store
+    return hdf5_path
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, exp_mass", [
+@pytest.mark.parametrize("atomic_number, exp_weight", [
     (2, 4.002602),
     (11, 22.98976928)
 ])
-def test_prepare_basic_atom_df(basic_atom_df_prepared, atomic_number, exp_mass):
-    assert_almost_equal(basic_atom_df_prepared.loc[atomic_number]["mass"], exp_mass)
+def test_prepare_basic_atom_df(basic_atom_df_prepared, atomic_number, exp_weight):
+    assert_almost_equal(basic_atom_df_prepared.loc[atomic_number]["weight"],
+                        exp_weight)
 
 
 @with_test_db
@@ -100,8 +96,8 @@ def test_prepare_ionizatinon_df(ionization_df_prepared, atomic_number, ion_numbe
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy",[
-    (7, 5, 7, 3991860.0 * u.Unit("cm-1")),
-    (4, 2, 2, 981177.5 * u.Unit("cm-1"))
+    (7, 6, 7, 3991860.0 * u.Unit("cm-1")),
+    (4, 3, 2, 981177.5 * u.Unit("cm-1"))
 ])
 def test_prepare_levels_df(levels_df_prepared, atomic_number, ion_number, level_number, exp_energy):
     energy = levels_df_prepared.loc[(atomic_number, ion_number, level_number)]["energy"] * u.eV
@@ -120,8 +116,8 @@ def test_create_levels_df_wo_chianti_species(test_session):
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength",[
-    (7, 5, 0, 1, 29.5343 * u.Unit("angstrom")),
-    (4, 2, 0, 3, 10.1693 * u.Unit("angstrom"))
+    (7, 6, 0, 1, 29.5343 * u.Unit("angstrom")),
+    (4, 3, 0, 3, 10.1693 * u.Unit("angstrom"))
 ])
 def test_prepare_lines_df(lines_df_prepared, atomic_number, ion_number,
                           level_number_lower, level_number_upper, exp_wavelength):
@@ -147,6 +143,5 @@ def test_prepare_macro_atom_ref_df(macro_atom_ref_df_prepared):
 
 
 @with_test_db
-def test_atom_data_to_hdf_collisions_df_attrs(hdf_store):
-    collisions_temperatures = hdf_store.get_storer("collisions_df").attrs["temperatures"]
-    assert_allclose(collisions_temperatures, np.linspace(2000, 50000, 20))
+def test_atom_data_to_hdf(atom_data, hdf5_path):
+    atom_data.to_hdf(hdf5_path)
