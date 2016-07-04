@@ -21,7 +21,6 @@ env:
         - ASTROPY_USE_SYSTEM_PYTEST=1
         - SETUP_CMD='test'
         - TEST_MODE='normal'
-        - INSTALL_CHIATNI=false
         - MINICONDA_URL='http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh'
         - CHIANTI_DATA_URL='http://www.chiantidatabase.org/download/CHIANTI_8.0.2_data.tar.gz'
         - CARSUS_DB_URL='https://github.com/tardis-sn/carsus-db.git'
@@ -71,10 +70,10 @@ install:
     - conda env create -f carsus_ci/carsus_ci_env27.yml
     - source activate carsus-ci
     # install the CHIANTI database
-    - if [[ $INSTALL_CHIANTI ]]; then mkdir $HOME/chianti; fi
-    - if [[ $INSTALL_CHIANTI ]]; then wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz; fi
-    - if [[ $INSTALL_CHIANTI ]]; then tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti; fi
-    - if [[ $INSTALL_CHIANTI ]]; then export XUVTOP=$HOME/chianti; fi
+    - mkdir $HOME/chianti
+    - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
+    - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
+    - then export XUVTOP=$HOME/chianti
     # Fetch the testing database from carsus-db
     - if [[ $TEST_MODE == 'with_test_db' ]]; then conda install -c ostrokach git-lfs=1.2.1 -y; fi
     - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs install; fi
