@@ -70,6 +70,7 @@ install:
     - conda env create -f carsus_ci/carsus_ci_env27.yml
     - source activate carsus-ci
     # install the CHIANTI database
+    - pwd
     - mkdir $HOME/chianti
     - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
     - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
@@ -82,6 +83,7 @@ install:
     - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs pull --include="test_databases/test.db" origin; fi
 
 script:
+    - cd $HOME
     - echo CC=$COMPILER python setup.py $SETUP_CMD
     - CC=$COMPILER python setup.py $SETUP_CMD
 
