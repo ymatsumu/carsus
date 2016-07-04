@@ -79,7 +79,7 @@ install:
     - if [[ $TEST_MODE == 'with_test_db' ]]; then conda install -c ostrokach git-lfs=1.2.1 -y; fi
     - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs install; fi
     - if [[ $TEST_MODE == 'with_test_db' ]]; then git -c filter.lfs.smudge= -c filter.lfs.required=false clone $CARSUS_DB_URL $HOME/carsus-db; fi
-    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs pull --include="test_databases/test.db" origin fi
+    - if [[ $TEST_MODE == 'with_test_db' ]]; then git lfs pull --include="test_databases/test.db" origin; fi
 
 script:
     - echo CC=$COMPILER python setup.py $SETUP_CMD
