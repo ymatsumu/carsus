@@ -9,6 +9,7 @@ from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.orm.exc import NoResultFound
 from carsus.io.base import IngesterError
+from carsus.util import atomic_number2symbol
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line,LineGFValue, LineAValue, LineWavelength, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
@@ -284,6 +285,9 @@ class ChiantiIngester(object):
             atomic_number = rdr.ion.Z
             ion_charge = rdr.ion.Ion -1
 
+            print("Ingesting levels for {} +{} from {}".format(
+                atomic_number2symbol(atomic_number), ion_charge, self.data_source.short_name))
+
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             # ToDo: Determine parity from configuration
@@ -310,6 +314,9 @@ class ChiantiIngester(object):
 
             atomic_number = rdr.ion.Z
             ion_charge = rdr.ion.Ion - 1
+
+            print("Ingesting lines for {} +{} from {}".format(
+                atomic_number2symbol(atomic_number), ion_charge, self.data_source.short_name))
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
@@ -355,6 +362,10 @@ class ChiantiIngester(object):
 
             atomic_number = rdr.ion.Z
             ion_charge = rdr.ion.Ion - 1
+
+            print("Ingesting collisions for {} +{} from {}".format(
+                atomic_number2symbol(atomic_number), ion_charge, self.data_source.short_name))
+
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
