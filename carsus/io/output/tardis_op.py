@@ -119,6 +119,11 @@ class AtomData(object):
             "lines_loggf_threshold": lines_loggf_threshold
         }
 
+        if collisions_temperatures is None:
+            collisions_temperatures = np.linspace(2000, 50000, 20)
+        else:
+            collisions_temperatures = np.array(collisions_temperatures)
+
         self.collisions_param = {
             "temperatures": collisions_temperatures
         }
@@ -546,14 +551,23 @@ class AtomData(object):
         return lines_prepared
 
     @property
-    def collisions_df(self):
-        if self._collisions_df is None:
-            self._collistions_df = self.create_collisions_df(**self.collisions_param)
-        return self._collistions_df
+    def collisions(self):
+        if self._collisions is None:
+            self._collisions = self.create_collisions(**self.collisions_param)
+        return self._collisions
 
-    def create_collisions_df(self, temperatures=None):
+    def _build_collisions_q(self, levels_ids):
+        levels_subq = self.session.query(Level.level_id.label("level_id")). \
+            filter(Level.level_id.in_(levels_ids)).subquery()
+
+        collisions_q = self.session.query(ECollision). \
+            join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
+
+        return collisions_q
+
+    def create_collisions(self, temperatures):
         """
-            Create a DataFrame with collisions data.
+            Create a DataFrame containing *collisions* data.
 
             Parameters
             -----------
@@ -563,26 +577,14 @@ class AtomData(object):
 
             Returns
             -------
-            collisions_df : pandas.DataFrame
-                DataFrame with indes: e_col_id,
-                and columns:
+            collisions: pandas.DataFrame
+                DataFrame with:
         """
 
-        if temperatures is None:
-            temperatures = np.linspace(2000, 50000, 20)
-        else:
-            temperatures = np.array(temperatures)
+        levels_idx = self.levels.index.values
+        collisions_q = self._build_collisions_q(levels_idx)
 
-        levels_df = self.levels_df.copy()
-
-        levels_subq = self.session.query(Level.level_id.label("level_id")). \
-            filter(Level.level_id.in_(levels_df.index.values)).\
-            filter(Level.data_source == self.ch_ds).subquery()
-
-        collisions_q = self.session.query(ECollision). \
-            join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
-
-        collisions_data = list()
+        collisions = list()
         for e_col in collisions_q.options(joinedload(ECollision.gf_values),
                                           joinedload(ECollision.temp_strengths)):
 
@@ -595,31 +597,27 @@ class AtomData(object):
 
             btemp, bscups = (list(ts) for ts in zip(*e_col.temp_strengths_tuple))
 
-            collisions_data.append((e_col.e_col_id, e_col.lower_level_id, e_col.upper_level_id,
+            collisions.append((e_col.e_col_id, e_col.lower_level_id, e_col.upper_level_id,
                 e_col.data_source_id, btemp, bscups, e_col.bt92_ttype, e_col.bt92_cups, gf.value))
 
         collisions_dtype = [("e_col_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
                             ("ds_id", np.int),  ("btemp", 'O'), ("bscups", 'O'), ("ttype", np.int),
                             ("cups", np.float), ("gf", np.float)]
 
-        collisions_data = np.array(collisions_data, dtype=collisions_dtype)
-        collisions_df = pd.DataFrame.from_records(collisions_data, index="e_col_id")
+        collisions = np.array(collisions, dtype=collisions_dtype)
+        collisions = pd.DataFrame.from_records(collisions, index="e_col_id")
 
-        # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
-        ions_df = levels_df[["atomic_number", "ion_number"]]
-
-        lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
-                              loc[:, ["level_number_lower", "g_l", "energy_lower"]]
-        upper_levels_df = levels_df.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+        # Join atomic_number, ion_number, level_number_lower, level_number_upper
+        lower_levels = self.levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
+                              loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
+        upper_levels = self.levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
                               loc[:, ["level_number_upper", "g_u", "energy_upper"]]
 
-        collisions_df = collisions_df.join(ions_df, on="lower_level_id")
-        collisions_df = collisions_df.join(lower_levels_df, on="lower_level_id")
-        collisions_df = collisions_df.join(upper_levels_df, on="upper_level_id")
+        collisions = collisions.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
 
         # Calculate delta_e
         kb_ev = const.k_B.cgs.to('eV / K').value
-        collisions_df["delta_e"] = (collisions_df["energy_upper"] - collisions_df["energy_lower"])/kb_ev
+        collisions["delta_e"] = (collisions["energy_upper"] - collisions["energy_lower"])/kb_ev
 
         def calculate_collisional_strength(row, temperatures):
             """
@@ -666,39 +664,39 @@ class AtomData(object):
             c_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
             return tuple(c_ul)
 
-        collisions_df["c_ul"] = collisions_df.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+        collisions["c_ul"] = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
 
         # Calculate g_ratio
-        collisions_df["g_ratio"] = collisions_df["g_l"] / collisions_df["g_u"]
+        collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
 
-        return collisions_df
+        return collisions
 
     @property
-    def collisions_df_prepared(self):
-        return self.prepare_collisions_df()
+    def collisions_prepared(self):
+        return self.prepare_collisions()
 
-    def prepare_collisions_df(self):
+    def prepare_collisions(self):
         """
-            Prepare collisions_df for TARDIS
-
+            Prepare the DataFrame with electron collisions for TARDIS
             Returns
             -------
-            collisions_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
-                and columns: e_col_id, delta_e, g_ratio, c_ul
+            collisions_prepared : pandas.DataFrame
+                DataFrame with:
+                    index: atomic_number, ion_number, level_number_lower, level_number_upper;
+                    columns: e_col_id, delta_e, g_ratio, c_ul.
         """
 
-        collisions_df = self.collisions_df.copy()
+        collisions_prepared = self.collisions.copy()
 
         # Drop the unwanted columns
-        collisions_df.drop(["lower_level_id", "upper_level_id", "ds_id", "btemp", "bscups",
+        collisions_prepared.drop(["lower_level_id", "upper_level_id", "ds_id", "btemp", "bscups",
                             "ttype", "energy_lower", "energy_upper", "gf", "g_l", "g_u", "cups"],  axis=1, inplace=True)
 
         # Set multiindex
-        collisions_df.reset_index(inplace=True)
-        collisions_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        collisions_prepared.reset_index(inplace=True)
+        collisions_prepared.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
-        return collisions_df
+        return collisions_prepared
 
     @property
     def macro_atom_df(self):
