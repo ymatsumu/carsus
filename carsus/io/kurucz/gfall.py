@@ -10,6 +10,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from carsus.model import Atom, DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
+from carsus.util import atomic_number2symbol
 
 class GFALLReader(object):
     """
@@ -315,10 +316,14 @@ class GFALLIngester(object):
         if levels_df is None:
             levels_df = self.gfall_reader.levels_df
 
+        print("Ingesting levels from {}".format(self.data_source.short_name))
+
         for ion_index, ion_df in levels_df.groupby(level=["atomic_number", "ion_charge"]):
 
             atomic_number, ion_charge = ion_index
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             for index, row in ion_df.iterrows():
 
@@ -340,10 +345,14 @@ class GFALLIngester(object):
         if lines_df is None:
             lines_df = self.gfall_reader.lines_df
 
+        print("Ingesting lines from {}".format(self.data_source.short_name))
+
         for ion_index, ion_df in lines_df.groupby(level=["atomic_number", "ion_charge"]):
 
             atomic_number, ion_charge = ion_index
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 

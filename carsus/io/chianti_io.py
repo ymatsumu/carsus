@@ -9,6 +9,7 @@ from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.orm.exc import NoResultFound
 from carsus.io.base import IngesterError
+from carsus.util import atomic_number2symbol
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line,LineGFValue, LineAValue, LineWavelength, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
@@ -279,12 +280,16 @@ class ChiantiIngester(object):
 
     def ingest_levels(self):
 
+        print("Ingesting levels from {}".format(self.data_source.short_name))
+
         for rdr in self.ion_readers:
 
             atomic_number = rdr.ion.Z
             ion_charge = rdr.ion.Ion -1
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             # ToDo: Determine parity from configuration
 
@@ -306,12 +311,16 @@ class ChiantiIngester(object):
 
     def ingest_lines(self):
 
+        print("Ingesting lines from {}".format(self.data_source.short_name))
+
         for rdr in self.ion_readers:
 
             atomic_number = rdr.ion.Z
             ion_charge = rdr.ion.Ion - 1
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 
@@ -351,11 +360,16 @@ class ChiantiIngester(object):
 
     def ingest_collisions(self):
 
+        print("Ingesting collisions from {}".format(self.data_source.short_name))
+
         for rdr in self.ion_readers:
 
             atomic_number = rdr.ion.Z
             ion_charge = rdr.ion.Ion - 1
+
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            print("Ingesting collisions for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 
