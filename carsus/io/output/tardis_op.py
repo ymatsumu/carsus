@@ -787,60 +787,67 @@ class AtomData(object):
         return macro_atom_prepared
 
     @property
-    def macro_atom_ref_df(self):
-        if self._macro_atom_ref_df is None:
-            self._macro_atom_ref_df = self.create_macro_atom_ref_df()
-        return self._macro_atom_ref_df
+    def macro_atom_references(self):
+        if self._macro_atom_references is None:
+            self._macro_atom_references = self.create_macro_atom_references()
+        return self._macro_atom_references
 
-    def create_macro_atom_ref_df(self):
+    def create_macro_atom_references(self):
         """
-            Create a DataFrame with macro atom reference data.
+            Create a DataFrame containing *macro atom reference* data.
 
             Returns
             -------
-            macro_atom_ref_df : pandas.DataFrame
-                DataFrame with index: level_id,
+            macro_atom_reference : pandas.DataFrame
+                DataFrame with:
+                index: level_id;
                 and columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total
         """
 
-        levels_df = self.levels_df.copy()
-        lines_df = self.lines_df.copy()
+        levels = self.levels.copy()
+        lines = self.lines.copy()
 
-        macro_atom_ref_df = levels_df.rename(columns={"level_number": "source_level_number"}).\
+        macro_atom_references = levels.rename(columns={"level_number": "source_level_number"}).\
                                        loc[:, ["atomic_number", "ion_number", "source_level_number"]]
 
-        count_down = lines_df.groupby("upper_level_id").size()
+        count_down = lines.groupby("upper_level_id").size()
         count_down.name = "count_down"
 
-        count_up = lines_df.groupby("lower_level_id").size()
+        count_up = lines.groupby("lower_level_id").size()
         count_up.name = "count_up"
 
-        macro_atom_ref_df = macro_atom_ref_df.join(count_down).join(count_up)
-        macro_atom_ref_df.fillna(0, inplace=True)
-        macro_atom_ref_df["count_total"] = 2*macro_atom_ref_df["count_down"] + macro_atom_ref_df["count_up"]
+        macro_atom_references = macro_atom_references.join(count_down).join(count_up)
+        macro_atom_references.fillna(0, inplace=True)
+        macro_atom_references["count_total"] = 2*macro_atom_references["count_down"] + macro_atom_references["count_up"]
 
-        return macro_atom_ref_df
+        # Convert to int
+        macro_atom_references["count_down"] = macro_atom_references["count_down"].astype(np.int)
+        macro_atom_references["count_up"] = macro_atom_references["count_up"].astype(np.int)
+        macro_atom_references["count_total"] = macro_atom_references["count_total"].astype(np.int)
+
+        return macro_atom_references
 
     @property
-    def macro_atom_ref_df_prepared(self):
-        return self.prepare_macro_atom_ref_df()
+    def macro_atom_references_prepared(self):
+        return self.prepare_macro_atom_references()
 
-    def prepare_macro_atom_ref_df(self):
+    def prepare_macro_atom_references(self):
         """
-            Prepare macro_atom_ref_df for TARDIS
+            Prepare the DataFrame with macro atom references for TARDIS
 
             Returns
             -------
-            macro_atom_ref_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, source_level_number
-                and columns: level_id, count_down, count_up, count_total
+            macro_atom_references_prepared : pandas.DataFrame
+                DataFrame with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
-        macro_atom_ref_df = self.macro_atom_ref_df.copy()
+        macro_atom_references_prepared = self.macro_atom_references_prepared.copy()
 
-        macro_atom_ref_df.reset_index(inplace=True)
-        macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_references_prepared.reset_index(inplace=True)
+        # macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
 
-        return macro_atom_ref_df
+        return macro_atom_references_prepared
 
     def to_hdf(self, hdf5_path, store_basic_atom=True, store_ionization=True,
                store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
