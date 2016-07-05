@@ -699,41 +699,42 @@ class AtomData(object):
         return collisions_prepared
 
     @property
-    def macro_atom_df(self):
-        if self._macro_atom_df is None:
-            self._macro_atom_df = self.create_macro_atom_df()
-        return self._macro_atom_df
+    def macro_atom(self):
+        if self._macro_atom is None:
+            self._macro_atom = self.create_macro_atom()
+        return self._macro_atom
 
-    def create_macro_atom_df(self):
+    def create_macro_atom(self):
         """
-            Create a DataFrame with macro atom data.
+            Create a DataFrame containing *macro atom* data.
 
             Returns
             -------
-            macro_atom_df : pandas.DataFrame
-                DataFrame with columns: atomic_number, ion_number, source_level_number, target_level_number,
-                transition_line_id, transition_type, transition_probability
+            macro_atom: pandas.DataFrame
+                DataFrame with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, target_level_number,
+                        transition_line_id, transition_type, transition_probability.
 
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
 
         """
 
-        levels_df = self.levels_df.copy()
-        lines_df = self.lines_df.copy()
+        levels = self.levels.copy()
+        lines = self.lines.copy()
 
-        lvl_energy_lower_df = levels_df.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
-        lvl_energy_upper_df = levels_df.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
+        lvl_energy_lower = self.levels.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
+        lvl_energy_upper = self.levels.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
 
-        lines_df = lines_df.join(lvl_energy_lower_df, on="lower_level_id")
-        lines_df = lines_df.join(lvl_energy_upper_df, on="upper_level_id")
+        lines = lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
 
-        macro_atom_data = list()
+        macro_atom = list()
         macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
                             ("source_level_number", np.int), ("target_level_number", np.int),
                             ("transition_line_id", np.int), ("transition_type", np.int), ("transition_probability", np.float)]
 
-        for line_id, row in lines_df.iterrows():
+        for line_id, row in lines.iterrows():
             atomic_number, ion_number = row["atomic_number"], row["ion_number"]
             level_number_lower, level_number_upper = row["level_number_lower"], row["level_number_upper"]
             nu = row["nu"]
@@ -745,39 +746,45 @@ class AtomData(object):
             transition_probabilities_dict[P_INTERNAL_DOWN] = 2 * nu**2 * f_ul / const.c.cgs.value**2 * e_lower
             transition_probabilities_dict[P_INTERNAL_UP] = f_lu * e_lower / (const.h.cgs.value * nu)
 
-            macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
+            macro_atom.append((atomic_number, ion_number, level_number_upper, level_number_lower,
                                     line_id, P_EMISSION_DOWN, transition_probabilities_dict[P_EMISSION_DOWN]))
-            macro_atom_data.append((atomic_number, ion_number, level_number_upper, level_number_lower,
+            macro_atom.append((atomic_number, ion_number, level_number_upper, level_number_lower,
                                     line_id, P_INTERNAL_DOWN, transition_probabilities_dict[P_INTERNAL_DOWN]))
-            macro_atom_data.append((atomic_number, ion_number, level_number_lower, level_number_upper,
+            macro_atom.append((atomic_number, ion_number, level_number_lower, level_number_upper,
                                     line_id, P_INTERNAL_UP, transition_probabilities_dict[P_INTERNAL_UP]))
 
-        macro_atom_data = np.array(macro_atom_data, dtype=macro_atom_dtype)
-        macro_atom_df = pd.DataFrame(macro_atom_data)
+        macro_atom = np.array(macro_atom, dtype=macro_atom_dtype)
+        macro_atom = pd.DataFrame(macro_atom)
 
-        return macro_atom_df
+        macro_atom.sort_values(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+
+        return macro_atom
 
     @property
-    def macro_atom_df_prepared(self):
-        return self.prepare_macro_atom_df()
+    def macro_atom_prepared(self):
+        return self.prepare_macro_atom()
 
     def prepare_macro_atom_df(self):
         """
-            Prepare macro_atom_df for TARDIS
-
+            Prepare the DataFrame with macro atom data for TARDIS
             Returns
             -------
-            macro_atom_df : pandas.DataFrame
-                DataFrame with muliindex: atomic_number, ion_number, source_level_number, target_level_number
-                and columns: transition_line_id, transition_type, transition_probability
-
+            macro_atom_prepared : pandas.DataFrame
+                DataFrame with the *macro atom data* with:
+                    index: none;
+                    columns: atomic_number, ion_number, source_level_number, destination_level_number,
+                        transition_line_id, transition_type, transition_probability.
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
-
         """
-        macro_atom_df = self.macro_atom_df.set_index(["atomic_number", "ion_number", "source_level_number", "target_level_number"])
-        macro_atom_df.sort_index(level=["atomic_number", "ion_number", "source_level_number"], inplace=True)
-        return macro_atom_df
+        macro_atom_prepared = self.macro_atom.copy()
+
+        # ToDo: choose between `target_level_number` and `destination_level_number`
+        # Rename `target_level_number` to `destination_level_number` used in TARDIS
+        # Personally, I think `target_level_number` is better so I use it in Carsus.
+        macro_atom_prepared.rename(columns={"target_level_number": "destination_level_number"}, inplace=True)
+
+        return macro_atom_prepared
 
     @property
     def macro_atom_ref_df(self):
