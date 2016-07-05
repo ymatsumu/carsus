@@ -28,12 +28,14 @@ class AtomData(object):
     Parameters:
     ------------
     session: SQLAlchemy session
-    basic_atom_max_atomic_number: int
-        The maximum atomic number to be stored in basic_atom_df
+    atom_masses_max_atomic_number: int
+        The maximum atomic number to be stored in atom_masses
             (default: 30)
     levels_create_metastable_flags: bool
         Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
         (default: True)
+    lines_loggf_threshold: int
+        log(gf) threshold for lines
     levels_metastable_loggf_threshold: int
         log(gf) threshold for flagging metastable levels
         (default: -3)
@@ -52,57 +54,68 @@ class AtomData(object):
     Attributes:
     ------------
     session: SQLAlchemy session
-    basic_atom_param: dict
-        The parameters for creating basic_atom_df
+    atom_masses_param: dict
+        The parameters for creating the `atom_masses` DataFrame
     levels_param: dict
-        The parameters for creating levels_df
-    collisions_df: dict
-        The parameters for creating collisins_df
-    basic_atom_df
-    ionization_df
-    levels_df
-    lines_df
-    collisions_df
-    macro_atom_df
-    macro_atom_ref_df
-    basic_atom_df_prepared
-    ionization_df_prepared
-    levels_df_prepared
-    lines_df_prepared
-    collisions_df_prepared
-    macro_atom_df_prepared
-    macro_atom_ref_df_prepared
+        The parameters for creating the `levels` DataFrame
+    lines_param: dict
+        The parameters for creating the `lines` DataFrame
+    collisions_param: dict
+        The parameters for creating the `collisions` DataFrame
+
+    ku_ds: carsus.model.atomic.DataSource instance
+        The Kurucz datasource
+    cu_ds: carsus.model.atomic.DataSource instance
+        The CHIANTI datasource
+
+    atom_masses
+    ionization_energies
+    levels_all
+    lines_all
+    levels
+    lines
+    collisions
+    macro_atom
+    macro_atom_references
+
+    atom_masses_prepared
+    ionization_energies_prepared
+    levels_prepared
+    lines_prepared
+    collisions_prepared
+    macro_atom_prepared
+    macro_atom_references_prepared
 
     Methods:
     ---------
-    create_basic_atom_df
-    create_ionization_df
-    create_levels_df
-    create_lines_df
-    create_collisions_df
-    create_macro_atom_df
-    create_macro_atom_ref_df
-    prepare_basic_atom_df
-    prepare_ionization_df
-    prepare_levels_df
-    prepare_lines_df
-    prepare_collisions_df
-    prepare_macro_atom_df
-    prepare_macro_atom_ref_df
+    create_atom_masses
+    create_ionization_energies
+    create_levels
+    create_lines
+    create_collisions
+    create_macro_atom
+    create_macro_atom_references
+
+    prepare_atom_masses
+    prepare_ionization_energies
+    prepare_levels
+    prepare_lines
+    prepare_collisions
+    prepare_macro_atom
+    prepare_macro_atom_references
 
     """
 
     def __init__(self, session,
-                 basic_atom_max_atomic_number=30, levels_create_metastable_flags=True,
-                 levels_metastable_loggf_threshold=-3, chianti_species=None,
-                 chianti_short_name=None, kurucz_short_name=None,
-                 collisions_temperatures=None):
+                 atom_masses_max_atomic_number=30, levels_create_metastable_flags=True,
+                 lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3, chianti_species=None,
+                 chianti_short_name=None, kurucz_short_name=None, collisions_temperatures=None):
 
         self.session = session
 
         # Set the parameters for the dataframes
-        self.basic_atom_param = {
-            "max_atomic_number": basic_atom_max_atomic_number
+        self.atom_masses_param = {
+            "max_atomic_number": atom_masses_max_atomic_number
         }
 
         self.levels_param = {
@@ -110,9 +123,17 @@ class AtomData(object):
             "metastable_loggf_threshold": levels_metastable_loggf_threshold
         }
 
+        self.lines_param = {
+            "loggf_threshold": lines_loggf_threshold
+        }
+
         self.collisions_param = {
             "temperatures": collisions_temperatures
         }
+
+        self.ku_ds = None
+        self.ch_ds = None
+        self.chianti_species = None
 
         # Query the data sources
         if kurucz_short_name is None:
@@ -127,6 +148,7 @@ class AtomData(object):
 
             # Get a list of tuples (atomic_number, ion_charge) for the chianti species
             chianti_species = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_species]
+            self.chianti_species = chianti_species
 
             if chianti_short_name is None:
                 chianti_short_name = "chianti_v8.0.2"
@@ -135,15 +157,16 @@ class AtomData(object):
             except NoResultFound:
                 print "Chianti data source does not exist!"
                 raise
-        self.chianti_species = chianti_species
 
-        self._basic_atom_df = None
-        self._ionization_df = None
-        self._levels_df = None
-        self._lines_df = None
-        self._collisions_df = None
-        self._macro_atom_df = None
-        self._macro_atom_ref_df = None
+        self._atomic_masses = None
+        self._ionization_energies = None
+        self._levels_all = None
+        self._levels = None
+        self._lines_all = None
+        self._lines = None
+        self._collisions = None
+        self._macro_atom = None
+        self._macro_atom_references = None
 
     @property
     def basic_atom_df(self):
