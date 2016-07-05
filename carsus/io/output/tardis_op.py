@@ -56,10 +56,8 @@ class AtomData(object):
     session: SQLAlchemy session
     atom_masses_param: dict
         The parameters for creating the `atom_masses` DataFrame
-    levels_param: dict
-        The parameters for creating the `levels` DataFrame
-    lines_param: dict
-        The parameters for creating the `lines` DataFrame
+    levels_lines_param: dict
+        The parameters for creating the `levels` DataFrame and the `lines` DataFrame
     collisions_param: dict
         The parameters for creating the `collisions` DataFrame
 
@@ -70,8 +68,6 @@ class AtomData(object):
 
     atom_masses
     ionization_energies
-    levels_all
-    lines_all
     levels
     lines
     collisions
@@ -90,8 +86,7 @@ class AtomData(object):
     ---------
     create_atom_masses
     create_ionization_energies
-    create_levels
-    create_lines
+    create_levels_lines
     create_collisions
     create_macro_atom
     create_macro_atom_references
@@ -118,13 +113,10 @@ class AtomData(object):
             "max_atomic_number": atom_masses_max_atomic_number
         }
 
-        self.levels_param = {
-            "create_metastable_flags": levels_create_metastable_flags,
-            "metastable_loggf_threshold": levels_metastable_loggf_threshold
-        }
-
-        self.lines_param = {
-            "loggf_threshold": lines_loggf_threshold
+        self.levels_lines_param = {
+            "levels_create_metastable_flags": levels_create_metastable_flags,
+            "levels_metastable_loggf_threshold": levels_metastable_loggf_threshold,
+            "lines_loggf_threshold": lines_loggf_threshold
         }
 
         self.collisions_param = {
@@ -160,9 +152,7 @@ class AtomData(object):
 
         self._atom_masses = None
         self._ionization_energies = None
-        self._levels_all = None
         self._levels = None
-        self._lines_all = None
         self._lines = None
         self._collisions = None
         self._macro_atom = None
@@ -286,40 +276,28 @@ class AtomData(object):
         return ionization_energies
 
     @property
-    def levels_df(self):
-        if self._levels_df is None:
-            self._levels_df = self.create_levels_df()
-        return self._levels_df
+    def levels(self):
+        if self._levels is None:
+            self._levels, self._lines = self.create_levels_lines(**self.levels_lines_param)
+        return self._levels
 
-    def create_levels_df(self, create_metastable_flags=True, metastable_loggf_threshold=-3):
-        """
-            Create a DataFrame with levels data.
+    @property
+    def lines(self):
+        if self._lines is None:
+            self._levels, self._lines = self.create_levels_lines(**self.levels_lines_param)
+        return self._lines
 
-            Parameters
-            ----------
-            create_metastable_flags: bool
-                Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
-                (default: True)
-            metastable_loggf_threshold: int
-                log(gf) threshold for flagging metastable levels
-                (default: -3)
-
-            Returns
-            -------
-            levels_df : pandas.DataFrame
-                DataFrame with index: level_id
-                         and columns: atomic_number, ion_number, level_number, energy[eV], g[1]
-        """
-
+    def _build_levels_q(self):
         if self.chianti_species is None:
-            kurucz_levels_q = self.session.query(Level).\
+            kurucz_levels_q = self.session.query(Level). \
                 filter(Level.data_source == self.ku_ds)
 
             levels_q = kurucz_levels_q
 
         else:
 
-            # To select ions we create a CTE (Common Table Expression), because sqlite doesn't support composite IN statements
+            # To select ions we create a CTE (Common Table Expression),
+            # because sqlite doesn't support composite IN statements
             chianti_species_cte = union_all(
                 *[self.session.query(
                     literal(atomic_number).label("atomic_number"),
@@ -328,22 +306,35 @@ class AtomData(object):
             ).cte("chianti_species_cte")
 
             # To select chianti ions we join on the CTE
-            chianti_levels_q = self.session.query(Level).\
+            chianti_levels_q = self.session.query(Level). \
                 join(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
-                                               Level.ion_charge == chianti_species_cte.c.ion_charge)).\
+                                               Level.ion_charge == chianti_species_cte.c.ion_charge)). \
                 filter(Level.data_source == self.ch_ds)
 
-            # To select kurucz ions we do an outerjoin on the CTE and select rows that don't have a match from the CTE
-            kurucz_levels_q = self.session.query(Level).\
+            # To select kurucz ions we do an outerjoin on the CTE and
+            # select rows that don't have a match from the CTE
+            kurucz_levels_q = self.session.query(Level). \
                 outerjoin(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
-                                               Level.ion_charge == chianti_species_cte.c.ion_charge)).\
-                filter(chianti_species_cte.c.atomic_number.is_(None)).\
+                                                    Level.ion_charge == chianti_species_cte.c.ion_charge)). \
+                filter(chianti_species_cte.c.atomic_number.is_(None)). \
                 filter(Level.data_source == self.ku_ds)
 
             levels_q = kurucz_levels_q.union(chianti_levels_q)
 
-        # Get the levels data
-        levels_data = list()
+        return levels_q
+
+    def _build_lines_q(self, levels_ids):
+        levels_subq = self.session.query(Level.level_id.label("level_id")). \
+            filter(Level.level_id.in_(levels_ids)).subquery()
+
+        lines_q = self.session.query(Line). \
+            join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
+
+        return lines_q
+
+    @staticmethod
+    def _get_all_levels_data(levels_q):
+        levels = list()
         for lvl in levels_q.options(joinedload(Level.energies)):
             try:
                 energy = None
@@ -358,115 +349,20 @@ class AtomData(object):
             except IndexError:
                 print "No energy is available for level {0}".format(lvl.level_id)
                 continue
-            levels_data.append((lvl.level_id, lvl.atomic_number, lvl.ion_charge, energy.value, lvl.g, lvl.data_source_id))
+            levels.append(
+                (lvl.level_id, lvl.atomic_number, lvl.ion_charge, energy.value, lvl.g))
 
         # Create a dataframe with the levels data
         levels_dtype = [("level_id", np.int), ("atomic_number", np.int),
-                        ("ion_charge", np.int), ("energy", np.float), ("g", np.int), ("ds_id", np.int)]
-        levels_data = np.array(levels_data, dtype=levels_dtype)
-        levels_df = pd.DataFrame.from_records(levels_data, index="level_id")
+                        ("ion_number", np.int), ("energy", np.float), ("g", np.int)]
+        levels = np.array(levels, dtype=levels_dtype)
+        levels = pd.DataFrame.from_records(levels, index="level_id")
 
-        # Replace ion_charge with ion_number in the spectroscopic notation
-        levels_df["ion_number"] = levels_df["ion_charge"] + 1
-        levels_df.drop("ion_charge", axis=1, inplace=True)
+        return levels
 
-        # Create level numbers
-        levels_df.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
-        levels_df["level_number"] = levels_df.groupby(['atomic_number', 'ion_number'])['energy']. \
-            transform(lambda x: np.arange(len(x))).values
-        levels_df["level_number"] = levels_df["level_number"].astype(np.int)
-
-        if create_metastable_flags:
-            # Create metastable flags
-            # ToDO: It is assumed that all lines are ingested. That may not always be the case
-
-            levels_subq = self.session.query(Level). \
-                filter(Level.level_id.in_(levels_df.index.values)).subquery()
-            metastable_q = self.session.query(Line). \
-                join(levels_subq, Line.upper_level)
-
-            metastable_data = list()
-            for line in yield_limit(metastable_q.options(joinedload(Line.gf_values)),
-                                    Line.line_id, maxrq=LINES_MAXRQ):
-                try:
-                    # Currently it is assumed that each line has only one gf value
-                    gf = line.gf_values[0].quantity  # Get the first gf value
-                except IndexError:
-                    print "No gf value is available for line {0}".format(line.line_id)
-                    continue
-                metastable_data.append((line.line_id, line.upper_level_id, gf.value))
-
-            metastable_dtype = [("line_id", np.int), ("upper_level_id", np.int), ("gf", np.float)]
-            metastable_data = np.array(metastable_data, dtype=metastable_dtype)
-            metastable_df = pd.DataFrame.from_records(metastable_data, index="line_id")
-
-            # Filter loggf on the threshold value
-            metastable_df["loggf"] = np.log10(metastable_df["gf"])
-            metastable_df = metastable_df.loc[metastable_df["loggf"] > metastable_loggf_threshold]
-
-            # Count the remaining strong transitions
-            metastable_df_grouped = metastable_df.groupby("upper_level_id")
-            metastable_flags = metastable_df_grouped["upper_level_id"].count()
-            metastable_flags.name = "metastable"
-
-            # If there are no strong transitions for a level (the count is NaN) then the metastable flag is True
-            # else (the count is a natural number) the metastable flag is False
-            levels_df = levels_df.join(metastable_flags)
-            levels_df["metastable"] = levels_df["metastable"].isnull()
-
-        return levels_df
-
-    @property
-    def levels_df_prepared(self):
-        return self.prepare_levels_df()
-
-    def prepare_levels_df(self):
-        """
-        Prepare levels_df for TARDIS
-
-        Returns
-        -------
-        levels_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable
-        """
-
-        levels_df = self.levels_df.copy()
-
-        # Create multiindex
-        levels_df.reset_index(inplace=True)
-        levels_df.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
-
-        # Drop the unwanted columns
-        levels_df.drop(["level_id", "ds_id"], axis=1, inplace=True)
-
-        return levels_df
-
-    @property
-    def lines_df(self):
-        if self._lines_df is None:
-            self._lines_df = self.create_lines_df()
-        return self._lines_df
-
-    def create_lines_df(self):
-        """
-            Create a DataFrame with lines data.
-
-            Returns
-            -------
-            lines_df : pandas.DataFrame
-                DataFrame with index: line_id
-                and columns: atomic_number, ion_number, level_number_lower, level_number_upper,
-                             wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
-        """
-        levels_df = self.levels_df.copy()
-
-        levels_subq = self.session.query(Level.level_id.label("level_id")). \
-            filter(Level.level_id.in_(levels_df.index.values)).subquery()
-
-        lines_q = self.session.query(Line).\
-            join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
-
-        lines_data = list()
+    @staticmethod
+    def _get_all_lines_data(lines_q):
+        lines = list()
         for line in yield_limit(lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)),
                                 Line.line_id, maxrq=LINES_MAXRQ):
             try:
@@ -481,75 +377,173 @@ class AtomData(object):
             except IndexError:
                 print "No wavelength is available for line {0}".format(line.line_id)
                 continue
-            lines_data.append((line.line_id, line.lower_level_id, line.upper_level_id,
-                               line.data_source_id,  wavelength.value, gf.value))
+            lines.append((line.line_id, line.lower_level_id, line.upper_level_id, wavelength.value, gf.value))
 
         lines_dtype = [("line_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
-                       ("ds_id", np.int), ("wavelength", np.float), ("gf", np.float)]
-        lines_data = np.array(lines_data, dtype=lines_dtype)
-        lines_df = pd.DataFrame.from_records(lines_data, index="line_id")
+                       ("wavelength", np.float), ("gf", np.float)]
+        lines = np.array(lines, dtype=lines_dtype)
+        lines = pd.DataFrame.from_records(lines, index="line_id")
 
-        # Join atomic_number, ion_number, level_number_lower, level_number_upper and set multiindex
-        ions_df = levels_df[["atomic_number", "ion_number"]]
+        lines["loggf"] = np.log10(lines["gf"])
 
-        lower_levels_df = levels_df.rename(columns={"level_number": "level_number_lower", "g": "g_l"}).\
-            loc[:,["level_number_lower", "g_l"]]
-        upper_levels_df = levels_df.rename(columns={"level_number": "level_number_upper", "g": "g_u"}).\
-            loc[:,["level_number_upper", "g_u"]]
+        return lines
 
-        lines_df = lines_df.join(ions_df, on="lower_level_id")
-        lines_df = lines_df.join(lower_levels_df, on="lower_level_id")
-        lines_df = lines_df.join(upper_levels_df, on="upper_level_id")
+    @staticmethod
+    def _create_metastable_flags(levels, lines, levels_metastable_loggf_threshold=-3):
+
+        # Filter lines on the loggf threshold value
+        metastable_lines = lines.loc[lines["loggf"] > levels_metastable_loggf_threshold]
+
+        # Count the remaining strong transitions
+        metastable_lines_grouped = metastable_lines.groupby("upper_level_id")
+        metastable_counts = metastable_lines_grouped["upper_level_id"].count()
+        metastable_counts.name = "metastable_counts"
+
+        # If there are no strong transitions for a level (the count is NaN) then the metastable flag is True
+        # else (the count is a natural number) the metastable flag is False
+        levels = levels.join(metastable_counts)
+        metastable_flags =  levels["metastable_counts"].isnull()
+        metastable_flags.name = "metastable"
+        return metastable_flags
+
+    def create_levels_lines(self, levels_create_metastable_flags=True, levels_metastable_loggf_threshold=-3,
+                            lines_loggf_threshold=-3):
+        """
+        Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
+
+        Parameters
+        ----------
+        levels_create_metastable_flags: bool
+            Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
+        levels_metastable_loggf_threshold: int
+            log(gf) threshold for flagging metastable levels
+        lines_loggf_threshold: int
+            log(gf) threshold for lines
+
+        Returns
+        -------
+        levels: pandas.DataFrame
+            DataFrame with:
+                index: level_id
+                columns: atomic_number, ion_number, level_number, energy[eV], g[1]
+
+        lines: pandas.DataFrame
+            DataFrame with:
+                index: line_id;
+                columns: atomic_number, ion_number, level_number_lower, level_number_upper,
+                         wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
+        """
+        levels_q = self._build_levels_q()
+        levels_all = self._get_all_levels_data(levels_q)
+
+        lines_q = self._build_lines_q(levels_all.index.values)
+        lines_all = self._get_all_lines_data(lines_q)
+
+        # Culling autoionization levels
+        ionization_energies = self.ionization_energies.set_index(["atomic_number", "ion_number"])
+        levels_w_ionization_energies = levels_all.join(ionization_energies, on=["atomic_number", "ion_number"])
+        levels = levels_all.loc[
+            levels_w_ionization_energies["energy"] >= levels_w_ionization_energies["ionization_energy"]
+        ]
+
+        # Clean lines
+        lines = lines_all.join(pd.DataFrame(index=levels.index), on="lower_level_id", how="inner").\
+            join(pd.DataFrame(index=levels.index), on="upper_level_id", how="inner")
+
+        # Culling lines with low gf values
+        lines = lines.loc[lines["loggf"] > lines_loggf_threshold]
+
+        # Clean levels
+        lower_level_idx = lines.rename(columns={"lower_level_id": "level_id"}).loc[:, ["level_id"]]
+        upper_level_idx = lines.rename(columns={"upper_level_id": "level_id"}).loc[:, ["level_id"]]
+        level_idx = pd.concat([lower_level_idx, upper_level_idx]).drop_duplicates("level_id")
+        levels = levels.join(pd.DataFrame(index=level_idx["level_id"]), how="inner")
+
+        # Create the metastable flags for levels
+        if levels_create_metastable_flags:
+            levels["metastable"] = self._create_metastable_flags(levels, lines_all, levels_metastable_loggf_threshold)
+
+        # Create level numbers
+        levels.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
+        levels["level_number"] = levels.groupby(['atomic_number', 'ion_number'])['energy']. \
+            transform(lambda x: np.arange(len(x))).values
+        levels["level_number"] = levels["level_number"].astype(np.int)
+
+        # Join atomic_number, ion_number, level_number_lower, level_number_upper on lines
+        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l"}). \
+                              loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l"]]
+        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u"}). \
+                              loc[:, ["level_number_upper", "g_u"]]
+        lines = lines.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
-        lines_df["f_lu"] = lines_df["gf"]/lines_df["g_l"]
-        lines_df["f_ul"] = -lines_df["gf"]/lines_df["g_u"]
+        lines["f_lu"] = lines["gf"] / lines["g_l"]
+        lines["f_ul"] = lines["gf"] / lines["g_u"]
 
         # Calculate frequency
-        lines_df['nu'] = u.Unit('angstrom').to('Hz', lines_df['wavelength'], u.spectral())
+        lines['nu'] = u.Unit('angstrom').to('Hz', lines['wavelength'], u.spectral())
 
         # Calculate Einstein coefficients
-        einstein_coeff = (4 * np.pi**2 * const.e.gauss.value**2) / (const.m_e.cgs.value * const.c.cgs.value)
-        lines_df['B_lu'] = einstein_coeff * lines_df['f_lu'] / (const.h.cgs.value * lines_df['nu'])
-        lines_df['B_ul'] = einstein_coeff * lines_df['f_ul'] / (const.h.cgs.value * lines_df['nu'])
-        lines_df['A_ul'] = -2 * einstein_coeff * lines_df['nu']**2 / const.c.cgs.value**2 * lines_df['f_ul']
+        einstein_coeff = (4 * np.pi ** 2 * const.e.gauss.value ** 2) / (const.m_e.cgs.value * const.c.cgs.value)
+        lines['B_lu'] = einstein_coeff * lines['f_lu'] / (const.h.cgs.value * lines['nu'])
+        lines['B_ul'] = einstein_coeff * lines['f_ul'] / (const.h.cgs.value * lines['nu'])
+        lines['A_ul'] = 2 * einstein_coeff * lines['nu'] ** 2 / const.c.cgs.value ** 2 * lines['f_ul']
 
-        return lines_df
+        return levels, lines
 
     @property
-    def lines_df_prepared(self):
-        return self.prepare_lines_df()
+    def levels_prepared(self):
+        return self.prepare_levels()
 
-    def prepare_lines_df(self):
+    def prepare_levels(self):
         """
-            Prepare lines_df for TARDIS
-            Parameters
-            ----------
-            session : SQLAlchemy session
-            chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
-                The lines data for these ions will be taken from the CHIANTI database
-                (default: None)
-            chianti_short_name: str
-                The short name of the CHIANTI database, if set to None the latest version will be used
-                (default: None)
-            kurucz_short_name: str
-                The short name of the Kurucz database, if set to None the latest version will be used
-                (default: None)
-            Returns
-            -------
-            lines_df : pandas.DataFrame
-                DataFrame with multiindex: atomic_number, ion_number, level_number_lower, level_number_upper
-                and columns: line_id, wavelength[AA], nu[Hz], f_lu, f_ul, B_ul, B_ul, A_ul
+        Prepare the DataFrame with levels for TARDIS
+
+        Returns
+        -------
+        levels_prepared: pandas.DataFrame
+            DataFrame with:
+                index: none;
+                columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable.
         """
 
-        #Set the multiindex
-        lines_df = self.lines_df.reset_index()
-        lines_df.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        levels_prepared = self.levels.copy()
+
+        # Set index
+        levels_prepared.reset_index(inplace=True)
+        # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
         # Drop the unwanted columns
-        lines_df.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id", "ds_id"], axis=1, inplace=True)
+        levels_prepared.drop(["level_id"], axis=1, inplace=True)
 
-        return lines_df
+        return levels_prepared
+
+    @property
+    def lines_prepared(self):
+        return self.prepare_lines()
+
+    def prepare_lines(self):
+        """
+            Prepare the DataFrame with lines for TARDIS
+
+            Returns
+            -------
+            lines_prepared : pandas.DataFrame
+                DataFrame with:
+                    index: none;
+                    columns: lind_id, atomic_number, ion_number, level_number_lower, level_number_upper,
+                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
+        """
+        lines_prepared = self.lines.copy()
+
+        # Set the index
+        lines_prepared.reset_index(inplace=True)
+        # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+
+        # Drop the unwanted columns
+        lines_prepared.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id"], axis=1, inplace=True)
+
+        return lines_prepared
 
     @property
     def collisions_df(self):
