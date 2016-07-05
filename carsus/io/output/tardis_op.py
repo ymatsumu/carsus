@@ -176,7 +176,7 @@ class AtomData(object):
 
     def create_atom_masses(self, max_atomic_number=30):
         """
-        Create a DataFrame containing *atomic masses*
+        Create a DataFrame containing *atomic masses*.
 
         Parameters
         ----------
@@ -212,7 +212,7 @@ class AtomData(object):
 
     def prepare_atom_masses(self):
         """
-        Prepare the DataFrame with atomic masses for TARDIS
+        Prepare the DataFrame with atomic masses for TARDIS.
 
         Returns
         -------
@@ -225,52 +225,65 @@ class AtomData(object):
         return atom_masses_prepared
 
     @property
-    def ionization_df(self):
-        if not self._ionization_df:
-            self._ionization_df = self.create_ionization_df()
-        return self._ionization_df
+    def ionization_energies(self):
+        if not self._ionization_energies:
+            self._ionization_energies = self.create_ionization_energies()
+        return self._ionization_energies
 
-    def create_ionization_df(self):
+    def create_ionization_energies(self):
         """
-        Create a DataFrame with ionization data.
+        Create a DataFrame containing *ionization energies*.
 
         Returns
         -------
-        ionization_df : pandas.DataFrame
-           DataFrame with columns: atomic_number, ion_number, ionization_energy[eV]
+        ionization_energies : pandas.DataFrame
+            DataFrame with:
+                index: none;
+                columns: atomic_number, ion_number, ionization_energy[eV]
         """
-        ionization_q = self.session.query(Ion).\
+        ionization_energies_q = self.session.query(Ion).\
             order_by(Ion.atomic_number, Ion.ion_charge)
 
-        ionization_data = list()
-        for ion in ionization_q.options(joinedload(Ion.ionization_energies)):
+        ionization_energies = list()
+        for ion in ionization_energies_q.options(joinedload(Ion.ionization_energies)):
             ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
-            ionization_data.append((ion.atomic_number, ion.ion_number, ionization_energy))
+            ionization_energies.append((ion.atomic_number, ion.ion_number, ionization_energy))
 
         ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
-        ionization_data = np.array(ionization_data, dtype=ionization_dtype)
+        ionization_energies = np.array(ionization_energies, dtype=ionization_dtype)
 
-        ionization_df = pd.DataFrame.from_records(ionization_data)
+        ionization_energies = pd.DataFrame.from_records(ionization_energies)
 
-        return ionization_df
+        return ionization_energies
 
     @property
-    def ionization_df_prepared(self):
-        return self.prepare_ionization_df()
+    def ionization_energies_prepared(self):
+        return self.prepare_ionization_energies()
 
-    def prepare_ionization_df(self):
+    def prepare_ionization_energies(self):
         """
-        Prepare ionization_df for TARDIS
+        Prepare the DataFrame with ionization energies for TARDIS
 
         Returns
         -------
-        ionization_df : pandas.DataFrame
-           DataFrame with index: atomic_number, ion_number
-                    and columns: ionization_energy[eV]
+        ionization_energies : pandas.DataFrame
+            DataFrame with:
+                index: atomic_number, ion_number;
+                columns: ionization_energy[eV].
 
+        Notes
+        ------
+        In TARDIS `ion_number` describes the final ion state,
+        e.g. H I - H II is described with ion_number = 1
+        On the other hand, in carsus `ion_number` describes the lower ion state,
+        e.g. H I - H II is described with ion_number = 0
+        For this reason we add 1 to `ion_number` in this prepare method.
         """
-        ionization_df = self.ionization_df.set_index(["atomic_number", "ion_number"])
-        return ionization_df
+        ionization_energies = self.ionization_energies.copy()
+        ionization_energies["ion_number"] += 1
+        ionization_energies.set_index(["atomic_number", "ion_number"], inplace=True)
+
+        return ionization_energies
 
     @property
     def levels_df(self):
