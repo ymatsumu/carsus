@@ -849,9 +849,9 @@ class AtomData(object):
 
         return macro_atom_references_prepared
 
-    def to_hdf(self, hdf5_path, store_basic_atom=True, store_ionization=True,
+    def to_hdf(self, hdf5_path, store_atom_masses=True, store_ionization_energies=True,
                store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
-               store_macro_atom_ref=True):
+               store_macro_atom_references=True):
         """
             Store the dataframes in an HDF5 file
 
@@ -859,51 +859,51 @@ class AtomData(object):
             ------------
             hdf5_path: str
                 The path of the HDF5 file
-            store_basic_atom: bool
-                Store the basic atom DataFrame
+            store_atom_masses: bool
+                Store the `atom_masses_prepared` DataFrame
                 (default: True)
-            store_ionization: bool
-                Store the ionzation DataFrame
+            store_ionization_energies: bool
+                Store the `ionization_energies_prepared` DataFrame
                 (default: True)
             store_levels: bool
-                Store the levels DataFrame
+                Store the `levels_prepared` DataFrame
                 (default: True)
             store_lines: bool
-                Store the lines DataFrame
+                Store the `lines_prepared` DataFrame
                 (default: True)
             store_collisions: bool
-                Store the electron collisions DataFrame
+                Store the `collisions_prepared` DataFrame
                 (default: True)
             store_macro_atom: bool
-                Store the macro_atom DataFrame
+                Store the `macro_atom_prepared` DataFrame
                 (default: True)
-            store_macro_atom_ref: bool
-                Store the macro_atom_references DataFrame
+            store_macro_atom_references: bool
+                Store the `macro_atom_references_prepared` DataFrame
                 (default: True)
         """
 
         with HDFStore(hdf5_path) as store:
 
-            if store_basic_atom:
-                store.put("basic_atom_df", self.basic_atom_df_prepared)
+            if store_atom_masses:
+                store.put("atom_masses", self.atom_masses_prepared)
 
-            if store_ionization:
-                store.put("ionization_df", self.ionization_df_prepared)
+            if store_ionization_energies:
+                store.put("ionization_energies", self.ionization_energies_prepared)
 
             if store_levels:
-                store.put("levels_df", self.levels_df_prepared)
+                store.put("levels", self.levels_prepared)
 
             if store_lines:
-                store.put("lines_df", self.lines_df_prepared)
+                store.put("lines", self.lines_prepared)
 
             if store_collisions:
-                store.put("collisions_df", self.collisions_df_prepared)
+                store.put("collisions", self.collisions_prepared)
 
             if store_macro_atom:
-                store.put("macro_atom_df", self.macro_atom_df_prepared)
+                store.put("macro_atom", self.macro_atom_prepared)
 
-            if store_macro_atom_ref:
-                store.put("macro_atom_ref_df", self.macro_atom_ref_df_prepared)
+            if store_macro_atom_references:
+                store.put("macro_atom_references", self.macro_atom_references_prepared)
 
             # Set the root attributes
             # It seems that the only way to set the root attributes is to use `_v_attrs`
