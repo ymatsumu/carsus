@@ -158,7 +158,7 @@ class AtomData(object):
                 print "Chianti data source does not exist!"
                 raise
 
-        self._atomic_masses = None
+        self._atom_masses = None
         self._ionization_energies = None
         self._levels_all = None
         self._levels = None
@@ -169,58 +169,60 @@ class AtomData(object):
         self._macro_atom_references = None
 
     @property
-    def basic_atom_df(self):
-        if self._basic_atom_df is None:
-            self._basic_atom_df = self.create_basic_atom_df(**self.basic_atom_param)
-        return self._basic_atom_df
+    def atom_masses_df(self):
+        if self._atom_masses is None:
+            self._atom_masses = self.create_atom_masses(**self.atom_masses_param)
+        return self._atom_masses
 
-    def create_basic_atom_df(self, max_atomic_number=30):
+    def create_atom_masses(self, max_atomic_number=30):
         """
-        Create a DataFrame with basic atomic data.
+        Create a DataFrame containing *atomic masses*
 
         Parameters
         ----------
         max_atomic_number: int
-            The maximum atomic number to be stored in basic_atom_df
+            The maximum atomic number to be stored in `atom_masses`
             (default: 30)
 
         Returns
         -------
-        basic_atom_df : pandas.DataFrame
-            DataFrame with columns: atomic_number, columns: symbol, name, weight[u]
+        atom_masses : pandas.DataFrame
+            DataFrame with:
+                index: none;
+                columns: atom_masses, symbol, name, mass[u].
         """
-        basic_atom_q = self.session.query(Atom). \
+        atom_masses_q = self.session.query(Atom). \
             filter(Atom.atomic_number <= max_atomic_number).\
             order_by(Atom.atomic_number)
 
-        basic_atom_data = list()
-        for atom in basic_atom_q.options(joinedload(Atom.weights)):
+        atom_masses = list()
+        for atom in atom_masses_q.options(joinedload(Atom.weights)):
             weight = atom.weights[0].quantity.value if atom.weights else None  # Get the first weight from the collection
-            basic_atom_data.append((atom.atomic_number, atom.symbol, atom.name, weight))
+            atom_masses.append((atom.atomic_number, atom.symbol, atom.name, weight))
 
-        basic_atom_dtype = [("atomic_number", np.int), ("symbol", "|S5"), ("name", "|S150"),
-                            ("weight", np.float)]
-        basic_atom_data = np.array(basic_atom_data, dtype=basic_atom_dtype)
-        basic_atom_df = pd.DataFrame.from_records(basic_atom_data)
+        atom_masses_dtype = [("atomic_number", np.int), ("symbol", "|S5"), ("name", "|S150"), ("mass", np.float)]
+        atom_masses = np.array(atom_masses, dtype=atom_masses_dtype)
+        atom_masses = pd.DataFrame.from_records(atom_masses)
 
-        return basic_atom_df
+        return atom_masses
 
     @property
-    def basic_atom_df_prepared(self):
-        return self.prepare_basic_atom_df()
+    def atom_masses_prepared(self):
+        return self.prepare_atom_masses()
 
-    def prepare_basic_atom_df(self):
+    def prepare_atom_masses(self):
         """
-        Prepare the basic_atom_df for TARDIS
+        Prepare the DataFrame with atomic masses for TARDIS
 
         Returns
         -------
-        basic_atom_df : pandas.DataFrame
-               DataFrame with index: atomic_number
-                        and columns: symbol, name, weight[u]
+        atom_masses_prepared : pandas.DataFrame
+            DataFrame with:
+                index: atomic_number;
+                columns: symbol, name, mass[u].
         """
-        basic_atom_df = self.basic_atom_df.set_index("atomic_number")
-        return basic_atom_df
+        atom_masses_prepared = self.atom_masses.set_index("atomic_number")
+        return atom_masses_prepared
 
     @property
     def ionization_df(self):
