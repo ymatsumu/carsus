@@ -21,38 +21,38 @@ def atom_data(test_session):
 
 
 @pytest.fixture
-def basic_atom_df_prepared(atom_data):
-    return atom_data.basic_atom_df_prepared
+def atom_masses_prepared(atom_data):
+    return atom_data.atom_masses_prepared
 
 
 @pytest.fixture
-def ionization_df_prepared(atom_data):
-    return atom_data.ionization_df_prepared
+def ionization_energies_prepared(atom_data):
+    return atom_data.ionization_energies_prepared
 
 
 @pytest.fixture
-def levels_df_prepared(atom_data):
-    return atom_data.levels_df_prepared
+def levels_prepared(atom_data):
+    return atom_data.levels_prepared
 
 
 @pytest.fixture
-def lines_df_prepared(atom_data):
-    return atom_data.lines_df_prepared
+def lines_prepared(atom_data):
+    return atom_data.lines_prepared
 
 
 @pytest.fixture
-def collisions_df_prepared(atom_data):
-    return atom_data.collisions_df_prepared
+def collisions_prepared(atom_data):
+    return atom_data.collisions_prepared
 
 
 @pytest.fixture
-def macro_atom_df_prepared(atom_data):
-    return atom_data.macro_atom_df_prepared
+def macro_atom_prepared(atom_data):
+    return atom_data.macro_atom_prepared
 
 
 @pytest.fixture
-def macro_atom_ref_df_prepared(atom_data):
-    return atom_data.macro_atom_ref_df_prepared
+def macro_atom_references_prepared(atom_data):
+    return atom_data.macro_atom_references_prepared
 
 
 @pytest.fixture
@@ -67,21 +67,20 @@ def hdf5_path(request, data_dir):
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, exp_weight", [
+@pytest.mark.parametrize("atomic_number, exp_mass", [
     (2, 4.002602),
     (11, 22.98976928)
 ])
-def test_prepare_basic_atom_df(basic_atom_df_prepared, atomic_number, exp_weight):
-    assert_almost_equal(basic_atom_df_prepared.loc[atomic_number]["weight"],
-                        exp_weight)
+def test_prepare_atom_masses(atom_masses_prepared, atomic_number, exp_mass):
+    assert_almost_equal(atom_masses_prepared.loc[atomic_number]["mass"], exp_mass)
 
 
 @with_test_db
-def test_prepare_basic_atom_df_max_atomic_number(test_session):
-    atom_data = AtomData(test_session, basic_atom_max_atomic_number=15)
-    basic_atom_df = atom_data.basic_atom_df_prepared
-    basic_atom_df.reset_index(inplace=True)
-    assert basic_atom_df["atomic_number"].max() == 15
+def test_prepare_atom_masses_max_atomic_number(test_session):
+    atom_data = AtomData(test_session, atom_masses_max_atomic_number=15)
+    atom_masses = atom_data.atom_masses_prepared
+    atom_masses.reset_index(inplace=True)
+    assert atom_masses["atomic_number"].max() == 15
 
 
 @with_test_db
@@ -89,56 +88,50 @@ def test_prepare_basic_atom_df_max_atomic_number(test_session):
     (8, 6, 138.1189),
     (11, 1,  5.1390767)
 ])
-def test_prepare_ionizatinon_df(ionization_df_prepared, atomic_number, ion_number, exp_ioniz_energy):
-    assert_almost_equal(ionization_df_prepared.loc[(atomic_number, ion_number)]["ionization_energy"],
+def test_prepare_ionizatinon_energies(ionization_energies_prepared, atomic_number, ion_number, exp_ioniz_energy):
+    assert_almost_equal(ionization_energies_prepared.loc[(atomic_number, ion_number)]["ionization_energy"],
                         exp_ioniz_energy)
 
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy",[
-    (7, 6, 7, 3991860.0 * u.Unit("cm-1")),
-    (4, 3, 2, 981177.5 * u.Unit("cm-1"))
+    (7, 5, 7, 3991860.0 * u.Unit("cm-1")),
+    (4, 2, 2, 981177.5 * u.Unit("cm-1"))
 ])
-def test_prepare_levels_df(levels_df_prepared, atomic_number, ion_number, level_number, exp_energy):
-    energy = levels_df_prepared.loc[(atomic_number, ion_number, level_number)]["energy"] * u.eV
+def test_prepare_levels(levels_prepared, atomic_number, ion_number, level_number, exp_energy):
+    levels_prepared.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
+    energy = levels_prepared.loc[(atomic_number, ion_number, level_number)]["energy"] * u.eV
     energy = energy.to(u.Unit("cm-1"), equivalencies=u.spectral())
     assert_quantity_allclose(energy, exp_energy)
 
 
 @with_test_db
-def test_create_levels_df_wo_chianti_species(test_session):
-    atom_data = AtomData(test_session)
-    levels_df = atom_data.levels_df
-    chianti_ds_id = test_session.query(DataSource.data_source_id).\
-        filter(DataSource.short_name=="chianti_v8.0.2").scalar()
-    assert all(levels_df["ds_id"]!=chianti_ds_id)
-
-
-@with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength",[
-    (7, 6, 0, 1, 29.5343 * u.Unit("angstrom")),
-    (4, 3, 0, 3, 10.1693 * u.Unit("angstrom"))
+    (7, 5, 1, 2, 1907.9000 * u.Unit("angstrom")),
+    (4, 2, 0, 6, 10.0255 * u.Unit("angstrom"))
 ])
-def test_prepare_lines_df(lines_df_prepared, atomic_number, ion_number,
-                          level_number_lower, level_number_upper, exp_wavelength):
-    wavelength = lines_df_prepared.loc[(atomic_number, ion_number,
+def test_prepare_lines(lines_prepared, atomic_number, ion_number,
+                       level_number_lower, level_number_upper, exp_wavelength):
+    lines_prepared.set_index(["atomic_number", "ion_number",
+                              "level_number_lower", "level_number_upper"], inplace=True)
+    wavelength = lines_prepared.loc[(atomic_number, ion_number,
                                         level_number_lower, level_number_upper)]["wavelength"] * u.Unit("angstrom")
     assert_quantity_allclose(wavelength, exp_wavelength)
 
 
 # ToDo: Implement real tests
 @with_test_db
-def test_prepare_collisions_df(collisions_df_prepared):
+def test_prepare_collisions_df(collisions_prepared):
     assert True
 
 
 @with_test_db
-def test_prepare_macro_atom_df(macro_atom_df_prepared):
+def test_prepare_macro_atom_df(macro_atom_prepared):
     assert True
 
 
 @with_test_db
-def test_prepare_macro_atom_ref_df(macro_atom_ref_df_prepared):
+def test_prepare_macro_atom_ref_df(macro_atom_references_prepared):
     assert True
 
 

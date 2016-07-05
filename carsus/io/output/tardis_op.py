@@ -164,7 +164,7 @@ class AtomData(object):
         self._macro_atom_references = None
 
     @property
-    def atom_masses_df(self):
+    def atom_masses(self):
         if self._atom_masses is None:
             self._atom_masses = self.create_atom_masses(**self.atom_masses_param)
         return self._atom_masses
@@ -221,7 +221,7 @@ class AtomData(object):
 
     @property
     def ionization_energies(self):
-        if not self._ionization_energies:
+        if self._ionization_energies is None:
             self._ionization_energies = self.create_ionization_energies()
         return self._ionization_energies
 
@@ -242,7 +242,7 @@ class AtomData(object):
         ionization_energies = list()
         for ion in ionization_energies_q.options(joinedload(Ion.ionization_energies)):
             ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
-            ionization_energies.append((ion.atomic_number, ion.ion_number, ionization_energy))
+            ionization_energies.append((ion.atomic_number, ion.ion_charge, ionization_energy))
 
         ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
         ionization_energies = np.array(ionization_energies, dtype=ionization_dtype)
@@ -448,12 +448,13 @@ class AtomData(object):
         ionization_energies = self.ionization_energies.set_index(["atomic_number", "ion_number"])
         levels_w_ionization_energies = levels_all.join(ionization_energies, on=["atomic_number", "ion_number"])
         levels = levels_all.loc[
-            levels_w_ionization_energies["energy"] >= levels_w_ionization_energies["ionization_energy"]
+            levels_w_ionization_energies["energy"] < levels_w_ionization_energies["ionization_energy"]
         ]
 
         # Clean lines
         lines = lines_all.join(pd.DataFrame(index=levels.index), on="lower_level_id", how="inner").\
             join(pd.DataFrame(index=levels.index), on="upper_level_id", how="inner")
+
 
         # Culling lines with low gf values
         lines = lines.loc[lines["loggf"] > lines_loggf_threshold]
@@ -764,7 +765,7 @@ class AtomData(object):
     def macro_atom_prepared(self):
         return self.prepare_macro_atom()
 
-    def prepare_macro_atom_df(self):
+    def prepare_macro_atom(self):
         """
             Prepare the DataFrame with macro atom data for TARDIS
             Returns
@@ -842,7 +843,7 @@ class AtomData(object):
                     index: none;
                     columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
-        macro_atom_references_prepared = self.macro_atom_references_prepared.copy()
+        macro_atom_references_prepared = self.macro_atom_references.copy()
 
         macro_atom_references_prepared.reset_index(inplace=True)
         # macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
