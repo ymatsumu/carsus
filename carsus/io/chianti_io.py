@@ -289,7 +289,7 @@ class ChiantiIngester(object):
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
-            print("Ingesting levels for {} +{}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             # ToDo: Determine parity from configuration
 
@@ -320,7 +320,7 @@ class ChiantiIngester(object):
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
-            print("Ingesting lines for {} +{}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 
@@ -369,7 +369,7 @@ class ChiantiIngester(object):
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
-            print("Ingesting collisions for {} +{}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting collisions for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 
