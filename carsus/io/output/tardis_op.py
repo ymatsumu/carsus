@@ -6,6 +6,7 @@ import uuid
 from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit
+from carsus.util import data_path
 from sqlalchemy import and_, union_all, literal
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.exc import NoResultFound
@@ -20,6 +21,8 @@ P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
 LINES_MAXRQ = 10000  # for yield_limit
+
+ZETA_DATAFILE = data_path("knox_long_recombination_zeta.dat")
 
 
 class AtomData(object):
@@ -51,6 +54,7 @@ class AtomData(object):
         (default: None)
     temperatures: np.array
         The temperatures for calculating collision strengths
+    zeta_datafile: none
 
     Attributes:
     ------------
@@ -74,6 +78,7 @@ class AtomData(object):
     collisions
     macro_atom
     macro_atom_references
+    zeta_data
 
     atom_masses_prepared
     ionization_energies_prepared
@@ -91,6 +96,7 @@ class AtomData(object):
     create_collisions
     create_macro_atom
     create_macro_atom_references
+    create_zeta_data
 
     prepare_atom_masses
     prepare_ionization_energies
@@ -105,7 +111,8 @@ class AtomData(object):
     def __init__(self, session,
                  atom_masses_max_atomic_number=30, levels_create_metastable_flags=True,
                  lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3, chianti_species=None,
-                 chianti_short_name=None, kurucz_short_name=None, collisions_temperatures=None):
+                 chianti_short_name=None, kurucz_short_name=None, collisions_temperatures=None,
+                 zeta_datafile=ZETA_DATAFILE):
 
         self.session = session
 
@@ -156,6 +163,8 @@ class AtomData(object):
                 print "Chianti data source does not exist!"
                 raise
 
+        self.zeta_datafile = zeta_datafile
+
         self._atom_masses = None
         self._ionization_energies = None
         self._levels = None
@@ -163,6 +172,7 @@ class AtomData(object):
         self._collisions = None
         self._macro_atom = None
         self._macro_atom_references = None
+        self._zeta_data = None
 
     @property
     def atom_masses(self):
@@ -870,9 +880,22 @@ class AtomData(object):
 
         return macro_atom_references_prepared
 
+    @property
+    def zeta_data(self):
+        if self._zeta_data is None:
+            self._zeta_data = self.create_zeta_data()
+        return self._zeta_data
+
+    def create_zeta_data(self):
+        zeta_data = np.loadtxt(self.zeta_datafile, usecols=xrange(1, 23), dtype=np.float64)
+        t_rads = np.arange(2000, 42000, 2000)
+        return pd.DataFrame(zeta_data[:, 2:],
+                            index=pd.MultiIndex.from_arrays(zeta_data[:, :2].transpose().astype(int)),
+                            columns=t_rads)
+
     def to_hdf(self, hdf5_path, store_atom_masses=True, store_ionization_energies=True,
                store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
-               store_macro_atom_references=True):
+               store_macro_atom_references=True, store_zeta_data=True):
         """
             Store the dataframes in an HDF5 file
 
@@ -901,6 +924,9 @@ class AtomData(object):
             store_macro_atom_references: bool
                 Store the `macro_atom_references_prepared` DataFrame
                 (default: True)
+            store_zeta_data: bool
+                Store the `zeta_data` DataFrame
+                (default: True)
         """
 
         with HDFStore(hdf5_path) as store:
@@ -925,6 +951,9 @@ class AtomData(object):
 
             if store_macro_atom_references:
                 store.put("macro_atom_references", self.macro_atom_references_prepared)
+
+            if store_zeta_data:
+                store.put("zeta_data", self.zeta_data)
 
             # Set the root attributes
             # It seems that the only way to set the root attributes is to use `_v_attrs`
