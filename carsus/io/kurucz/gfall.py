@@ -374,7 +374,7 @@ class GFALLIngester(object):
                     upper_level_id=upper_level_id,
                     data_source=self.data_source,
                     wavelengths=[
-                        LineWavelength(quantity=row["wavelength"] * u.AA,
+                        LineWavelength(quantity=row["wavelength"] * u.nm,
                                        data_source=self.data_source)
                     ],
                     gf_values=[
