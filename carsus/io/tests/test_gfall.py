@@ -115,8 +115,8 @@ def test_gfall_ingester_ingest_levels(memory_session, gfall_ingester, atomic_num
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index_lower, level_index_upper,"
                          "exp_wavelength, exp_gf_value", [
-    (4, 2, 0, 16, 8.8309*u.AA, 0.12705741),
-    (4, 2, 6, 15, 74.6230*u.AA, 2.1330449131)
+    (4, 2, 0, 16, 8.8309*u.nm, 0.12705741),
+    (4, 2, 6, 15, 74.6230*u.nm, 2.1330449131)
 ])
 def test_gfall_ingester_ingest_lines(memory_session, gfall_ingester, atomic_number, ion_charge,
                                      level_index_lower, level_index_upper, exp_wavelength, exp_gf_value):

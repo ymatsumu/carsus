@@ -109,7 +109,7 @@ def test_create_levels(levels, atomic_number, ion_number, level_number, exp_ener
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength",[
     (7, 5, 1, 2, 1907.9000 * u.Unit("angstrom")),
-    (4, 2, 0, 6, 10.0255 * u.Unit("angstrom"))
+    (4, 2, 0, 6, 10.0255 * u.Unit("nm"))
 ])
 def test_create_lines(lines, atomic_number, ion_number,
                        level_number_lower, level_number_upper, exp_wavelength):
