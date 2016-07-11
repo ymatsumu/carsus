@@ -56,6 +56,11 @@ def macro_atom_references(atom_data):
 
 
 @pytest.fixture
+def zeta_data(atom_data):
+    return atom_data.zeta_data
+
+
+@pytest.fixture
 def hdf5_path(request, data_dir):
     hdf5_path = os.path.join(data_dir, "test_hdf.hdf5")
 
@@ -133,6 +138,11 @@ def test_create_macro_atom_df(macro_atom):
 
 @with_test_db
 def test_create_macro_atom_ref_df(macro_atom_references):
+    assert True
+
+
+@with_test_db
+def test_create_zeta_data(zeta_data):
     assert True
 
 
