@@ -112,9 +112,9 @@ def test_prepare_ground_levels_df(ground_levels_df, expected_series_ground_level
                          zip(expected_indices,
                              expected_ioniz_energy_value[1],
                              expected_ioniz_energy_uncert[1]))
-def test_ingest_test_data(index, value, uncert, memory_session, ioniz_energies_ingester):
+def test_ingest_ionization_energies(index, value, uncert, memory_session, ioniz_energies_ingester):
 
-    ioniz_energies_ingester.ingest()
+    ioniz_energies_ingester.ingest(ionization_energies=True)
 
     atomic_number, ion_charge = index
     ion = memory_session.query(Ion).options(joinedload('ionization_energies')).get((atomic_number, ion_charge))
@@ -128,4 +128,4 @@ def test_ingest_test_data(index, value, uncert, memory_session, ioniz_energies_i
 def test_ingest_nist_asd_ion_data(memory_session):
     ingester = NISTIonizationEnergiesIngester(memory_session)
     ingester.download('h-uuh')
-    ingester.ingest()
+    ingester.ingest(ionization_energies=True)
