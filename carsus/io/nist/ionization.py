@@ -10,7 +10,7 @@ from StringIO import StringIO
 from astropy import units as u
 from uncertainties import ufloat_fromstr
 from pyparsing import ParseException
-from carsus.model import DataSource, Ion, IonizationEnergy
+from carsus.model import DataSource, Ion, IonizationEnergy, Level, LevelEnergy
 from carsus.io.base import BaseParser, BaseIngester
 from carsus.io.nist.ionization_grammar import level
 
@@ -209,9 +209,48 @@ class NISTIonizationEnergiesIngester(BaseIngester):
             # No need to add ion to the session, because
             # that was done in `as_unique`
 
-    def ingest(self, ionization_energies=True):
+    def ingest_ground_levels(self):
+        print("Ingesting ground levels from {}".format(self.data_source.short_name))
+
+        ground_levels_df = self.parser.prepare_ground_levels_df()
+
+        for index, row in ground_levels_df.iterrows():
+            atomic_number, ion_charge = index
+
+            # Replace nan with None
+            row = row.where(pd.notnull(row), None)
+
+            ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
+
+            try:
+                spin_multiplicity = int(row["spin_multiplicity"])
+            except TypeError:  # Raised when the variable is None
+                spin_multiplicity = None
+
+            try:
+                parity = int(row["parity"])
+            except TypeError:  # Raised when the variable is None
+                parity = None
+
+            ion.levels.append(
+                Level(data_source=self.data_source,
+                      configuration=row["configuration"],
+                      term=row["term"],
+                      L=row["L"],
+                      spin_multiplicity=spin_multiplicity,
+                      parity=parity,
+                      J=row["J"],
+                      energies=[
+                          LevelEnergy(quantity=0, data_source=self.data_source)
+                      ])
+            )
+
+    def ingest(self, ionization_energies=True, ground_levels=True):
 
         print("Ingesting data from {}".format(self.data_source.short_name))
 
         if ionization_energies:
             self.ingest_ionization_energies()
+
+        if ground_levels:
+            self.ingest_ground_levels()
