@@ -483,11 +483,7 @@ class AtomData(object):
         # Culling lines with low gf values
         lines = lines.loc[lines["loggf"] > lines_loggf_threshold]
 
-        # Clean levels
-        lower_level_idx = lines.rename(columns={"lower_level_id": "level_id"}).loc[:, ["level_id"]]
-        upper_level_idx = lines.rename(columns={"upper_level_id": "level_id"}).loc[:, ["level_id"]]
-        level_idx = pd.concat([lower_level_idx, upper_level_idx]).drop_duplicates("level_id")
-        levels = levels.join(pd.DataFrame(index=level_idx["level_id"]), how="inner")
+        # Do not clean levels that don't exist in lines
 
         # Create the metastable flags for levels
         if levels_create_metastable_flags:
