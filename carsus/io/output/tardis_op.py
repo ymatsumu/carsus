@@ -151,11 +151,16 @@ class AtomData(object):
         }
 
         self.ions = [tuple(species_string_to_tuple(species_str)) for species_str in ions]
-        if chianti_ions is None:
-            self.chianti_ions = chianti_ions
-        else:
+
+        if chianti_ions is not None:
             # Get a list of tuples (atomic_number, ion_charge) for the chianti ions
             self.chianti_ions = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_ions]
+            try:
+                assert set(self.chianti_ions).issubset(set(self.ions))
+            except AssertionError:
+                raise ValueError("`chianti_ions` *must* be a subset of `ions`!")
+        else:
+            self.chianti_ions = None
 
         # Query the data sources
         self.ku_ds = None
