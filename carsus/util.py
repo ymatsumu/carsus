@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 
 from collections import OrderedDict
@@ -15,3 +16,13 @@ symbol2atomic_number = OrderedDict(zip(atomic_symbols_data['symbol'],
                                        atomic_symbols_data['atomic_number']))
 atomic_number2symbol = OrderedDict(zip(atomic_symbols_data['atomic_number'],
                                        atomic_symbols_data['symbol']))
+
+
+def convert_camel2snake(name):
+    """
+    Convert CamelCase to snake_case.
+
+    http://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
+    """
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
