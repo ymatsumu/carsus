@@ -76,6 +76,9 @@ class AtomData(object):
     ions: list of tuples (atomic_number, ion_charge)
     chianti_ions: list of tuples (atomic_number, ion_charge)
 
+    ions_table: sqlalchemy.sql.schema.Table
+    chianti_ions_table: sqlalchemy.sql.schema.Table
+
     ku_ds: carsus.model.atomic.DataSource instance
         The Kurucz datasource
     cu_ds: carsus.model.atomic.DataSource instance
@@ -162,6 +165,9 @@ class AtomData(object):
         else:
             self.chianti_ions = None
 
+        self._ions_table = None
+        self._chianti_ions_table = None
+
         # Query the data sources
         self.ku_ds = None
         self.ch_ds = None
@@ -171,7 +177,6 @@ class AtomData(object):
             self.ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
         except NoResultFound:
             raise NoResultFound("Kurucz data source is not found!")
-            raise
 
         try:
             self.nist_ds = session.query(DataSource).filter(DataSource.short_name == nist_short_name).one()
@@ -194,6 +199,38 @@ class AtomData(object):
         self._macro_atom = None
         self._macro_atom_references = None
         self._zeta_data = None
+
+    @property
+    def ions_table(self):
+        if self._ions_table is None:
+            class MainIonList(Base, IonListMixin):
+                pass
+            # To create the temporary table use the session's current transaction-bound connection
+            MainIonList.__table__.create(self.session.connection())
+
+            # Insert values from `ions` into the table
+            self.session.execute(MainIonList.__table__.insert(),
+                [{"atomic_number": atomic_number, "ion_charge": ion_charge}
+                 for atomic_number, ion_charge in self.ions])
+
+            self._ions_table = MainIonList.__table__
+        return self._ions_table
+
+    @property
+    def chianti_ions_table(self):
+        if self._chianti_ions_table is None:
+            class ChiatniIonList(Base, IonListMixin):
+                pass
+            # To create the temporary table use the session's current transaction-bound connection
+            ChiatniIonList.__table__.create(self.session.connection())
+
+            # Insert values from `ions` into the table
+            self.session.execute(ChiatniIonList.__table__.insert(),
+                                 [{"atomic_number": atomic_number, "ion_charge": ion_charge}
+                                  for atomic_number, ion_charge in self.chianti_ions])
+
+            self._chianti_ions_table = ChiatniIonList.__table__
+        return self._chianti_ions_table
 
     @property
     def atom_masses(self):
@@ -338,6 +375,7 @@ class AtomData(object):
         return self._lines
 
     def _build_levels_q(self):
+
         if self.chianti_species is None:
             kurucz_levels_q = self.session.query(Level). \
                 filter(Level.data_source == self.ku_ds)

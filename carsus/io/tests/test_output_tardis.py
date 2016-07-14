@@ -2,10 +2,11 @@ import pytest
 import os
 
 from carsus.io.output.tardis_op import AtomData
-from carsus.model import DataSource
+from carsus.model import DataSource, Ion
 from numpy.testing import assert_almost_equal
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
+from sqlalchemy import and_
 
 
 with_test_db = pytest.mark.skipif(
@@ -91,6 +92,17 @@ def test_atom_data_chianti_ions_subset(memory_session):
         atom_data = AtomData(memory_session,
                              ions=["He II", "Be III", "B IV", "N VI"],
                              chianti_ions=["He II", "N VI", "Si II"])
+
+
+@with_test_db
+def test_atom_data_join_on_chianti_ions_table(test_session, atom_data):
+    chiatni_ions_q = test_session.query(Ion).join(atom_data.chianti_ions_table,
+                                     and_(Ion.atomic_number == atom_data.chianti_ions_table.c.atomic_number,
+                                          Ion.ion_charge == atom_data.chianti_ions_table.c.ion_charge)).\
+        order_by(Ion.atomic_number, Ion.ion_charge)
+    chianti_ions = [(ion.atomic_number, ion.ion_charge) for ion in chiatni_ions_q]
+    import pdb; pdb.set_trace()
+    assert set(chianti_ions) == set([(2,1), (7,5)])
 
 
 @with_test_db
