@@ -2,10 +2,11 @@ import numpy as np
 import pandas as pd
 import hashlib
 import uuid
+import pickle
 
 from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
-from carsus.model.meta import yield_limit
+from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import data_path
 from sqlalchemy import and_, union_all, literal
 from sqlalchemy.orm import joinedload
@@ -32,6 +33,21 @@ class AtomData(object):
     Parameters:
     ------------
     session: SQLAlchemy session
+    ions: list of species str
+        The ions to be taken from the database.
+    chianti_ions: list of species str
+        The levels data for these ions will be taken from the CHIANTI database.
+        The list *must* be a subset of `ions`
+        (default: None)
+    kurucz_short_name: str
+        The short name of the Kurucz datasource
+        (default: "ku_latest")
+    nist_short_name: str
+        The short name of the NIST datasource
+        (default: "nist-asd")
+    chianti_short_name: str
+        The short name of the CHIANTI datasource
+        (default: "chianti_v8.0.2")
     atom_masses_max_atomic_number: int
         The maximum atomic number to be stored in atom_masses
             (default: 30)
@@ -43,15 +59,6 @@ class AtomData(object):
     levels_metastable_loggf_threshold: int
         log(gf) threshold for flagging metastable levels
         (default: -3)
-    chianti_species: list of str in format <element_symbol> <ion_number>, eg. Fe 2
-            The levels data for these ions will be taken from the CHIANTI database
-            (default: None)
-    chianti_short_name: str
-        The short name of the CHIANTI database, if set to None the latest version will be used
-        (default: None)
-    kurucz_short_name: str
-        The short name of the Kurucz database, if set to None the latest version will be used
-        (default: None)
     temperatures: np.array
         The temperatures for calculating collision strengths
     zeta_datafile: none
@@ -66,10 +73,16 @@ class AtomData(object):
     collisions_param: dict
         The parameters for creating the `collisions` DataFrame
 
+    ions: list of tuples (atomic_number, ion_charge)
+    chianti_ions: list of tuples (atomic_number, ion_charge)
+
     ku_ds: carsus.model.atomic.DataSource instance
         The Kurucz datasource
     cu_ds: carsus.model.atomic.DataSource instance
         The CHIANTI datasource
+    nist_ds: carsus.model.atomic.DataSource instance
+        The NIST datasource
+
 
     atom_masses
     ionization_energies
@@ -108,10 +121,11 @@ class AtomData(object):
 
     """
 
-    def __init__(self, session,
+    def __init__(self, session, ions, chianti_ions=None,
+                 kurucz_short_name="ku_latest", chianti_short_name="chianti_v8.0.2", nist_short_name="nist-asd",
                  atom_masses_max_atomic_number=30, levels_create_metastable_flags=True,
-                 lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3, chianti_species=None,
-                 chianti_short_name=None, kurucz_short_name=None, collisions_temperatures=None,
+                 lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3,
+                 collisions_temperatures=None,
                  zeta_datafile=ZETA_DATAFILE):
 
         self.session = session
@@ -136,27 +150,31 @@ class AtomData(object):
             "temperatures": collisions_temperatures
         }
 
-        self.ku_ds = None
-        self.ch_ds = None
-        self.chianti_species = None
+        self.ions = [tuple(species_string_to_tuple(species_str)) for species_str in ions]
+        if chianti_ions is None:
+            self.chianti_ions = chianti_ions
+        else:
+            # Get a list of tuples (atomic_number, ion_charge) for the chianti ions
+            self.chianti_ions = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_ions]
 
         # Query the data sources
-        if kurucz_short_name is None:
-            kurucz_short_name = "ku_latest"
+        self.ku_ds = None
+        self.ch_ds = None
+        self.nist_ds = None
+
         try:
             self.ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
         except NoResultFound:
             print "Kurucz data source does not exist!"
             raise
 
-        if chianti_species is not None:
+        try:
+            self.nist_ds = session.query(DataSource).filter(DataSource.short_name == nist_short_name).one()
+        except NoResultFound:
+            print "NIST ASD data source does not exist!"
+            raise
 
-            # Get a list of tuples (atomic_number, ion_charge) for the chianti species
-            chianti_species = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_species]
-            self.chianti_species = chianti_species
-
-            if chianti_short_name is None:
-                chianti_short_name = "chianti_v8.0.2"
+        if self.chianti_ions is not None:
             try:
                 self.ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
             except NoResultFound:
