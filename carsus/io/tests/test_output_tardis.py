@@ -16,9 +16,10 @@ with_test_db = pytest.mark.skipif(
 
 @pytest.fixture
 def atom_data(test_session):
-    atom_data = AtomData(test_session, chianti_species=["He 2", "N 6"])
+    atom_data = AtomData(test_session,
+                         ions=["He II", "Be III", "B IV", "N VI"],
+                         chianti_ions=["He II", "N VI"])
     return atom_data
-
 
 @pytest.fixture
 def atom_masses(atom_data):
@@ -69,6 +70,27 @@ def hdf5_path(request, data_dir):
     request.addfinalizer(fin)
 
     return hdf5_path
+
+
+def test_atom_data_init(memory_session):
+    nist = DataSource.as_unique(memory_session, short_name="nist-asd")
+    ch = DataSource.as_unique(memory_session, short_name="chianti_v8.0.2")
+    ku = DataSource.as_unique(memory_session, short_name="ku_latest")
+    atom_data = AtomData(memory_session,
+                         ions=["He II", "Be III", "B IV", "N VI"],
+                         chianti_ions=["He II", "N VI"])
+    assert set(atom_data.ions) == set([(2,1), (4,2), (5,3), (7,5)])
+    assert set(atom_data.chianti_ions) == set([(2,1), (7,5)])
+
+
+def test_atom_data_chianti_ions_subset(memory_session):
+    nist = DataSource.as_unique(memory_session, short_name="nist-asd")
+    ch = DataSource.as_unique(memory_session, short_name="chianti_v8.0.2")
+    ku = DataSource.as_unique(memory_session, short_name="ku_latest")
+    with pytest.raises(ValueError):
+        atom_data = AtomData(memory_session,
+                             ions=["He II", "Be III", "B IV", "N VI"],
+                             chianti_ions=["He II", "N VI", "Si II"])
 
 
 @with_test_db
