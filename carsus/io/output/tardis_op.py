@@ -170,21 +170,19 @@ class AtomData(object):
         try:
             self.ku_ds = session.query(DataSource).filter(DataSource.short_name == kurucz_short_name).one()
         except NoResultFound:
-            print "Kurucz data source does not exist!"
+            raise NoResultFound("Kurucz data source is not found!")
             raise
 
         try:
             self.nist_ds = session.query(DataSource).filter(DataSource.short_name == nist_short_name).one()
         except NoResultFound:
-            print "NIST ASD data source does not exist!"
-            raise
+            raise NoResultFound("NIST ASD data source is not found!")
 
         if self.chianti_ions is not None:
             try:
                 self.ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
             except NoResultFound:
-                print "Chianti data source does not exist!"
-                raise
+                raise NoResultFound("Chianti data source is not found!")
 
         self.zeta_datafile = zeta_datafile
 
