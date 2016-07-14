@@ -5,10 +5,27 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.declarative import declared_attr
 from ..meta.types import DBQuantity
+from carsus.util import convert_camel2snake
 from astropy.units import dimensionless_unscaled, UnitsError, set_enabled_equivalencies
 
 
+class IonListMixin(object):
 
+    """
+    Mixin for creating temporary tables for selecting ions from a list of ions.
+
+    Because SQLite doesn't support composite IN expressions
+    (you can't do WHERE atomic_number, ion_charge in some_list_of_ions)
+    temporary tables are needed for selecting ions.
+    """
+    @declared_attr
+    def __tablename__(cls):
+        return convert_camel2snake(cls.__name__)
+
+    atomic_number = Column(Integer, primary_key=True)
+    ion_charge = Column(Integer, primary_key=True)
+
+    __table_args__ = {'prefixes': ['TEMPORARY']}
 
 
 class DataSourceMixin(object):
