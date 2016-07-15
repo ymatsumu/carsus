@@ -8,8 +8,8 @@ from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import data_path
-from sqlalchemy import and_, union_all, literal
-from sqlalchemy.orm import joinedload
+from sqlalchemy import and_, case
+from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.orm.exc import NoResultFound
 from astropy import constants as const
 from astropy import units as u
@@ -376,38 +376,33 @@ class AtomData(object):
 
     def _build_levels_q(self):
 
-        if self.chianti_species is None:
-            kurucz_levels_q = self.session.query(Level). \
-                filter(Level.data_source == self.ku_ds)
+        lvl_alias = aliased(Level)
 
-            levels_q = kurucz_levels_q
-
-        else:
-
-            # To select ions we create a CTE (Common Table Expression),
-            # because sqlite doesn't support composite IN statements
-            chianti_species_cte = union_all(
-                *[self.session.query(
-                    literal(atomic_number).label("atomic_number"),
-                    literal(ion_charge).label("ion_charge"))
-                  for atomic_number, ion_charge in self.chianti_species]
-            ).cte("chianti_species_cte")
-
-            # To select chianti ions we join on the CTE
-            chianti_levels_q = self.session.query(Level). \
-                join(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
-                                               Level.ion_charge == chianti_species_cte.c.ion_charge)). \
-                filter(Level.data_source == self.ch_ds)
-
-            # To select kurucz ions we do an outerjoin on the CTE and
-            # select rows that don't have a match from the CTE
-            kurucz_levels_q = self.session.query(Level). \
-                outerjoin(chianti_species_cte, and_(Level.atomic_number == chianti_species_cte.c.atomic_number,
-                                                    Level.ion_charge == chianti_species_cte.c.ion_charge)). \
-                filter(chianti_species_cte.c.atomic_number.is_(None)). \
-                filter(Level.data_source == self.ku_ds)
-
-            levels_q = kurucz_levels_q.union(chianti_levels_q)
+        levels_q = self.session.query(Level).\
+            join(self.ions_table,
+                 and_(Level.atomic_number == self.ions_table.c.atomic_number,
+                      Level.ion_charge == self.ions_table.c.ion_charge)).\
+            filter(Level.data_source_id == case(
+                [
+                    # 1. If ion is in `chianti_ions` and there exist levels for this ion from
+                    #    the chianti source in the database, then select from the chianti source
+                    (self.session.query(lvl_alias).\
+                        join(self.chianti_ions_table,
+                             and_(lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
+                                  lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)).\
+                        filter(and_(lvl_alias.atomic_number == Level.atomic_number,
+                                    lvl_alias.ion_charge == Level.ion_charge),
+                                    lvl_alias.data_source == self.ch_ds).exists(), self.ch_ds.data_source_id),
+                    # 2. Else if there exist levels from kurucz for this ion then select from the kurucz source
+                    (self.session.query(lvl_alias). \
+                     filter(and_(lvl_alias.atomic_number == Level.atomic_number,
+                                 lvl_alias.ion_charge == Level.ion_charge),
+                                 lvl_alias.data_source == self.ku_ds).exists(), self.ku_ds.data_source_id)
+                ],
+                # 3. Else select from the nist source (the ground levels)
+                else_=self.nist_ds.data_source_id
+                )
+            )
 
         return levels_q
 
