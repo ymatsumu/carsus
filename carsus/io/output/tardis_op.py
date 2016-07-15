@@ -9,6 +9,7 @@ from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import data_path, convert_camel2snake
 from sqlalchemy import and_, case
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.orm.exc import NoResultFound
 from astropy import constants as const
@@ -211,13 +212,16 @@ class AtomData(object):
             except KeyError:
                 ions_table = type(ions_table_name,(Base, IonListMixin), dict()).__table__
 
-            # To create the temporary table use the session's current transaction-bound connection
-            ions_table.create(self.session.connection())
-
-            # Insert values from `ions` into the table
-            self.session.execute(ions_table.insert(),
-                [{"atomic_number": atomic_number, "ion_charge": ion_charge}
-                 for atomic_number, ion_charge in self.ions])
+            try:
+                # To create the temporary table use the session's current transaction-bound connection
+                ions_table.create(self.session.connection())
+            except OperationalError:  # Raised if the table already exists
+                pass
+            else:
+                # Insert values from `ions` into the table
+                self.session.execute(ions_table.insert(),
+                    [{"atomic_number": atomic_number, "ion_charge": ion_charge}
+                     for atomic_number, ion_charge in self.ions])
 
             self._ions_table = ions_table
         return self._ions_table
@@ -233,13 +237,16 @@ class AtomData(object):
             except KeyError:
                 chianti_ions_table = type(chianti_ions_table_name, (Base, IonListMixin), dict()).__table__
 
-            # To create the temporary table use the session's current transaction-bound connection
-            chianti_ions_table.create(self.session.connection())
-
-            # Insert values from `ions` into the table
-            self.session.execute(chianti_ions_table.insert(),
-                                 [{"atomic_number": atomic_number, "ion_charge": ion_charge}
-                                  for atomic_number, ion_charge in self.chianti_ions])
+            try:
+                # To create the temporary table use the session's current transaction-bound connection
+                chianti_ions_table.create(self.session.connection())
+            except OperationalError:  # Raised if the table already exists
+                pass
+            else:
+                # Insert values from `ions` into the table
+                self.session.execute(chianti_ions_table.insert(),
+                                     [{"atomic_number": atomic_number, "ion_charge": ion_charge}
+                                      for atomic_number, ion_charge in self.chianti_ions])
 
             self._chianti_ions_table = chianti_ions_table
         return self._chianti_ions_table
