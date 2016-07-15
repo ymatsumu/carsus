@@ -18,7 +18,7 @@ with_test_db = pytest.mark.skipif(
 @pytest.fixture
 def atom_data(test_session):
     atom_data = AtomData(test_session,
-                         ions=["He II", "Be III", "B IV", "N VI"],
+                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
                          chianti_ions=["He II", "N VI"])
     return atom_data
 
@@ -101,8 +101,22 @@ def test_atom_data_join_on_chianti_ions_table(test_session, atom_data):
                                           Ion.ion_charge == atom_data.chianti_ions_table.c.ion_charge)).\
         order_by(Ion.atomic_number, Ion.ion_charge)
     chianti_ions = [(ion.atomic_number, ion.ion_charge) for ion in chiatni_ions_q]
-    import pdb; pdb.set_trace()
     assert set(chianti_ions) == set([(2,1), (7,5)])
+
+
+@with_test_db
+def test_atom_data_two_instances_same_session(test_session):
+
+    atom_data1 = AtomData(test_session,
+                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         chianti_ions=["He II", "N VI"])
+    atom_data2 = AtomData(test_session,
+                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         chianti_ions=["He II", "N VI"])
+    atom_data1.ions_table
+    atom_data2.ions_table
+    atom_data1.chianti_ions_table
+    atom_data2.chianti_ions_table
 
 
 @with_test_db
@@ -117,7 +131,7 @@ def test_create_atom_masses(atom_masses, atomic_number, exp_mass):
 
 @with_test_db
 def test_create_atom_masses_max_atomic_number(test_session):
-    atom_data = AtomData(test_session, atom_masses_max_atomic_number=15)
+    atom_data = AtomData(test_session, ions=[], atom_masses_max_atomic_number=15)
     atom_masses = atom_data.atom_masses
     assert atom_masses["atomic_number"].max() == 15
 
