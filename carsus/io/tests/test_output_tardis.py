@@ -150,7 +150,8 @@ def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_num
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy",[
     (7, 5, 7, 3991860.0 * u.Unit("cm-1")),
-    (4, 2, 2, 981177.5 * u.Unit("cm-1"))
+    (4, 2, 2, 981177.5 * u.Unit("cm-1")),
+    (30, 19, 0, 0.0*u.Unit("cm-1"))
 ])
 def test_create_levels(levels, atomic_number, ion_number, level_number, exp_energy):
     levels = levels.set_index(["atomic_number", "ion_number", "level_number"])
