@@ -7,7 +7,7 @@ import pickle
 from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import data_path
+from carsus.util import data_path, convert_camel2snake
 from sqlalchemy import and_, case
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.orm.exc import NoResultFound
@@ -203,33 +203,45 @@ class AtomData(object):
     @property
     def ions_table(self):
         if self._ions_table is None:
-            class MainIonList(Base, IonListMixin):
-                pass
+
+            ions_table_name = "MainIonList" + str(hash(frozenset(self.ions)))
+
+            try:
+                ions_table = Base.metadata.tables[convert_camel2snake(ions_table_name)]
+            except KeyError:
+                ions_table = type(ions_table_name,(Base, IonListMixin), dict()).__table__
+
             # To create the temporary table use the session's current transaction-bound connection
-            MainIonList.__table__.create(self.session.connection())
+            ions_table.create(self.session.connection())
 
             # Insert values from `ions` into the table
-            self.session.execute(MainIonList.__table__.insert(),
+            self.session.execute(ions_table.insert(),
                 [{"atomic_number": atomic_number, "ion_charge": ion_charge}
                  for atomic_number, ion_charge in self.ions])
 
-            self._ions_table = MainIonList.__table__
+            self._ions_table = ions_table
         return self._ions_table
 
     @property
     def chianti_ions_table(self):
         if self._chianti_ions_table is None:
-            class ChiatniIonList(Base, IonListMixin):
-                pass
+
+            chianti_ions_table_name = "ChiantiIonList" + str(hash(frozenset(self.chianti_ions)))
+
+            try:
+                chianti_ions_table = Base.metadata.tables[convert_camel2snake(chianti_ions_table_name)]
+            except KeyError:
+                chianti_ions_table = type(chianti_ions_table_name, (Base, IonListMixin), dict()).__table__
+
             # To create the temporary table use the session's current transaction-bound connection
-            ChiatniIonList.__table__.create(self.session.connection())
+            chianti_ions_table.create(self.session.connection())
 
             # Insert values from `ions` into the table
-            self.session.execute(ChiatniIonList.__table__.insert(),
+            self.session.execute(chianti_ions_table.insert(),
                                  [{"atomic_number": atomic_number, "ion_charge": ion_charge}
                                   for atomic_number, ion_charge in self.chianti_ions])
 
-            self._chianti_ions_table = ChiatniIonList.__table__
+            self._chianti_ions_table = chianti_ions_table
         return self._chianti_ions_table
 
     @property
