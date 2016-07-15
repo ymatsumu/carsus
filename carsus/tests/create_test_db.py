@@ -38,8 +38,8 @@ def create_test_db(test_db_fname=TEST_DB_FNAME, gfall_fname=GFALL_FNAME):
 
     # Ingest ionization energies
     ioniz_energies_ingester = NISTIonizationEnergiesIngester(session)
-    ioniz_energies_ingester.download()
-    ioniz_energies_ingester.ingest()
+    ioniz_energies_ingester.download(spectra="h-zn")
+    ioniz_energies_ingester.ingest(ionization_energies=True, ground_levels=True)
     session.commit()
 
     # Ingest kurucz levels and lines
