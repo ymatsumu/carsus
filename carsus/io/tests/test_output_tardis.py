@@ -2,10 +2,11 @@ import pytest
 import os
 
 from carsus.io.output.tardis_op import AtomData
-from carsus.model import DataSource
+from carsus.model import DataSource, Ion
 from numpy.testing import assert_almost_equal
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
+from sqlalchemy import and_
 
 
 with_test_db = pytest.mark.skipif(
@@ -16,7 +17,15 @@ with_test_db = pytest.mark.skipif(
 
 @pytest.fixture
 def atom_data(test_session):
-    atom_data = AtomData(test_session, chianti_species=["He 2", "N 6"])
+    atom_data = AtomData(test_session,
+                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         chianti_ions=["He II", "N VI"])
+    return atom_data
+
+
+@pytest.fixture
+def atom_data_only_be2(test_session):
+    atom_data = AtomData(test_session, ions=["Be III"])
     return atom_data
 
 
@@ -71,6 +80,62 @@ def hdf5_path(request, data_dir):
     return hdf5_path
 
 
+def test_atom_data_init(memory_session):
+    nist = DataSource.as_unique(memory_session, short_name="nist-asd")
+    ch = DataSource.as_unique(memory_session, short_name="chianti_v8.0.2")
+    ku = DataSource.as_unique(memory_session, short_name="ku_latest")
+    atom_data = AtomData(memory_session,
+                         ions=["He II", "Be III", "B IV", "N VI"],
+                         chianti_ions=["He II", "N VI"])
+    assert set(atom_data.ions) == set([(2,1), (4,2), (5,3), (7,5)])
+    assert set(atom_data.chianti_ions) == set([(2,1), (7,5)])
+
+
+def test_atom_data_chianti_ions_subset(memory_session):
+    nist = DataSource.as_unique(memory_session, short_name="nist-asd")
+    ch = DataSource.as_unique(memory_session, short_name="chianti_v8.0.2")
+    ku = DataSource.as_unique(memory_session, short_name="ku_latest")
+    with pytest.raises(ValueError):
+        atom_data = AtomData(memory_session,
+                             ions=["He II", "Be III", "B IV", "N VI"],
+                             chianti_ions=["He II", "N VI", "Si II"])
+
+
+def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be2, test_session):
+    assert atom_data_only_be2.chianti_ions == list()
+    assert test_session.query(atom_data_only_be2.chianti_ions_table).count() == 0
+
+
+def test_atom_data_wo_chianti_ions_levels(atom_data_only_be2):
+    levels402 = atom_data_only_be2.levels.copy()
+    assert ((levels402["atomic_number"] == 4) & (levels402["ion_number"] == 2)).all()
+
+
+@with_test_db
+def test_atom_data_join_on_chianti_ions_table(test_session, atom_data):
+    chiatni_ions_q = test_session.query(Ion).join(atom_data.chianti_ions_table,
+                                     and_(Ion.atomic_number == atom_data.chianti_ions_table.c.atomic_number,
+                                          Ion.ion_charge == atom_data.chianti_ions_table.c.ion_charge)).\
+        order_by(Ion.atomic_number, Ion.ion_charge)
+    chianti_ions = [(ion.atomic_number, ion.ion_charge) for ion in chiatni_ions_q]
+    assert set(chianti_ions) == set([(2,1), (7,5)])
+
+
+@with_test_db
+def test_atom_data_two_instances_same_session(test_session):
+
+    atom_data1 = AtomData(test_session,
+                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         chianti_ions=["He II", "N VI"])
+    atom_data2 = AtomData(test_session,
+                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         chianti_ions=["He II", "N VI"])
+    atom_data1.ions_table
+    atom_data2.ions_table
+    atom_data1.chianti_ions_table
+    atom_data2.chianti_ions_table
+
+
 @with_test_db
 @pytest.mark.parametrize("atomic_number, exp_mass", [
     (2, 4.002602),
@@ -83,7 +148,7 @@ def test_create_atom_masses(atom_masses, atomic_number, exp_mass):
 
 @with_test_db
 def test_create_atom_masses_max_atomic_number(test_session):
-    atom_data = AtomData(test_session, atom_masses_max_atomic_number=15)
+    atom_data = AtomData(test_session, ions=[], atom_masses_max_atomic_number=15)
     atom_masses = atom_data.atom_masses
     assert atom_masses["atomic_number"].max() == 15
 
@@ -102,7 +167,8 @@ def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_num
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy",[
     (7, 5, 7, 3991860.0 * u.Unit("cm-1")),
-    (4, 2, 2, 981177.5 * u.Unit("cm-1"))
+    (4, 2, 2, 981177.5 * u.Unit("cm-1")),
+    (30, 19, 0, 0.0*u.Unit("cm-1"))
 ])
 def test_create_levels(levels, atomic_number, ion_number, level_number, exp_energy):
     levels = levels.set_index(["atomic_number", "ion_number", "level_number"])
