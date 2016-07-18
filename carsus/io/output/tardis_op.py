@@ -552,7 +552,7 @@ class AtomData(object):
         levels_w_ionization_energies = levels_all.join(ionization_energies, on=["atomic_number", "ion_number"])
         levels = levels_all.loc[
             levels_w_ionization_energies["energy"] < levels_w_ionization_energies["ionization_energy"]
-        ]
+        ].copy()
 
         # Clean lines
         lines = lines_all.join(pd.DataFrame(index=levels.index), on="lower_level_id", how="inner").\
