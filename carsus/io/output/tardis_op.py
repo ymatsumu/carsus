@@ -164,7 +164,7 @@ class AtomData(object):
             except AssertionError:
                 raise ValueError("`chianti_ions` *must* be a subset of `ions`!")
         else:
-            self.chianti_ions = None
+            self.chianti_ions = list()
 
         self._ions_table = None
         self._chianti_ions_table = None
@@ -184,7 +184,7 @@ class AtomData(object):
         except NoResultFound:
             raise NoResultFound("NIST ASD data source is not found!")
 
-        if self.chianti_ions is not None:
+        if self.chianti_ions:
             try:
                 self.ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
             except NoResultFound:
@@ -228,6 +228,7 @@ class AtomData(object):
 
     @property
     def chianti_ions_table(self):
+
         if self._chianti_ions_table is None:
 
             chianti_ions_table_name = "ChiantiIonList" + str(hash(frozenset(self.chianti_ions)))
@@ -244,9 +245,10 @@ class AtomData(object):
                 pass
             else:
                 # Insert values from `ions` into the table
-                self.session.execute(chianti_ions_table.insert(),
-                                     [{"atomic_number": atomic_number, "ion_charge": ion_charge}
-                                      for atomic_number, ion_charge in self.chianti_ions])
+                if self.chianti_ions:
+                    self.session.execute(chianti_ions_table.insert(),
+                                         [{"atomic_number": atomic_number, "ion_charge": ion_charge}
+                                          for atomic_number, ion_charge in self.chianti_ions])
 
             self._chianti_ions_table = chianti_ions_table
         return self._chianti_ions_table
@@ -397,31 +399,35 @@ class AtomData(object):
 
         lvl_alias = aliased(Level)
 
+        whens = list()
+
+        if self.chianti_ions:
+            # 1. If ion is in `chianti_ions` and there exist levels for this ion from
+            #    the chianti source in the database, then select from the chianti source
+            whens.append(
+                 (self.session.query(lvl_alias). \
+                 join(self.chianti_ions_table,
+                      and_(lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
+                           lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)). \
+                 filter(and_(lvl_alias.atomic_number == Level.atomic_number,
+                             lvl_alias.ion_charge == Level.ion_charge),
+                        lvl_alias.data_source == self.ch_ds).exists(), self.ch_ds.data_source_id)
+            )
+
+        # 2. Else if there exist levels from kurucz for this ion then select from the kurucz source
+        whens.append((self.session.query(lvl_alias). \
+                     filter(and_(lvl_alias.atomic_number == Level.atomic_number,
+                                 lvl_alias.ion_charge == Level.ion_charge),
+                                 lvl_alias.data_source == self.ku_ds).exists(), self.ku_ds.data_source_id))
+
+        # 3. Else select from the nist source (the ground levels)
+        case_stmt = case(whens=whens, else_=self.nist_ds.data_source_id)
+
         levels_q = self.session.query(Level).\
             join(self.ions_table,
                  and_(Level.atomic_number == self.ions_table.c.atomic_number,
                       Level.ion_charge == self.ions_table.c.ion_charge)).\
-            filter(Level.data_source_id == case(
-                [
-                    # 1. If ion is in `chianti_ions` and there exist levels for this ion from
-                    #    the chianti source in the database, then select from the chianti source
-                    (self.session.query(lvl_alias).\
-                        join(self.chianti_ions_table,
-                             and_(lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
-                                  lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)).\
-                        filter(and_(lvl_alias.atomic_number == Level.atomic_number,
-                                    lvl_alias.ion_charge == Level.ion_charge),
-                                    lvl_alias.data_source == self.ch_ds).exists(), self.ch_ds.data_source_id),
-                    # 2. Else if there exist levels from kurucz for this ion then select from the kurucz source
-                    (self.session.query(lvl_alias). \
-                     filter(and_(lvl_alias.atomic_number == Level.atomic_number,
-                                 lvl_alias.ion_charge == Level.ion_charge),
-                                 lvl_alias.data_source == self.ku_ds).exists(), self.ku_ds.data_source_id)
-                ],
-                # 3. Else select from the nist source (the ground levels)
-                else_=self.nist_ds.data_source_id
-                )
-            )
+            filter(Level.data_source_id == case_stmt)
 
         return levels_q
 

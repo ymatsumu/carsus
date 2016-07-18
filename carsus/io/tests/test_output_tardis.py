@@ -22,6 +22,13 @@ def atom_data(test_session):
                          chianti_ions=["He II", "N VI"])
     return atom_data
 
+
+@pytest.fixture
+def atom_data_only_be2(test_session):
+    atom_data = AtomData(test_session, ions=["Be III"])
+    return atom_data
+
+
 @pytest.fixture
 def atom_masses(atom_data):
     return atom_data.atom_masses
@@ -92,6 +99,16 @@ def test_atom_data_chianti_ions_subset(memory_session):
         atom_data = AtomData(memory_session,
                              ions=["He II", "Be III", "B IV", "N VI"],
                              chianti_ions=["He II", "N VI", "Si II"])
+
+
+def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be2, test_session):
+    assert atom_data_only_be2.chianti_ions == list()
+    assert test_session.query(atom_data_only_be2.chianti_ions_table).count() == 0
+
+
+def test_atom_data_wo_chianti_ions_levels(atom_data_only_be2):
+    levels402 = atom_data_only_be2.levels.copy()
+    assert ((levels402["atomic_number"] == 4) & (levels402["ion_number"] == 2)).all()
 
 
 @with_test_db
