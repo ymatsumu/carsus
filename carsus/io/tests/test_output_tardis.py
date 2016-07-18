@@ -138,12 +138,18 @@ def test_atom_data_two_instances_same_session(test_session):
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, exp_mass", [
-    (2, 4.002602),
-    (11, 22.98976928)
+    (2, 4.002602 * u.u),
+    (4, 9.0121831 * u.u),
+    (5, (10.806 + 10.821)/2 *u.u),
+    (7, (14.00643 + 14.00728)/2 *u.u),
+    (30, 65.38 *u.u)
 ])
 def test_create_atom_masses(atom_masses, atomic_number, exp_mass):
     atom_masses = atom_masses.set_index("atomic_number")
-    assert_almost_equal(atom_masses.loc[atomic_number]["mass"], exp_mass)
+    assert_quantity_allclose(
+        atom_masses.loc[atomic_number]["mass"] * u.u,
+        exp_mass
+    )
 
 
 @with_test_db
