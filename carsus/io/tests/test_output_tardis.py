@@ -161,13 +161,18 @@ def test_create_atom_masses_max_atomic_number(test_session):
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, exp_ioniz_energy", [
-    (8, 5, 138.1189),
-    (11, 0,  5.1390767)
+    (2, 1,  54.41776311 * u.eV),
+    (4, 2, 153.896198 * u.eV),
+    (5, 3, 259.3715 * u.eV),
+    (7, 5, 552.06731 * u.eV),
+    (30, 19, 737.366 * u.eV)
 ])
 def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_number, exp_ioniz_energy):
     ionization_energies = ionization_energies.set_index(["atomic_number", "ion_number"])
-    assert_almost_equal(ionization_energies.loc[(atomic_number, ion_number)]["ionization_energy"],
-                        exp_ioniz_energy)
+    assert_quantity_allclose(
+        ionization_energies.loc[(atomic_number, ion_number)]["ionization_energy"] * u.eV,
+        exp_ioniz_energy
+    )
 
 
 @with_test_db
