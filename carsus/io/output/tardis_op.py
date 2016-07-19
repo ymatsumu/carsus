@@ -591,6 +591,23 @@ class AtomData(object):
     def levels_prepared(self):
         return self.prepare_levels()
 
+    @staticmethod
+    def _create_artificial_fully_ionized(levels_prepared):
+
+        fully_ionized_levels = list()
+
+        for atomic_number, _ in levels_prepared.groupby("atomic_number"):
+            fully_ionized_levels.append(
+                {"atomic_number": atomic_number,
+                 "ion_number": atomic_number,
+                 "level_number": 0,
+                 "energy": 0.0,
+                 "g": 1,
+                 "metastable": True}
+            )
+
+        return pd.DataFrame.from_dict(data=fully_ionized_levels, dtype=levels_prepared.dtypes)
+
     def prepare_levels(self):
         """
         Prepare the DataFrame with levels for TARDIS
@@ -609,11 +626,16 @@ class AtomData(object):
         levels_prepared.reset_index(inplace=True)
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
-        # Covert energy to CGS
-        levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
-
         # Drop the unwanted columns
         levels_prepared.drop(["level_id"], axis=1, inplace=True)
+
+        # Create and append artificial fully ionized ions
+        artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels_prepared)
+        levels_prepared = levels_prepared.append(artificial_fully_ionized_levels, ignore_index=True)
+        levels_prepared.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
+
+        # Covert energy to CGS
+        levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
 
         return levels_prepared
 
@@ -703,7 +725,7 @@ class AtomData(object):
 
         collisions = np.array(collisions, dtype=collisions_dtype)
         collisions = pd.DataFrame.from_records(collisions, index="e_col_id")
-    
+
         # Join atomic_number, ion_number, level_number_lower, level_number_upper
         lower_levels = self.levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
                               loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
