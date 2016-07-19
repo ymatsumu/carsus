@@ -71,6 +71,10 @@ def zeta_data(atom_data):
 
 
 @pytest.fixture
+def levels_prepared(atom_data):
+    return atom_data.levels_prepared
+
+@pytest.fixture
 def hdf5_path(request, data_dir):
     hdf5_path = os.path.join(data_dir, "test_hdf.hdf5")
 
@@ -262,6 +266,17 @@ def test_create_lines_loggf_treshold(lines, atomic_number, ion_number, level_num
                              "level_number_lower", "level_number_upper"])
     with pytest.raises(KeyError):
         lines.loc[(atomic_number, ion_number, level_number_lower, level_number_upper)]
+
+
+@with_test_db
+@pytest.mark.parametrize("atomic_number", [2, 14, 30])
+def test_levels_prepare_create_artificial_ions(levels_prepared, atomic_number):
+    levels_prepared = levels_prepared.set_index(["atomic_number", "ion_number", "level_number"])
+    energy, g, metastable = levels_prepared.loc[(atomic_number, atomic_number, 0),
+                                                ["energy", "g", "metastable"]]
+    assert_almost_equal(energy, 0.0)
+    assert g == 1
+    assert metastable == True
 
 
 # ToDo: Implement real tests
