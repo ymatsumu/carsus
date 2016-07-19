@@ -200,19 +200,19 @@ def test_create_levels_filter_auto_ionizing_levels(levels, atomic_number, ion_nu
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy, exp_g, exp_metastable_flag",[
     # Kurucz levels
-    (4, 2, 0, 0.0 * u.Unit("cm-1"), 1, True),
-    (4, 2, 1, 956501.9 * u.Unit("cm-1"), 3, True),
-    (4, 2, 6, 997455.0 * u.Unit("cm-1"), 3, False),
-    (14, 1, 0, 0.0 * u.Unit("cm-1"), 2, True),
-    (14, 1, 15, 81251.320 * u.Unit("cm-1"), 4, False),
-    (14, 1, 16, 83801.950 * u.Unit("cm-1"), 2, True),
+    (4, 2, 0, 0.0 * u.Unit("cm-1"), 1, 1),
+    (4, 2, 1, 956501.9 * u.Unit("cm-1"), 3, 1),
+    (4, 2, 6, 997455.0 * u.Unit("cm-1"), 3, 0),
+    (14, 1, 0, 0.0 * u.Unit("cm-1"), 2, 1),
+    (14, 1, 15, 81251.320 * u.Unit("cm-1"), 4, 0),
+    (14, 1, 16, 83801.950 * u.Unit("cm-1"), 2, 1),
     # CHIANTI levels
     # Theoretical values from CHIANTI aren't ingested!!!
-    (7, 5, 0, 0.0 * u.Unit("cm-1"), 1, True),
-    (7, 5, 7, 3991860.0 * u.Unit("cm-1"), 3, False),
-    (7, 5, 43, 4294670.00 * u.Unit("cm-1"), 5, False),
+    (7, 5, 0, 0.0 * u.Unit("cm-1"), 1, 1),
+    (7, 5, 7, 3991860.0 * u.Unit("cm-1"), 3, 0),
+    (7, 5, 43, 4294670.00 * u.Unit("cm-1"), 5, 0),
     # NIST Ground level
-    (30, 19, 0, 0.0 * u.eV, 2, True)
+    (30, 19, 0, 0.0 * u.eV, 2, 1)
 ])
 def test_create_levels(levels, atomic_number, ion_number, level_number,
                        exp_energy, exp_g, exp_metastable_flag):
@@ -276,8 +276,7 @@ def test_levels_prepare_create_artificial_ions(levels_prepared, atomic_number):
                                                 ["energy", "g", "metastable"]]
     assert_almost_equal(energy, 0.0)
     assert g == 1
-    assert metastable == True
-
+    assert metastable == 1
 
 # ToDo: Implement real tests
 @with_test_db
