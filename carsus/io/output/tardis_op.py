@@ -7,7 +7,7 @@ import pickle
 from pandas import HDFStore
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import data_path, convert_camel2snake
+from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum
 from sqlalchemy import and_, case
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, aliased
@@ -491,6 +491,15 @@ class AtomData(object):
 
         return lines
 
+    def _convert_wavelength_air2vacuum(self, row):
+        # This is a hack and will be removed once the `medium` culumn has been introduced
+        atomic_number, ion_number, wavelength = row[["atomic_number", "ion_number", "wavelength"]]
+        if (atomic_number, ion_number) not in self.chianti_ions:
+            # Then they are from kurucz
+            if wavelength > 2000:
+                row["wavelength"] = convert_wavelength_air2vacuum(wavelength)
+        return row
+
     @staticmethod
     def _create_metastable_flags(levels, lines, levels_metastable_loggf_threshold=-3):
 
@@ -573,6 +582,9 @@ class AtomData(object):
         upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u"}). \
                               loc[:, ["level_number_upper", "g_u"]]
         lines = lines.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
+
+        # Convert wavelengths above 2000 Angstrom to vacuum (only relevant to kurucz lines)
+        lines = lines.apply(self._convert_wavelength_air2vacuum, axis=1)
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
         lines["f_lu"] = lines["gf"] / lines["g_l"]
