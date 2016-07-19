@@ -18,7 +18,7 @@ with_test_db = pytest.mark.skipif(
 @pytest.fixture
 def atom_data(test_session):
     atom_data = AtomData(test_session,
-                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         ions=["He II", "Be III", "B IV", "N VI", "Si II", "Zn XX"],
                          chianti_ions=["He II", "N VI"])
     return atom_data
 
@@ -140,8 +140,9 @@ def test_atom_data_two_instances_same_session(test_session):
 @pytest.mark.parametrize("atomic_number, exp_mass", [
     (2, 4.002602 * u.u),
     (4, 9.0121831 * u.u),
-    (5, (10.806 + 10.821)/2 *u.u),
-    (7, (14.00643 + 14.00728)/2 *u.u),
+    (5, (10.806 + 10.821)/2 * u.u),
+    (7, (14.00643 + 14.00728)/2 * u.u),
+    (14, (28.084 + 28.086)/2 *u.u),
     (30, 65.38 *u.u)
 ])
 def test_create_atom_masses(atom_masses, atomic_number, exp_mass):
@@ -165,6 +166,7 @@ def test_create_atom_masses_max_atomic_number(test_session):
     (4, 2, 153.896198 * u.eV),
     (5, 3, 259.3715 * u.eV),
     (7, 5, 552.06731 * u.eV),
+    (14, 1, 16.345845 * u.eV),
     (30, 19, 737.366 * u.eV)
 ])
 def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_number, exp_ioniz_energy):
@@ -176,16 +178,32 @@ def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_num
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy",[
-    (7, 5, 7, 3991860.0 * u.Unit("cm-1")),
-    (4, 2, 2, 981177.5 * u.Unit("cm-1")),
-    (30, 19, 0, 0.0*u.Unit("cm-1"))
+@pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy, exp_g, exp_metastable_flag",[
+    # Kurucz levels
+    (4, 2, 0, 0.0 * u.Unit("cm-1"), 1, True),
+    (4, 2, 1, 956501.9 * u.Unit("cm-1"), 3, True),
+    (4, 2, 6, 997455.0 * u.Unit("cm-1"), 3, False),
+    # CHIANTI levels
+    # Theoretical values from CHIANTI aren't ingested!!!
+    (7, 5, 0, 0.0 * u.Unit("cm-1"), 1, True),
+    (7, 5, 7, 3991860.0 * u.Unit("cm-1"), 3, False),
+    (7, 5, 43, 4294670.00 * u.Unit("cm-1"), 5, False),
+    # NIST Ground level
+    (30, 19, 0, 0.0 * u.eV, 2, True)
 ])
-def test_create_levels(levels, atomic_number, ion_number, level_number, exp_energy):
+def test_create_levels(levels, atomic_number, ion_number, level_number,
+                       exp_energy, exp_g, exp_metastable_flag):
     levels = levels.set_index(["atomic_number", "ion_number", "level_number"])
     energy = levels.loc[(atomic_number, ion_number, level_number)]["energy"] * u.eV
-    energy = energy.to(u.Unit("cm-1"), equivalencies=u.spectral())
+    g = levels.loc[(atomic_number, ion_number, level_number)]["g"]
+    metastable_flag = levels.loc[(atomic_number, ion_number, level_number)]["metastable"]
+
+    # Convert the expected energy using equivalencies
+    exp_energy = exp_energy.to(u.eV, equivalencies=u.spectral())
+
     assert_quantity_allclose(energy, exp_energy)
+    assert g == exp_g
+    assert metastable_flag == exp_metastable_flag
 
 
 @with_test_db
