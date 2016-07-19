@@ -1,5 +1,6 @@
 import pytest
 import os
+import numpy as np
 
 from carsus.io.output.tardis_op import AtomData
 from carsus.model import DataSource, Ion
@@ -225,17 +226,42 @@ def test_create_levels(levels, atomic_number, ion_number, level_number,
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength",[
-    (7, 5, 1, 2, 1907.9000 * u.Unit("angstrom")),
-    (4, 2, 0, 6, 10.0255 * u.Unit("nm"))
+@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength, exp_loggf",[
+    # Kurucz lines
+    (14, 1, 0, 57, 81.8575 * u.Unit("nm"), -1.92),
+    (14, 1, 1, 71, 80.5098 * u.Unit("nm"), -2.86),
+    # CHIANTI lines
+    # Note that energies are *not* sorted in the elvlc file!
+    (2, 1, 0, 1, 303.786 * u.Unit("angstrom"), np.log10(0.2772)),
+    (2, 1, 2, 16, 1084.920 * u.Unit("angstrom"), np.log10(0.027930))
 ])
-def test_create_lines(lines, atomic_number, ion_number,
-                       level_number_lower, level_number_upper, exp_wavelength):
+def test_create_lines(lines, atomic_number, ion_number, level_number_lower, level_number_upper,
+                      exp_wavelength, exp_loggf):
     lines = lines.set_index(["atomic_number", "ion_number",
                               "level_number_lower", "level_number_upper"])
     wavelength = lines.loc[(atomic_number, ion_number,
-                                        level_number_lower, level_number_upper)]["wavelength"] * u.Unit("angstrom")
+                            level_number_lower, level_number_upper)]["wavelength"] * u.Unit("angstrom")
+    loggf = lines.loc[(atomic_number, ion_number,
+                            level_number_lower, level_number_upper)]["loggf"]
     assert_quantity_allclose(wavelength, exp_wavelength)
+    assert_almost_equal(loggf, exp_loggf)
+
+
+@with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper", [
+    # Default loggf_threshold = -3
+    # Kurucz lines
+    (14, 1, 3, 98), # loggf = -4.430
+    (14, 1, 2, 83), # loggf = -4.140
+    # CHIANTI lines
+    (7, 5, 3, 11), # loggf = -5.522589
+    (7, 5, 6, 7), # loggf = -5.240106
+])
+def test_create_lines_loggf_treshold(lines, atomic_number, ion_number, level_number_lower, level_number_upper):
+    lines = lines.set_index(["atomic_number", "ion_number",
+                             "level_number_lower", "level_number_upper"])
+    with pytest.raises(KeyError):
+        lines.loc[(atomic_number, ion_number, level_number_lower, level_number_upper)]
 
 
 # ToDo: Implement real tests
