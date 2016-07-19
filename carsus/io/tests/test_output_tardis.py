@@ -178,11 +178,29 @@ def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_num
 
 
 @with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, ionization_energy",[
+    (2, 1, 54.41776311 * u.eV),
+    (4, 2, 153.896198 * u.eV),
+    (5, 3, 259.3715 * u.eV),
+    (7, 5, 552.06731 * u.eV),
+    (14, 1, 16.345845 * u.eV)  # In fact, only Si II has levels with energy > ionization potential
+])
+def test_create_levels_filter_auto_ionizing_levels(levels, atomic_number, ion_number, ionization_energy):
+    levels_ion = levels.loc[(levels["atomic_number"] == atomic_number) &
+                            (levels["ion_number"] == ion_number)].copy()
+    levels_energies = levels_ion["energy"].values * u.eV
+    assert all(levels_energies < ionization_energy)
+
+
+@with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy, exp_g, exp_metastable_flag",[
     # Kurucz levels
     (4, 2, 0, 0.0 * u.Unit("cm-1"), 1, True),
     (4, 2, 1, 956501.9 * u.Unit("cm-1"), 3, True),
     (4, 2, 6, 997455.0 * u.Unit("cm-1"), 3, False),
+    (14, 1, 0, 0.0 * u.Unit("cm-1"), 2, True),
+    (14, 1, 15, 81251.320 * u.Unit("cm-1"), 4, False),
+    (14, 1, 16, 83801.950 * u.Unit("cm-1"), 2, True),
     # CHIANTI levels
     # Theoretical values from CHIANTI aren't ingested!!!
     (7, 5, 0, 0.0 * u.Unit("cm-1"), 1, True),
