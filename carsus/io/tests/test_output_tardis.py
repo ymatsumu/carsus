@@ -252,6 +252,24 @@ def test_create_lines(lines, atomic_number, ion_number, level_number_lower, leve
 
 
 @with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength, exp_loggf",[
+    # Kurucz lines with wavelength above 2000 Angstrom
+    (14, 1, 8, 83, 2015.574293 * u.Unit("angstrom"), -0.120),
+    (14, 1, 8, 82, 2017.305610 * u.Unit("angstrom"), 0.190)
+])
+def test_create_lines_convert_air2vacuum(lines, atomic_number, ion_number, level_number_lower, level_number_upper,
+                      exp_wavelength, exp_loggf):
+    lines = lines.set_index(["atomic_number", "ion_number",
+                              "level_number_lower", "level_number_upper"])
+    wavelength = lines.loc[(atomic_number, ion_number,
+                            level_number_lower, level_number_upper)]["wavelength"] * u.Unit("angstrom")
+    loggf = lines.loc[(atomic_number, ion_number,
+                            level_number_lower, level_number_upper)]["loggf"]
+    assert_quantity_allclose(wavelength, exp_wavelength)
+    assert_almost_equal(loggf, exp_loggf)
+
+
+@with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper", [
     # Default loggf_threshold = -3
     # Kurucz lines
