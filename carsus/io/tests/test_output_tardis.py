@@ -1,5 +1,6 @@
 import pytest
 import os
+import numpy as np
 
 from carsus.io.output.tardis_op import AtomData
 from carsus.model import DataSource, Ion
@@ -18,7 +19,7 @@ with_test_db = pytest.mark.skipif(
 @pytest.fixture
 def atom_data(test_session):
     atom_data = AtomData(test_session,
-                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         ions=["He II", "Be III", "B IV", "N VI", "Si II", "Zn XX"],
                          chianti_ions=["He II", "N VI"])
     return atom_data
 
@@ -138,12 +139,19 @@ def test_atom_data_two_instances_same_session(test_session):
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, exp_mass", [
-    (2, 4.002602),
-    (11, 22.98976928)
+    (2, 4.002602 * u.u),
+    (4, 9.0121831 * u.u),
+    (5, (10.806 + 10.821)/2 * u.u),
+    (7, (14.00643 + 14.00728)/2 * u.u),
+    (14, (28.084 + 28.086)/2 *u.u),
+    (30, 65.38 *u.u)
 ])
 def test_create_atom_masses(atom_masses, atomic_number, exp_mass):
     atom_masses = atom_masses.set_index("atomic_number")
-    assert_almost_equal(atom_masses.loc[atomic_number]["mass"], exp_mass)
+    assert_quantity_allclose(
+        atom_masses.loc[atomic_number]["mass"] * u.u,
+        exp_mass
+    )
 
 
 @with_test_db
@@ -155,40 +163,105 @@ def test_create_atom_masses_max_atomic_number(test_session):
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, exp_ioniz_energy", [
-    (8, 5, 138.1189),
-    (11, 0,  5.1390767)
+    (2, 1,  54.41776311 * u.eV),
+    (4, 2, 153.896198 * u.eV),
+    (5, 3, 259.3715 * u.eV),
+    (7, 5, 552.06731 * u.eV),
+    (14, 1, 16.345845 * u.eV),
+    (30, 19, 737.366 * u.eV)
 ])
 def test_create_ionizatinon_energies(ionization_energies, atomic_number, ion_number, exp_ioniz_energy):
     ionization_energies = ionization_energies.set_index(["atomic_number", "ion_number"])
-    assert_almost_equal(ionization_energies.loc[(atomic_number, ion_number)]["ionization_energy"],
-                        exp_ioniz_energy)
+    assert_quantity_allclose(
+        ionization_energies.loc[(atomic_number, ion_number)]["ionization_energy"] * u.eV,
+        exp_ioniz_energy
+    )
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy",[
-    (7, 5, 7, 3991860.0 * u.Unit("cm-1")),
-    (4, 2, 2, 981177.5 * u.Unit("cm-1")),
-    (30, 19, 0, 0.0*u.Unit("cm-1"))
+@pytest.mark.parametrize("atomic_number, ion_number, ionization_energy",[
+    (2, 1, 54.41776311 * u.eV),
+    (4, 2, 153.896198 * u.eV),
+    (5, 3, 259.3715 * u.eV),
+    (7, 5, 552.06731 * u.eV),
+    (14, 1, 16.345845 * u.eV)  # In fact, only Si II has levels with energy > ionization potential
 ])
-def test_create_levels(levels, atomic_number, ion_number, level_number, exp_energy):
+def test_create_levels_filter_auto_ionizing_levels(levels, atomic_number, ion_number, ionization_energy):
+    levels_ion = levels.loc[(levels["atomic_number"] == atomic_number) &
+                            (levels["ion_number"] == ion_number)].copy()
+    levels_energies = levels_ion["energy"].values * u.eV
+    assert all(levels_energies < ionization_energy)
+
+
+@with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, level_number, exp_energy, exp_g, exp_metastable_flag",[
+    # Kurucz levels
+    (4, 2, 0, 0.0 * u.Unit("cm-1"), 1, True),
+    (4, 2, 1, 956501.9 * u.Unit("cm-1"), 3, True),
+    (4, 2, 6, 997455.0 * u.Unit("cm-1"), 3, False),
+    (14, 1, 0, 0.0 * u.Unit("cm-1"), 2, True),
+    (14, 1, 15, 81251.320 * u.Unit("cm-1"), 4, False),
+    (14, 1, 16, 83801.950 * u.Unit("cm-1"), 2, True),
+    # CHIANTI levels
+    # Theoretical values from CHIANTI aren't ingested!!!
+    (7, 5, 0, 0.0 * u.Unit("cm-1"), 1, True),
+    (7, 5, 7, 3991860.0 * u.Unit("cm-1"), 3, False),
+    (7, 5, 43, 4294670.00 * u.Unit("cm-1"), 5, False),
+    # NIST Ground level
+    (30, 19, 0, 0.0 * u.eV, 2, True)
+])
+def test_create_levels(levels, atomic_number, ion_number, level_number,
+                       exp_energy, exp_g, exp_metastable_flag):
     levels = levels.set_index(["atomic_number", "ion_number", "level_number"])
     energy = levels.loc[(atomic_number, ion_number, level_number)]["energy"] * u.eV
-    energy = energy.to(u.Unit("cm-1"), equivalencies=u.spectral())
+    g = levels.loc[(atomic_number, ion_number, level_number)]["g"]
+    metastable_flag = levels.loc[(atomic_number, ion_number, level_number)]["metastable"]
+
+    # Convert the expected energy using equivalencies
+    exp_energy = exp_energy.to(u.eV, equivalencies=u.spectral())
+
     assert_quantity_allclose(energy, exp_energy)
+    assert g == exp_g
+    assert metastable_flag == exp_metastable_flag
 
 
 @with_test_db
-@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength",[
-    (7, 5, 1, 2, 1907.9000 * u.Unit("angstrom")),
-    (4, 2, 0, 6, 10.0255 * u.Unit("nm"))
+@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper, exp_wavelength, exp_loggf",[
+    # Kurucz lines
+    (14, 1, 0, 57, 81.8575 * u.Unit("nm"), -1.92),
+    (14, 1, 1, 71, 80.5098 * u.Unit("nm"), -2.86),
+    # CHIANTI lines
+    # Note that energies are *not* sorted in the elvlc file!
+    (2, 1, 0, 1, 303.786 * u.Unit("angstrom"), np.log10(0.2772)),
+    (2, 1, 2, 16, 1084.920 * u.Unit("angstrom"), np.log10(0.027930))
 ])
-def test_create_lines(lines, atomic_number, ion_number,
-                       level_number_lower, level_number_upper, exp_wavelength):
+def test_create_lines(lines, atomic_number, ion_number, level_number_lower, level_number_upper,
+                      exp_wavelength, exp_loggf):
     lines = lines.set_index(["atomic_number", "ion_number",
                               "level_number_lower", "level_number_upper"])
     wavelength = lines.loc[(atomic_number, ion_number,
-                                        level_number_lower, level_number_upper)]["wavelength"] * u.Unit("angstrom")
+                            level_number_lower, level_number_upper)]["wavelength"] * u.Unit("angstrom")
+    loggf = lines.loc[(atomic_number, ion_number,
+                            level_number_lower, level_number_upper)]["loggf"]
     assert_quantity_allclose(wavelength, exp_wavelength)
+    assert_almost_equal(loggf, exp_loggf)
+
+
+@with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper", [
+    # Default loggf_threshold = -3
+    # Kurucz lines
+    (14, 1, 3, 98), # loggf = -4.430
+    (14, 1, 2, 83), # loggf = -4.140
+    # CHIANTI lines
+    (7, 5, 3, 11), # loggf = -5.522589
+    (7, 5, 6, 7), # loggf = -5.240106
+])
+def test_create_lines_loggf_treshold(lines, atomic_number, ion_number, level_number_lower, level_number_upper):
+    lines = lines.set_index(["atomic_number", "ion_number",
+                             "level_number_lower", "level_number_upper"])
+    with pytest.raises(KeyError):
+        lines.loc[(atomic_number, ion_number, level_number_lower, level_number_upper)]
 
 
 # ToDo: Implement real tests
