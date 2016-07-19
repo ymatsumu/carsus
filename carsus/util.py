@@ -26,3 +26,41 @@ def convert_camel2snake(name):
     """
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def convert_wavelength_vacuum2air(wavelength_vacuum):
+    """
+    Convert vacuum wavelength to air wavelength
+    Parameters
+    -----------
+    wavelength_vacuum: float
+        Vacuum wavelength in Angstroms
+
+    Returns
+    --------
+    float
+        Air wavelength in Angstroms
+    """
+    sigma2 = (1e4/wavelength_vacuum)**2.
+    fact = 1.0 + 5.792105e-2/(238.0185 - sigma2) + 1.67917e-3/(57.362 - sigma2)
+
+    return wavelength_vacuum/fact
+
+
+def convert_wavelength_air2vacuum(wavelength_air):
+    """
+    Convert air wavelength to vacuum wavelength
+    Parameters
+    -----------
+    wavelength_air: float
+        Air wavelength in Angstroms
+
+    Returns
+    --------
+    float
+        Vacuum wavelength in Angstroms
+    """
+    sigma2 = (1e4/wavelength_air)**2.
+    fact = 1.0 + 5.792105e-2/(238.0185 - sigma2) + 1.67917e-3/(57.362 - sigma2)
+
+    return wavelength_air * fact
