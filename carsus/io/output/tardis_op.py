@@ -51,10 +51,7 @@ class AtomData(object):
         (default: "chianti_v8.0.2")
     atom_masses_max_atomic_number: int
         The maximum atomic number to be stored in atom_masses
-            (default: 30)
-    levels_create_metastable_flags: bool
-        Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
-        (default: True)
+        (default: 30)
     lines_loggf_threshold: int
         log(gf) threshold for lines
     levels_metastable_loggf_threshold: int
@@ -127,8 +124,7 @@ class AtomData(object):
 
     def __init__(self, session, ions, chianti_ions=None,
                  kurucz_short_name="ku_latest", chianti_short_name="chianti_v8.0.2", nist_short_name="nist-asd",
-                 atom_masses_max_atomic_number=30, levels_create_metastable_flags=True,
-                 lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3,
+                 atom_masses_max_atomic_number=30, lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3,
                  collisions_temperatures=None,
                  zeta_datafile=ZETA_DATAFILE):
 
@@ -140,7 +136,6 @@ class AtomData(object):
         }
 
         self.levels_lines_param = {
-            "levels_create_metastable_flags": levels_create_metastable_flags,
             "levels_metastable_loggf_threshold": levels_metastable_loggf_threshold,
             "lines_loggf_threshold": lines_loggf_threshold
         }
@@ -507,22 +502,21 @@ class AtomData(object):
         metastable_counts = metastable_lines_grouped["upper_level_id"].count()
         metastable_counts.name = "metastable_counts"
 
-        # If there are no strong transitions for a level (the count is NaN) then the metastable flag is True
-        # else (the count is a natural number) the metastable flag is False
+        # If there are no strong transitions for a level (the count is NaN) then the metastable flag is 1
+        # else (the count is a natural number) the metastable flag is 0
         levels = levels.join(metastable_counts)
-        metastable_flags =  levels["metastable_counts"].isnull()
+        metastable_flags = levels["metastable_counts"].isnull()
+        metastable_flags = metastable_flags.apply(lambda x: 1 if x else 0)  # convert bool to 0/1
         metastable_flags.name = "metastable"
+
         return metastable_flags
 
-    def create_levels_lines(self, levels_create_metastable_flags=True, levels_metastable_loggf_threshold=-3,
-                            lines_loggf_threshold=-3):
+    def create_levels_lines(self, levels_metastable_loggf_threshold=-3, lines_loggf_threshold=-3):
         """
         Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
 
         Parameters
         ----------
-        levels_create_metastable_flags: bool
-            Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
         levels_metastable_loggf_threshold: int
             log(gf) threshold for flagging metastable levels
         lines_loggf_threshold: int
@@ -565,8 +559,7 @@ class AtomData(object):
         # Do not clean levels that don't exist in lines
 
         # Create the metastable flags for levels
-        if levels_create_metastable_flags:
-            levels["metastable"] = self._create_metastable_flags(levels, lines_all, levels_metastable_loggf_threshold)
+        levels["metastable"] = self._create_metastable_flags(levels, lines_all, levels_metastable_loggf_threshold)
 
         # Create level numbers
         levels.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
@@ -600,6 +593,23 @@ class AtomData(object):
     def levels_prepared(self):
         return self.prepare_levels()
 
+    @staticmethod
+    def _create_artificial_fully_ionized(levels_prepared):
+
+        fully_ionized_levels = list()
+
+        for atomic_number, _ in levels_prepared.groupby("atomic_number"):
+            fully_ionized_levels.append(
+                {"atomic_number": atomic_number,
+                 "ion_number": atomic_number,
+                 "level_number": 0,
+                 "energy": 0.0,
+                 "g": 1,
+                 "metastable": 1}
+            )
+
+        return pd.DataFrame.from_dict(data=fully_ionized_levels, dtype=levels_prepared.dtypes)
+
     def prepare_levels(self):
         """
         Prepare the DataFrame with levels for TARDIS
@@ -618,11 +628,16 @@ class AtomData(object):
         levels_prepared.reset_index(inplace=True)
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
-        # Covert energy to CGS
-        levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
-
         # Drop the unwanted columns
         levels_prepared.drop(["level_id"], axis=1, inplace=True)
+
+        # Create and append artificial fully ionized ions
+        artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels_prepared)
+        levels_prepared = levels_prepared.append(artificial_fully_ionized_levels, ignore_index=True)
+        levels_prepared.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
+
+        # Covert energy to CGS
+        levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
 
         return levels_prepared
 
