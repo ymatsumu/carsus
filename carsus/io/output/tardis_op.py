@@ -51,10 +51,7 @@ class AtomData(object):
         (default: "chianti_v8.0.2")
     atom_masses_max_atomic_number: int
         The maximum atomic number to be stored in atom_masses
-            (default: 30)
-    levels_create_metastable_flags: bool
-        Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
-        (default: True)
+        (default: 30)
     lines_loggf_threshold: int
         log(gf) threshold for lines
     levels_metastable_loggf_threshold: int
@@ -127,8 +124,7 @@ class AtomData(object):
 
     def __init__(self, session, ions, chianti_ions=None,
                  kurucz_short_name="ku_latest", chianti_short_name="chianti_v8.0.2", nist_short_name="nist-asd",
-                 atom_masses_max_atomic_number=30, levels_create_metastable_flags=True,
-                 lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3,
+                 atom_masses_max_atomic_number=30, lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3,
                  collisions_temperatures=None,
                  zeta_datafile=ZETA_DATAFILE):
 
@@ -140,7 +136,6 @@ class AtomData(object):
         }
 
         self.levels_lines_param = {
-            "levels_create_metastable_flags": levels_create_metastable_flags,
             "levels_metastable_loggf_threshold": levels_metastable_loggf_threshold,
             "lines_loggf_threshold": lines_loggf_threshold
         }
@@ -514,15 +509,12 @@ class AtomData(object):
         metastable_flags.name = "metastable"
         return metastable_flags
 
-    def create_levels_lines(self, levels_create_metastable_flags=True, levels_metastable_loggf_threshold=-3,
-                            lines_loggf_threshold=-3):
+    def create_levels_lines(self, levels_metastable_loggf_threshold=-3, lines_loggf_threshold=-3):
         """
         Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
 
         Parameters
         ----------
-        levels_create_metastable_flags: bool
-            Create the `metastable` column containing flags for metastable levels (levels that take a long time to de-excite)
         levels_metastable_loggf_threshold: int
             log(gf) threshold for flagging metastable levels
         lines_loggf_threshold: int
@@ -565,8 +557,7 @@ class AtomData(object):
         # Do not clean levels that don't exist in lines
 
         # Create the metastable flags for levels
-        if levels_create_metastable_flags:
-            levels["metastable"] = self._create_metastable_flags(levels, lines_all, levels_metastable_loggf_threshold)
+        levels["metastable"] = self._create_metastable_flags(levels, lines_all, levels_metastable_loggf_threshold)
 
         # Create level numbers
         levels.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
@@ -712,7 +703,7 @@ class AtomData(object):
 
         collisions = np.array(collisions, dtype=collisions_dtype)
         collisions = pd.DataFrame.from_records(collisions, index="e_col_id")
-
+    
         # Join atomic_number, ion_number, level_number_lower, level_number_upper
         lower_levels = self.levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
                               loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
