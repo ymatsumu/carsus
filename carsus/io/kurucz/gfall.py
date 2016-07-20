@@ -150,6 +150,11 @@ class GFALLReader(object):
         gfall_df["label_lower"] = gfall_df["label_lower"].str.strip()
         gfall_df["label_upper"] = gfall_df["label_upper"].str.strip()
 
+        # Ignore lines with the labels "AVARAGE ENERGIES" and "CONTINUUM"
+        ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
+        gfall_df = gfall_df.loc[~((gfall_df["label_lower"].isin(ignored_labels)) |
+                                  (gfall_df["label_upper"].isin(ignored_labels)))].copy()
+
         gfall_df['e_lower_predicted'] = gfall_df["e_lower"] < 0
         gfall_df["e_lower"] = gfall_df["e_lower"].abs()
         gfall_df['e_upper_predicted'] = gfall_df["e_upper"] < 0
@@ -201,8 +206,8 @@ class GFALLReader(object):
         levels = pd.concat([e_lower_levels[selected_columns],
                             e_upper_levels[selected_columns]])
 
-        levels = levels.drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j', 'label']). \
-            sort_values(['atomic_number', 'ion_charge', 'energy', 'j'])
+        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j']).\
+            drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j'])
 
         levels["method"] = levels["theoretical"].\
             apply(lambda x: "theor" if x else "meas")  # Theoretical or measured
@@ -246,18 +251,16 @@ class GFALLReader(object):
 
         levels_df_idx = levels_df.reset_index()
         levels_df_idx["level_index"] = levels_df_idx["level_index"].astype(int)  # convert to int
-        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j'])
 
         lines = gfall_df[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower',
-                                    'j_lower', 'label_lower']].values.tolist()
+        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower']].values.tolist()
         level_lower_idx = [tuple(item) for item in level_lower_idx]
 
-        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper',
-                                    'j_upper', 'label_upper']].values.tolist()
+        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper']].values.tolist()
         level_upper_idx = [tuple(item) for item in level_upper_idx]
 
         lines['level_index_lower'] = levels_df_idx["level_index"].loc[level_lower_idx].values

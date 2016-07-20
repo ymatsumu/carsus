@@ -1,5 +1,5 @@
 import pytest
-import os
+import pandas as pd
 
 from carsus.io.kurucz import GFALLReader, GFALLIngester
 from carsus.model import Ion, Level, LevelEnergy, DataSource, Line, LineWavelength, LineGFValue
@@ -64,6 +64,19 @@ def test_gfall_reader_gfall_df(gfall_df, index, wavelength, atomic_number, ion_c
                     [wavelength, e_lower, e_upper])
     assert row["e_lower_predicted"] == e_lower_predicted
     assert row["e_upper_predicted"] == e_upper_predicted
+
+
+def test_gfall_reader_gfall_df_ignore_labels(gfall_df):
+    ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
+    assert len(gfall_df.loc[(gfall_df["label_lower"].isin(ignored_labels)) |
+                                  (gfall_df["label_upper"].isin(ignored_labels))]) == 0
+
+
+def test_gfall_reader_levels_df_unique(levels_df):
+    levels_df = levels_df.reset_index()
+    assert pd.Series(
+        levels_df.groupby(["atomic_number", "ion_charge", "energy", "j"]).size() == 1
+    ).all()
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index, "
