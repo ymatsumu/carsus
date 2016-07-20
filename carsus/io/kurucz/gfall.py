@@ -251,18 +251,16 @@ class GFALLReader(object):
 
         levels_df_idx = levels_df.reset_index()
         levels_df_idx["level_index"] = levels_df_idx["level_index"].astype(int)  # convert to int
-        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j'])
 
         lines = gfall_df[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower',
-                                    'j_lower', 'label_lower']].values.tolist()
+        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower']].values.tolist()
         level_lower_idx = [tuple(item) for item in level_lower_idx]
 
-        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper',
-                                    'j_upper', 'label_upper']].values.tolist()
+        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper']].values.tolist()
         level_upper_idx = [tuple(item) for item in level_upper_idx]
 
         lines['level_index_lower'] = levels_df_idx["level_index"].loc[level_lower_idx].values
