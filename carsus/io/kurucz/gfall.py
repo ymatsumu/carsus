@@ -201,7 +201,7 @@ class GFALLReader(object):
         levels = pd.concat([e_lower_levels[selected_columns],
                             e_upper_levels[selected_columns]])
 
-        levels = levels.drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j', 'label']). \
+        levels = levels.drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j']). \
             sort_values(['atomic_number', 'ion_charge', 'energy', 'j'])
 
         levels["method"] = levels["theoretical"].\
