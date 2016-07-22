@@ -91,8 +91,14 @@ class GFALLReader(object):
         field_widths = type_match.sub('', kurucz_fortran_format)
         field_widths = map(int, re.sub(r'\.\d+', '', field_widths).split(','))
 
-        gfall = np.genfromtxt(fname, dtype=field_types, delimiter=field_widths,
-                              skip_header=2)
+        def read_remove_empty(fname):
+            """ Generator to remove empty lines from the gfall file"""
+            with open(fname, "r") as f:
+                for line in f:
+                    if not re.match(r'^\s*$', line):
+                        yield line
+
+        gfall = np.genfromtxt(read_remove_empty(fname), dtype=field_types, delimiter=field_widths)
 
         columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
                    'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
