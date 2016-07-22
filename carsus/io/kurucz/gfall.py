@@ -147,8 +147,12 @@ class GFALLReader(object):
             del gfall_df['{0}_first'.format(column)]
             del gfall_df['{0}_second'.format(column)]
 
+        # Clean labels
         gfall_df["label_lower"] = gfall_df["label_lower"].str.strip()
         gfall_df["label_upper"] = gfall_df["label_upper"].str.strip()
+
+        gfall_df["label_lower"] = gfall_df["label_lower"].str.replace('\s+', ' ')
+        gfall_df["label_upper"] = gfall_df["label_upper"].str.replace('\s+', ' ')
 
         # Ignore lines with the labels "AVARAGE ENERGIES" and "CONTINUUM"
         ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
