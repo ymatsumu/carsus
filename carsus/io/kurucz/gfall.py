@@ -227,6 +227,7 @@ class GFALLReader(object):
 
         levels["level_index"] = levels.groupby(['atomic_number', 'ion_charge'])['j'].\
             transform(lambda x: np.arange(len(x))).values
+        levels["levels_index"] = levels["levels_index"].astype(int)
 
         # ToDo: The commented block below does not work with all lines. Find a way to parse it.
         # levels[["configuration", "term"]] = levels["label"].str.split(expand=True)
@@ -262,7 +263,6 @@ class GFALLReader(object):
             selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
 
         levels_df_idx = levels_df.reset_index()
-        levels_df_idx["level_index"] = levels_df_idx["level_index"].astype(int)  # convert to int
         levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j'])
 
         lines = gfall_df[selected_columns].copy()
