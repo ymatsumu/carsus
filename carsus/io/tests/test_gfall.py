@@ -72,13 +72,6 @@ def test_gfall_reader_gfall_df_ignore_labels(gfall_df):
                                   (gfall_df["label_upper"].isin(ignored_labels))]) == 0
 
 
-def test_gfall_reader_levels_df_unique(levels_df):
-    levels_df = levels_df.reset_index()
-    assert pd.Series(
-        levels_df.groupby(["atomic_number", "ion_charge", "energy", "j"]).size() == 1
-    ).all()
-
-
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index, "
                          "energy, j, method",[
     (4, 2, 0, 0.0, 0.0, "meas"),
