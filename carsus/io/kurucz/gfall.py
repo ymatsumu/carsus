@@ -227,7 +227,7 @@ class GFALLReader(object):
 
         levels["level_index"] = levels.groupby(['atomic_number', 'ion_charge'])['j'].\
             transform(lambda x: np.arange(len(x))).values
-        levels["levels_index"] = levels["levels_index"].astype(int)
+        levels["level_index"] = levels["level_index"].astype(int)
 
         # ToDo: The commented block below does not work with all lines. Find a way to parse it.
         # levels[["configuration", "term"]] = levels["label"].str.split(expand=True)
@@ -263,20 +263,20 @@ class GFALLReader(object):
             selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
 
         levels_df_idx = levels_df.reset_index()
-        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j'])
+        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
 
         lines = gfall_df[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower']].values.tolist()
+        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower', 'label_lower']].values.tolist()
         level_lower_idx = [tuple(item) for item in level_lower_idx]
 
-        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper']].values.tolist()
+        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
         level_upper_idx = [tuple(item) for item in level_upper_idx]
 
-        lines['level_index_lower'] = levels_df_idx["level_index"].loc[level_lower_idx].values
-        lines['level_index_upper'] = levels_df_idx["level_index"].loc[level_upper_idx].values
+        lines['level_index_lower'] = levels_df_idx.loc[level_lower_idx, "level_index"].values
+        lines['level_index_upper'] = levels_df_idx.loc[level_upper_idx, "level_index"].values
 
         lines.set_index(['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'], inplace=True)
 
