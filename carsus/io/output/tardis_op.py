@@ -612,15 +612,13 @@ class AtomData(object):
 
         for atomic_number, _ in levels_prepared.groupby("atomic_number"):
             fully_ionized_levels.append(
-                {"atomic_number": atomic_number,
-                 "ion_number": atomic_number,
-                 "level_number": 0,
-                 "energy": 0.0,
-                 "g": 1,
-                 "metastable": 1}
+                (atomic_number, atomic_number, 0, 0.0, 1, 1)
             )
 
-        return pd.DataFrame.from_dict(data=fully_ionized_levels, dtype=levels_prepared.dtypes)
+        fully_ionized_levels_dtypes = zip(levels_prepared.dtypes.index, levels_prepared.dtypes)
+        fully_ionized_levels = np.array(fully_ionized_levels, dtype=fully_ionized_levels_dtypes)
+
+        return pd.DataFrame(data=fully_ionized_levels)
 
     def prepare_levels(self):
         """
@@ -645,6 +643,7 @@ class AtomData(object):
 
         # Create and append artificial fully ionized ions
         artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels_prepared)
+
         levels_prepared = levels_prepared.append(artificial_fully_ionized_levels, ignore_index=True)
         levels_prepared.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
 
