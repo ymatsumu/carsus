@@ -11,6 +11,8 @@ from carsus.model import Atom, DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
 from carsus.util import atomic_number2symbol
+from tardis.util import species_string_to_tuple
+
 
 class GFALLReader(object):
     """
@@ -288,7 +290,11 @@ class GFALLIngester(object):
         Attributes
         ----------
         session: SQLAlchemy session
-
+        fname: str
+            The name of the gfall file to read
+        ions: list of species str
+            Ingest levels and lines only for these ions. If set to None then ingest all.
+            (default: None)
         data_source: DataSource instance
             The data source of the ingester
 
@@ -299,9 +305,16 @@ class GFALLIngester(object):
         ingest(session)
             Persists data into the database
     """
-    def __init__(self, session, fname, ds_short_name="ku_latest"):
+    def __init__(self, session, fname, ions=None, ds_short_name="ku_latest"):
         self.session = session
         self.gfall_reader = GFALLReader(fname)
+        if ions is not None:
+            ions = [dict(zip(["atomic_number", "ion_charge"], species_string_to_tuple(species_str)))
+                    for species_str in ions]
+            self.ions = pd.DataFrame.from_records(ions, index=["atomic_number", "ion_charge"])
+        else:
+            self.ions = None
+
         self.data_source = DataSource.as_unique(self.session, short_name=ds_short_name)
         if self.data_source.data_source_id is None:  # To get the id if a new data source was created
             self.session.flush()
@@ -328,6 +341,13 @@ class GFALLIngester(object):
 
         if levels_df is None:
             levels_df = self.gfall_reader.levels_df
+
+        # Select ions
+        if self.ions is not None:
+            levels_df = levels_df.reset_index().\
+                                  join(self.ions, how="inner",
+                                       on=["atomic_number", "ion_charge"]).\
+                                  set_index(["atomic_number", "ion_charge", "level_index"])
 
         print("Ingesting levels from {}".format(self.data_source.short_name))
 
@@ -357,6 +377,13 @@ class GFALLIngester(object):
 
         if lines_df is None:
             lines_df = self.gfall_reader.lines_df
+
+        # Select ions
+        if self.ions is not None:
+            lines_df = lines_df.reset_index(). \
+                join(self.ions, how="inner",
+                     on=["atomic_number", "ion_charge"]). \
+                set_index(["atomic_number", "ion_charge", "level_index_lower", "level_index_upper"])
 
         print("Ingesting lines from {}".format(self.data_source.short_name))
 
