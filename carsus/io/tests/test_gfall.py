@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 import pandas as pd
 
 from carsus.io.kurucz import GFALLReader, GFALLIngester
@@ -70,6 +71,12 @@ def test_gfall_reader_gfall_df_ignore_labels(gfall_df):
     ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
     assert len(gfall_df.loc[(gfall_df["label_lower"].isin(ignored_labels)) |
                                   (gfall_df["label_upper"].isin(ignored_labels))]) == 0
+
+
+def test_gfall_reader_clean_levels_labels(levels_df):
+    # One label for the ground level of Be III has an extra space
+    levels0402 = levels_df.loc[(4,2)]
+    assert len(levels0402.loc[(np.isclose(levels0402["energy"], 0.0))]) == 1
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index, "
