@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 import pandas as pd
 
 from carsus.io.kurucz import GFALLReader, GFALLIngester
@@ -35,7 +36,7 @@ def lines_df(gfall_rdr):
 
 @pytest.fixture()
 def gfall_ingester(memory_session, gfall_fname):
-    return GFALLIngester(memory_session, gfall_fname)
+    return GFALLIngester(memory_session, gfall_fname, ions=["Be III", "N VI"])
 
 
 @pytest.mark.parametrize("index, wavelength, element_code, e_first, e_second",[
@@ -72,11 +73,10 @@ def test_gfall_reader_gfall_df_ignore_labels(gfall_df):
                                   (gfall_df["label_upper"].isin(ignored_labels))]) == 0
 
 
-def test_gfall_reader_levels_df_unique(levels_df):
-    levels_df = levels_df.reset_index()
-    assert pd.Series(
-        levels_df.groupby(["atomic_number", "ion_charge", "energy", "j"]).size() == 1
-    ).all()
+def test_gfall_reader_clean_levels_labels(levels_df):
+    # One label for the ground level of Be III has an extra space
+    levels0402 = levels_df.loc[(4,2)]
+    assert len(levels0402.loc[(np.isclose(levels0402["energy"], 0.0))]) == 1
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index, "

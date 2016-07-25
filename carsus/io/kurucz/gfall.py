@@ -11,6 +11,8 @@ from carsus.model import Atom, DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
 from carsus.util import atomic_number2symbol
+from tardis.util import species_string_to_tuple
+
 
 class GFALLReader(object):
     """
@@ -91,8 +93,14 @@ class GFALLReader(object):
         field_widths = type_match.sub('', kurucz_fortran_format)
         field_widths = map(int, re.sub(r'\.\d+', '', field_widths).split(','))
 
-        gfall = np.genfromtxt(fname, dtype=field_types, delimiter=field_widths,
-                              skip_header=2)
+        def read_remove_empty(fname):
+            """ Generator to remove empty lines from the gfall file"""
+            with open(fname, "r") as f:
+                for line in f:
+                    if not re.match(r'^\s*$', line):
+                        yield line
+
+        gfall = np.genfromtxt(read_remove_empty(fname), dtype=field_types, delimiter=field_widths)
 
         columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
                    'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
@@ -147,8 +155,12 @@ class GFALLReader(object):
             del gfall_df['{0}_first'.format(column)]
             del gfall_df['{0}_second'.format(column)]
 
+        # Clean labels
         gfall_df["label_lower"] = gfall_df["label_lower"].str.strip()
         gfall_df["label_upper"] = gfall_df["label_upper"].str.strip()
+
+        gfall_df["label_lower"] = gfall_df["label_lower"].str.replace('\s+', ' ')
+        gfall_df["label_upper"] = gfall_df["label_upper"].str.replace('\s+', ' ')
 
         # Ignore lines with the labels "AVARAGE ENERGIES" and "CONTINUUM"
         ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
@@ -206,8 +218,8 @@ class GFALLReader(object):
         levels = pd.concat([e_lower_levels[selected_columns],
                             e_upper_levels[selected_columns]])
 
-        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j']).\
-            drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j'])
+        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j', 'label']).\
+            drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
 
         levels["method"] = levels["theoretical"].\
             apply(lambda x: "theor" if x else "meas")  # Theoretical or measured
@@ -215,6 +227,7 @@ class GFALLReader(object):
 
         levels["level_index"] = levels.groupby(['atomic_number', 'ion_charge'])['j'].\
             transform(lambda x: np.arange(len(x))).values
+        levels["level_index"] = levels["level_index"].astype(int)
 
         # ToDo: The commented block below does not work with all lines. Find a way to parse it.
         # levels[["configuration", "term"]] = levels["label"].str.split(expand=True)
@@ -250,21 +263,20 @@ class GFALLReader(object):
             selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
 
         levels_df_idx = levels_df.reset_index()
-        levels_df_idx["level_index"] = levels_df_idx["level_index"].astype(int)  # convert to int
-        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j'])
+        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
 
         lines = gfall_df[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower']].values.tolist()
+        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower', 'label_lower']].values.tolist()
         level_lower_idx = [tuple(item) for item in level_lower_idx]
 
-        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper']].values.tolist()
+        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
         level_upper_idx = [tuple(item) for item in level_upper_idx]
 
-        lines['level_index_lower'] = levels_df_idx["level_index"].loc[level_lower_idx].values
-        lines['level_index_upper'] = levels_df_idx["level_index"].loc[level_upper_idx].values
+        lines['level_index_lower'] = levels_df_idx.loc[level_lower_idx, "level_index"].values
+        lines['level_index_upper'] = levels_df_idx.loc[level_upper_idx, "level_index"].values
 
         lines.set_index(['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'], inplace=True)
 
@@ -278,7 +290,11 @@ class GFALLIngester(object):
         Attributes
         ----------
         session: SQLAlchemy session
-
+        fname: str
+            The name of the gfall file to read
+        ions: list of species str
+            Ingest levels and lines only for these ions. If set to None then ingest all.
+            (default: None)
         data_source: DataSource instance
             The data source of the ingester
 
@@ -289,9 +305,16 @@ class GFALLIngester(object):
         ingest(session)
             Persists data into the database
     """
-    def __init__(self, session, fname, ds_short_name="ku_latest"):
+    def __init__(self, session, fname, ions=None, ds_short_name="ku_latest"):
         self.session = session
         self.gfall_reader = GFALLReader(fname)
+        if ions is not None:
+            ions = [dict(zip(["atomic_number", "ion_charge"], species_string_to_tuple(species_str)))
+                    for species_str in ions]
+            self.ions = pd.DataFrame.from_records(ions, index=["atomic_number", "ion_charge"])
+        else:
+            self.ions = None
+
         self.data_source = DataSource.as_unique(self.session, short_name=ds_short_name)
         if self.data_source.data_source_id is None:  # To get the id if a new data source was created
             self.session.flush()
@@ -318,6 +341,13 @@ class GFALLIngester(object):
 
         if levels_df is None:
             levels_df = self.gfall_reader.levels_df
+
+        # Select ions
+        if self.ions is not None:
+            levels_df = levels_df.reset_index().\
+                                  join(self.ions, how="inner",
+                                       on=["atomic_number", "ion_charge"]).\
+                                  set_index(["atomic_number", "ion_charge", "level_index"])
 
         print("Ingesting levels from {}".format(self.data_source.short_name))
 
@@ -347,6 +377,13 @@ class GFALLIngester(object):
 
         if lines_df is None:
             lines_df = self.gfall_reader.lines_df
+
+        # Select ions
+        if self.ions is not None:
+            lines_df = lines_df.reset_index(). \
+                join(self.ions, how="inner",
+                     on=["atomic_number", "ion_charge"]). \
+                set_index(["atomic_number", "ion_charge", "level_index_lower", "level_index_upper"])
 
         print("Ingesting lines from {}".format(self.data_source.short_name))
 
