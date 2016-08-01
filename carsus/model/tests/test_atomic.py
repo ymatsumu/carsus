@@ -97,9 +97,9 @@ def test_ionization_energies_query(foo_session, atomic_number, ion_charge, ds_sh
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index,"
                          "configuration, term, L, J, spin_multiplicity, parity",[
-    (10, 2, "ku", 1, "2s2.2p5", "2P1.5", "P", 1.5, 2, 1),
-    (10, 2, "ku", 2, "2s2.2p5", "2P0.5", "P", 0.5, 2, 1),
-    (10, 2, "chianti", 2, "2s2.2p5", "2P0.5", "P", 0.5, 2, 1),
+    (10, 2, "ku", 0, "2s2.2p5", "2P1.5", "P", 1.5, 2, 1),
+    (10, 2, "ku", 1, "2s2.2p5", "2P0.5", "P", 0.5, 2, 1),
+    (10, 2, "chianti", 1, "2s2.2p5", "2P0.5", "P", 0.5, 2, 1),
 ])
 def test_level_query(foo_session, atomic_number, ion_charge, ds_short_name, level_index,
                          configuration, term, L, J, spin_multiplicity, parity):
@@ -119,10 +119,10 @@ def test_level_query(foo_session, atomic_number, ion_charge, ds_short_name, leve
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index,"
                          "method, expected_level_energy_value", [
-    (10, 2, "ku", 1, "m", 0),
-    (10, 2, "ku", 1, "th", 0),
-    (10, 2, "ku", 2, "m", 780.4),
-    (10, 2, "chianti", 2, "m", 780.2)  # Unit cm-1
+    (10, 2, "ku", 0, "m", 0),
+    (10, 2, "ku", 0, "th", 0),
+    (10, 2, "ku", 1, "m", 780.4),
+    (10, 2, "chianti", 1, "m", 780.2)  # Unit cm-1
 ])
 def test_ionization_energies_query(foo_session, atomic_number, ion_charge,  ds_short_name,
                                    level_index, method, expected_level_energy_value):
@@ -141,7 +141,8 @@ def test_ionization_energies_query(foo_session, atomic_number, ion_charge,  ds_s
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, lower_level_index, upper_level_index,"
                          "expected_wavelength, expected_a_value, expected_gf_value", [
-                        (10, 2, "ku", 1, 2, 155545.188*u.AA, 5.971e-03*u.Unit("s-1"), 8.792e-01),
+    (10, 2, "ku", 0, 1, 183.571*u.AA,  5.971e-03*u.Unit("s-1"), 8.792e-01),
+    (10, 2, "ku", 0, 2, 18.4210*u.nm,  5.587e-03*u.Unit("s-1"), 8.238e-01),
 ])
 def test_line_quantities_query(foo_session, atomic_number, ion_charge, ds_short_name,
                                lower_level_index, upper_level_index,
@@ -169,10 +170,34 @@ def test_line_quantities_query(foo_session, atomic_number, ion_charge, ds_short_
     assert_quantity_allclose(a_value, expected_a_value)
     assert_quantity_allclose(gf_value, expected_gf_value)
 
+@pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name,"
+                         "lower_level_index, upper_level_index, expected_medium", [
+    (10, 2, "ku", 0, 1, 0),  # vacuum
+    (10, 2, "ku", 0, 2, 1)   # air
+])
+def test_line_wavelength_medium(foo_session, atomic_number, ion_charge, ds_short_name,
+                                lower_level_index, upper_level_index, expected_medium):
+    data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
+    ion = Ion.as_unique(foo_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    lower_level = foo_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == lower_level_index)).one()
+    upper_level = foo_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == upper_level_index)).one()
+    line = foo_session.query(Line). \
+        filter(and_(Line.data_source == data_source,
+                    Line.lower_level == lower_level,
+                    Line.upper_level == upper_level)).one()
+    wavelength = line.wavelengths[0]
+    assert wavelength.medium == expected_medium
+
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index, exp_g", [
-    (10, 2, "ku", 1, 4),
-    (10, 2, "ku", 2, 2),
+    (10, 2, "ku", 0, 4),
+    (10, 2, "ku", 1, 2),
 ])
 def test_level_g_hybrid_attribute(foo_session, atomic_number, ion_charge, ds_short_name, level_index, exp_g):
     data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
@@ -185,8 +210,8 @@ def test_level_g_hybrid_attribute(foo_session, atomic_number, ion_charge, ds_sho
 
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, level_index, exp_g", [
-    (10, 2, "ku", 1, 4),
-    (10, 2, "ku", 2, 2),
+    (10, 2, "ku", 0, 4),
+    (10, 2, "ku", 1, 2),
 ])
 def test_level_g_hybrid_attribute_expression(foo_session, atomic_number, ion_charge, ds_short_name, level_index, exp_g):
     data_source = DataSource.as_unique(foo_session, short_name=ds_short_name)
@@ -200,7 +225,7 @@ def test_level_g_hybrid_attribute_expression(foo_session, atomic_number, ion_cha
 
 @pytest.mark.parametrize("atomic_number, ion_charge, ds_short_name, lower_level_index, upper_level_index,"
                          "expected_energy, expected_temp_strengths", [
-                             (10, 2, "ku", 1, 2, 0.007108*u.rydberg, [(0.0, 0.255), (0.07394, 0.266)]),
+                             (10, 2, "ku", 0, 1, 0.007108*u.rydberg, [(0.0, 0.255), (0.07394, 0.266)]),
                          ])
 def test_e_collision_quantities_query(foo_session, atomic_number, ion_charge, ds_short_name,
                                lower_level_index, upper_level_index,
