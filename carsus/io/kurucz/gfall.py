@@ -408,6 +408,8 @@ class GFALLIngester(object):
                     raise IngesterError("Levels from this source have not been found."
                                         "You must ingest levels before transitions")
 
+                medium = 0 if row["wavelength"] < 200 else 1  # air above 200 nm
+
                 # Create a new line
                 line = Line(
                     lower_level_id=lower_level_id,
@@ -415,6 +417,7 @@ class GFALLIngester(object):
                     data_source=self.data_source,
                     wavelengths=[
                         LineWavelength(quantity=row["wavelength"] * u.nm,
+                                       medium=medium,
                                        data_source=self.data_source)
                     ],
                     gf_values=[
