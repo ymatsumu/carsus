@@ -72,7 +72,7 @@ def foo_engine():
 
     # levels
     ne2_lvl0_ku = Level(
-        ion=ne2, data_source=ku, level_index=1,
+        ion=ne2, data_source=ku, level_index=0,
         configuration="2s2.2p5", term="2P1.5", L="P", J=1.5, spin_multiplicity=2, parity=1,
         energies=[
             LevelEnergy(quantity=0, data_source=ku, method="m"),
@@ -80,15 +80,22 @@ def foo_engine():
         ])
 
     ne2_lvl1_ku = Level(
-        ion=ne2, data_source=ku, level_index=2,
+        ion=ne2, data_source=ku, level_index=1,
         configuration="2s2.2p5", term="2P0.5", L="P", J=0.5, spin_multiplicity=2, parity=1,
         energies=[
             LevelEnergy(quantity=780.4*u.Unit("cm-1"), data_source=ku, method="m"),
             LevelEnergy(quantity=780.0*u.Unit("cm-1"), data_source=ku, method="th")
         ])
 
+    ne2_lvl2_ku = Level(
+        ion=ne2, data_source=ku, level_index=2,
+        configuration="2s2.2p5", term="2D2.5", L="D", J=2.5, spin_multiplicity=2, parity=0,
+        energies=[
+            LevelEnergy(quantity=1366.3*u.Unit("cm-1"), data_source=ku, method="m")
+        ])
+
     ne2_lvl1_ch = Level(
-        ion=ne2, data_source=ch, level_index=2,
+        ion=ne2, data_source=ch, level_index=1,
         configuration="2s2.2p5", term="2P0.5", L="P", J=0.5, spin_multiplicity=2, parity=1,
         energies=[
             LevelEnergy(quantity=780.2*u.Unit("cm-1"), data_source=ch, method="m")
@@ -100,13 +107,28 @@ def foo_engine():
         upper_level=ne2_lvl1_ku,
         data_source=ku,
         wavelengths=[
-            LineWavelength(quantity=155545.188*u.AA, data_source=ch)
+            LineWavelength(quantity=183.571*u.AA, data_source=ku)
         ],
         a_values=[
-            LineAValue(quantity=5.971e-03*u.Unit("s-1"), data_source=ch)
+            LineAValue(quantity=5.971e-03*u.Unit("s-1"), data_source=ku)
         ],
         gf_values=[
-            LineGFValue(quantity=8.792e-01, data_source=ch)
+            LineGFValue(quantity=8.792e-01, data_source=ku)
+        ]
+    )
+
+    ne2_line1_ku = Line(
+        lower_level=ne2_lvl0_ku,
+        upper_level=ne2_lvl2_ku,
+        data_source=ku,
+        wavelengths=[
+            LineWavelength(quantity=18.4210*u.nm, medium=1, data_source=ku)
+        ],
+        a_values=[
+            LineAValue(quantity=5.587e-03*u.Unit("s-1"), data_source=ku)
+        ],
+        gf_values=[
+            LineGFValue(quantity=8.238e-01, data_source=ku)
         ]
     )
 
@@ -127,8 +149,8 @@ def foo_engine():
     )
 
     session.add_all([h, ne, nist, ku, ch, h0, ne1,
-                     ne2_lvl1_ch, ne2_lvl0_ku, ne2_lvl1_ku,
-                     ne2_line0_ku, ne2_e_col0_ku])
+                     ne2_lvl1_ch, ne2_lvl0_ku, ne2_lvl1_ku, ne2_lvl2_ku,
+                     ne2_line0_ku, ne2_line1_ku, ne2_e_col0_ku])
     session.commit()
     session.close()
     return engine
