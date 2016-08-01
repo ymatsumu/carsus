@@ -128,7 +128,7 @@ def test_gfall_ingester_ingest_levels(memory_session, gfall_ingester, atomic_num
 
 @pytest.mark.parametrize("atomic_number, ion_charge, level_index_lower, level_index_upper,"
                          "exp_wavelength, exp_gf_value", [
-    (4, 2, 0, 16, 8.8309*u.nm, 0.12705741),
+    (4, 2, 0, 16, 8.8309*u.nm,  0.12705741),
     (4, 2, 6, 15, 74.6230*u.nm, 2.1330449131)
 ])
 def test_gfall_ingester_ingest_lines(memory_session, gfall_ingester, atomic_number, ion_charge,
@@ -152,3 +152,33 @@ def test_gfall_ingester_ingest_lines(memory_session, gfall_ingester, atomic_numb
     gf_value = line.gf_values[0].quantity
     assert_quantity_allclose(wavelength, exp_wavelength)
     assert_quantity_allclose(gf_value, exp_gf_value)
+
+
+@pytest.mark.parametrize("atomic_number, ion_charge, level_index_lower, level_index_upper,"
+                         "exp_wavelength, exp_medium", [
+    # wavelength air above 200 nm
+    (4, 2, 1, 5, 372.0855*u.nm, 1),
+    (7, 5, 1, 2, 190.7669*u.nm, 0),
+    (7, 5, 5, 6, 297.2049*u.nm, 1)
+])
+def test_gfall_ingester_ingest_lines_wavelength_medium(memory_session, gfall_ingester, atomic_number, ion_charge,
+                                                       level_index_lower, level_index_upper,
+                                                       exp_wavelength, exp_medium):
+    gfall_ingester.ingest(levels=True, lines=True)
+    ion = Ion.as_unique(memory_session, atomic_number=atomic_number, ion_charge=ion_charge)
+    data_source = DataSource.as_unique(memory_session, short_name="ku_latest")
+    lower_level = memory_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == level_index_lower)).one()
+    upper_level = memory_session.query(Level). \
+        filter(and_(Level.data_source == data_source,
+                    Level.ion == ion,
+                    Level.level_index == level_index_upper)).one()
+    line = memory_session.query(Line). \
+        filter(and_(Line.data_source == data_source,
+                    Line.lower_level == lower_level,
+                    Line.upper_level == upper_level)).one()
+    wavelength = line.wavelengths[0]
+    assert_quantity_allclose(wavelength.quantity, exp_wavelength)
+    assert wavelength.medium == exp_medium
