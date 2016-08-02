@@ -435,7 +435,6 @@ class ChiantiIngester(object):
 
                 self.session.add(e_col)
 
-
     def ingest(self, levels=True, lines=False, collisions=False):
 
         if levels:
