@@ -3,11 +3,10 @@ import numpy as np
 import pickle
 import os
 import re
-from pandas import read_sql_query
+
 from numpy.testing import assert_almost_equal
 from astropy import units as u
 from sqlalchemy import and_
-from sqlalchemy.orm.exc import NoResultFound
 from carsus.io.base import IngesterError
 from carsus.util import atomic_number2symbol
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
