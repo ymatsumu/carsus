@@ -235,15 +235,19 @@ class ChiantiIngester(object):
     """
         Class for ingesting data from the CHIANTI database
 
+        Parameters
+        -----------
+        session:  SQLAlchemy session
+        ions:  list of species str, if set to None then masterlist
+            (default None)
+        ds_short_name: str
+            Short name of the datasource
+
         Attributes
         ----------
         session: SQLAlchemy session
-
         data_source: DataSource instance
-            The data source of the ingester
-
-        ion_readers : list of ChiantiIonReader instances, if set to None then masterlist_ions
-            (default value = None)
+        ion_readers : list of ChiantiIonReader instances
 
         Methods
         -------
@@ -253,15 +257,15 @@ class ChiantiIngester(object):
 
     masterlist_ions = masterlist_ions
 
-    def __init__(self, session, ions_list=None, ds_short_name="chianti_v8.0.2"):
+    def __init__(self, session, ions=None, ds_short_name="chianti_v8.0.2"):
         self.session = session
         # ToDo write a parser for Spectral Notation
         self.ion_readers = list()
 
-        if ions_list is None:
-            ions_list = masterlist_ions
+        if ions is None:
+            ions = masterlist_ions
 
-        for ion in ions_list:
+        for ion in ions:
             if ion in self.masterlist_ions:
                 self.ion_readers.append(ChiantiIonReader(ion))
             else:
