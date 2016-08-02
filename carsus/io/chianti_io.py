@@ -297,11 +297,17 @@ class ChiantiIngester(object):
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
+            try:
+                bound_levels_df = rdr.bound_levels_df
+            except ChiantiIonReaderError:
+                print("Levels not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+                continue
+
             print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             # ToDo: Determine parity from configuration
 
-            for index, row in rdr.bound_levels_df.iterrows():
+            for index, row in bound_levels_df.iterrows():
 
                 level = Level(ion=ion, data_source=self.data_source, level_index=index,
                                      configuration=row["configuration"], term=row["term"],
@@ -328,11 +334,17 @@ class ChiantiIngester(object):
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
+            try:
+                bound_lines_df = rdr.bound_lines_df
+            except ChiantiIonReaderError:
+                print("Lines not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+                continue
+
             print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 
-            for index, row in rdr.bound_lines_df.iterrows():
+            for index, row in bound_lines_df.iterrows():
 
                 # index: (lower_level_index, upper_level_index)
                 lower_level_index, upper_level_index = index
@@ -377,11 +389,17 @@ class ChiantiIngester(object):
 
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
+            try:
+                bound_collisions_df = rdr.bound_collisions_df
+            except ChiantiIonReaderError:
+                print("Collisions not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+                continue
+
             print("Ingesting collisions for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
             lvl_index2id_df = self.get_lvl_index2id_df(ion)
 
-            for index, row in rdr.bound_collisions_df.iterrows():
+            for index, row in bound_collisions_df.iterrows():
 
                 # index: (lower_level_index, upper_level_index)
                 lower_level_index, upper_level_index = index
