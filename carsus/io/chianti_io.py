@@ -242,8 +242,8 @@ class ChiantiIngester(object):
         data_source: DataSource instance
             The data source of the ingester
 
-        ion_readers : list of ChiantiIonReader instances
-            (default value = masterlist_ions)
+        ion_readers : list of ChiantiIonReader instances, if set to None then masterlist_ions
+            (default value = None)
 
         Methods
         -------
@@ -253,10 +253,14 @@ class ChiantiIngester(object):
 
     masterlist_ions = masterlist_ions
 
-    def __init__(self, session, ions_list=masterlist_ions, ds_short_name="chianti_v8.0.2"):
+    def __init__(self, session, ions_list=None, ds_short_name="chianti_v8.0.2"):
         self.session = session
         # ToDo write a parser for Spectral Notation
         self.ion_readers = list()
+
+        if ions_list is None:
+            ions_list = masterlist_ions
+
         for ion in ions_list:
             if ion in self.masterlist_ions:
                 self.ion_readers.append(ChiantiIonReader(ion))
