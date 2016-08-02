@@ -24,7 +24,7 @@ if os.getenv('XUVTOP'):
     masterlist_ions = pickle.load(masterlist_ions_file).keys()
     # Exclude the "d" ions for now
     masterlist_ions = [_ for _ in masterlist_ions
-                       if re.match("[a-z]+_\d+", _)]
+                       if re.match("^[a-z]+_\d+$", _)]
 
 else:
     print "Chianti database is not installed!"
