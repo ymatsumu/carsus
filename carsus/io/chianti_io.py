@@ -31,7 +31,7 @@ else:
     masterlist_ions = list()
 
 
-class ReaderError(ValueError):
+class ChiantiIonReaderError(Exception):
     pass
 
 
@@ -153,13 +153,15 @@ class ChiantiIonReader(object):
 
     def _read_levels(self):
 
-        if not hasattr(self.ion, 'Elvlc'):
-            raise ReaderError("No levels data is available for ion {}".format(self.ion.Spectroscopic))
+        try:
+            elvlc = self.ion.Elvlc
+        except AttributeError:
+            raise ChiantiIonReaderError("No levels data is available for ion {}".format(self.ion.Spectroscopic))
 
         levels_dict = {}
 
         for key, col_name in self.elvlc_dict.iteritems():
-            levels_dict[col_name] = self.ion.Elvlc.get(key)
+            levels_dict[col_name] = elvlc.get(key)
 
         # Check that ground level energy is 0
         try:
@@ -181,13 +183,16 @@ class ChiantiIonReader(object):
         self._levels_df.sort_index(inplace=True)
 
     def _read_lines(self):
-        if not hasattr(self.ion, 'Wgfa'):
-            raise ReaderError("No lines data is available for ion {}".format(self.ion.Spectroscopic))
+
+        try:
+            wgfa = self.ion.Wgfa
+        except AttributeError:
+            raise ChiantiIonReaderError("No lines data is available for ion {}".format(self.ion.Spectroscopic))
 
         lines_dict = {}
 
         for key, col_name in self.wgfa_dict.iteritems():
-            lines_dict[col_name] = self.ion.Wgfa.get(key)
+            lines_dict[col_name] = wgfa.get(key)
 
         self._lines_df = pd.DataFrame(lines_dict)
 
@@ -210,13 +215,16 @@ class ChiantiIonReader(object):
         self._lines_df.sort_index(inplace=True)
 
     def _read_collisions(self):
-        if not hasattr(self.ion, 'Scups'):
-            raise ("No collision data is available for ion {}".format(self.ion.Spectroscopic))
+
+        try:
+            scups = self.ion.Scups
+        except AttributeError:
+            raise ChiantiIonReaderError("No collision data is available for ion {}".format(self.ion.Spectroscopic))
 
         collisions_dict = {}
 
         for key, col_name in self.scups_dict.iteritems():
-            collisions_dict[col_name] = self.ion.Scups.get(key)
+            collisions_dict[col_name] = scups.get(key)
 
         self._collisions_df = pd.DataFrame(collisions_dict)
 
