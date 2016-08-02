@@ -615,7 +615,9 @@ class AtomData(object):
                 (atomic_number, atomic_number, 0, 0.0, 1, 1)
             )
 
-        fully_ionized_levels_dtypes = zip(levels_prepared.dtypes.index, levels_prepared.dtypes)
+        levels_columns = ["atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
+        fully_ionized_levels_dtypes = [(key, levels_prepared.dtypes[key]) for key in levels_columns]
+
         fully_ionized_levels = np.array(fully_ionized_levels, dtype=fully_ionized_levels_dtypes)
 
         return pd.DataFrame(data=fully_ionized_levels)
