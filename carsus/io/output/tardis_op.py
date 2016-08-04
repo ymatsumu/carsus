@@ -723,7 +723,10 @@ class AtomData(object):
                 DataFrame with:
         """
 
-        levels_idx = self.levels.index.values
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
+
+        levels_idx = levels.index.values
         collisions_q = self._build_collisions_q(levels_idx)
 
         collisions = list()
@@ -750,9 +753,9 @@ class AtomData(object):
         collisions = pd.DataFrame.from_records(collisions, index="e_col_id")
 
         # Join atomic_number, ion_number, level_number_lower, level_number_upper
-        lower_levels = self.levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
+        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
                               loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
-        upper_levels = self.levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
                               loc[:, ["level_number_upper", "g_u", "energy_upper"]]
 
         collisions = collisions.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
