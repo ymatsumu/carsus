@@ -523,7 +523,7 @@ class AtomData(object):
 
         for atomic_number, _ in levels.groupby("atomic_number"):
             fully_ionized_levels.append(
-                (-1, atomic_number, atomic_number, 0, 0.0, 1, 1)
+                (-1, atomic_number, atomic_number, 0, 0.0, 1, True)
             )
 
         levels_columns = ["level_id", "atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
