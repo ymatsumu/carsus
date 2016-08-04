@@ -944,24 +944,22 @@ class AtomData(object):
             -------
             macro_atom_reference : pandas.DataFrame
                 DataFrame with:
-                index: level_id;
+                index: no index;
                 and columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total
         """
+        macro_atom_references = self.levels.rename(columns={"level_number": "source_level_number"}).\
+                                       loc[:, ["atomic_number", "ion_number", "source_level_number", "level_id"]]
 
-        levels = self.levels.copy()
-        lines = self.lines.copy()
-
-        macro_atom_references = levels.rename(columns={"level_number": "source_level_number"}).\
-                                       loc[:, ["atomic_number", "ion_number", "source_level_number"]]
-
-        count_down = lines.groupby("upper_level_id").size()
+        count_down = self.lines.groupby("upper_level_id").size()
         count_down.name = "count_down"
 
-        count_up = lines.groupby("lower_level_id").size()
+        count_up = self.lines.groupby("lower_level_id").size()
         count_up.name = "count_up"
 
-        macro_atom_references = macro_atom_references.join(count_down).join(count_up)
-        macro_atom_references.fillna(0, inplace=True)
+        macro_atom_references = macro_atom_references.join(count_down, on="level_id").join(count_up, on="level_id")
+        macro_atom_references = macro_atom_references.drop("level_id", axis=1)
+
+        macro_atom_references = macro_atom_references.fillna(0)
         macro_atom_references["count_total"] = 2*macro_atom_references["count_down"] + macro_atom_references["count_up"]
 
         # Convert to int
