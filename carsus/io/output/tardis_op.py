@@ -811,15 +811,14 @@ class AtomData(object):
                     columns: e_col_id, delta_e, g_ratio, c_ul.
         """
 
-        collisions_prepared = self.collisions.copy()
-
-        # Drop the unwanted columns
-        collisions_prepared.drop(["lower_level_id", "upper_level_id", "ds_id", "btemp", "bscups",
-                            "ttype", "energy_lower", "energy_upper", "gf", "g_l", "g_u", "cups"],  axis=1, inplace=True)
+        collisions_prepared = self.collisions.loc[:, ["atomic_number", "ion_number",
+                                                      "level_number_lower", "level_number_upper",
+                                                      "e_col_id", "delta_e", "g_ratio", "c_ul"]].copy()
 
         # Set multiindex
-        collisions_prepared.reset_index(inplace=True)
-        collisions_prepared.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        collisions_prepared = collisions_prepared.reset_index(inplace=True)
+        collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
+                                                             "level_number_lower", "level_number_upper"], inplace=True)
 
         return collisions_prepared
 
