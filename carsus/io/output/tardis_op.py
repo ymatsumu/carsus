@@ -308,7 +308,8 @@ class AtomData(object):
                 index: atomic_number;
                 columns: symbol, name, mass[u].
         """
-        atom_masses_prepared = self.atom_masses.set_index("atomic_number")
+        atom_masses_prepared = self.atom_masses.loc[:, ["atomic_number", "symbol", "name", "mass"]].copy()
+        atom_masses_prepared = atom_masses_prepared.set_index("atomic_number")
 
         return atom_masses_prepared
 
