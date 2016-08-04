@@ -112,8 +112,11 @@ def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be2, test_session):
 
 
 def test_atom_data_wo_chianti_ions_levels(atom_data_only_be2):
-    levels402 = atom_data_only_be2.levels.copy()
-    assert ((levels402["atomic_number"] == 4) & (levels402["ion_number"] == 2)).all()
+    levels402 = atom_data_only_be2.levels
+    ions_in_levels402 = levels402.loc[:, ("atomic_number", "ion_number")].to_records(index=False).tolist()
+    # Exclude fully ionized, it is supposed to be there
+    ions_in_levels402 = [ion for ion in ions_in_levels402 if ion != (4, 4)]
+    assert all([ion == (4, 2) for ion in ions_in_levels402])
 
 
 @with_test_db
