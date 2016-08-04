@@ -638,13 +638,11 @@ class AtomData(object):
                 columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable.
         """
 
-        levels_prepared = self.levels.copy()
+        levels_prepared = self.levels.loc[:, ["atomic_number", "ion_number", "level_number",
+                                              "energy", "g", "metastable"]].copy()
 
         # Set index
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
-
-        # Drop the unwanted columns
-        levels_prepared.drop(["level_id"], axis=1, inplace=True)
 
         return levels_prepared
 
@@ -661,16 +659,16 @@ class AtomData(object):
             lines_prepared : pandas.DataFrame
                 DataFrame with:
                     index: none;
-                    columns: lind_id, atomic_number, ion_number, level_number_lower, level_number_upper,
+                    columns: line_id, atomic_number, ion_number, level_number_lower, level_number_upper,
                              wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
-        lines_prepared = self.lines.copy()
+
+        lines_prepared = self.lines.loc[:, ["line_id", "wavelength", "atomic_number", "ion_number",
+                                            "f_ul", "f_lu", "level_number_lower", "level_number_upper",
+                                            "nu", "B_lu", "B_ul", "A_ul"]].copy()
 
         # Set the index
         # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
-
-        # Drop the unwanted columns
-        lines_prepared.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id"], axis=1, inplace=True)
 
         return lines_prepared
 
