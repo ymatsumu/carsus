@@ -310,13 +310,6 @@ class AtomData(object):
         """
         atom_masses_prepared = self.atom_masses.set_index("atomic_number")
 
-        # We have to use constants.u because astropy uses different values for the unit u and the constant.
-        # This is changed in later versions of astropy (the value of constants.u is used in all cases)
-        if u.u.cgs == const.u.cgs:
-            atom_masses_prepared["mass"] = Quantity(atom_masses_prepared["mass"].values, "u").cgs
-        else:
-            atom_masses_prepared["mass"] = atom_masses_prepared["mass"].values * const.u.cgs
-
         return atom_masses_prepared
 
     @property
@@ -364,7 +357,7 @@ class AtomData(object):
         ionization_energies : pandas.DataFrame
             DataFrame with:
                 index: atomic_number, ion_number;
-                columns: ionization_energy[CGS].
+                columns: ionization_energy[eV].
 
         Notes
         ------
@@ -376,10 +369,6 @@ class AtomData(object):
         """
         ionization_energies_prepared = self.ionization_energies.copy()
         ionization_energies_prepared["ion_number"] += 1
-
-        # Convert ionization energies to CGS
-        ionization_energies_prepared["ionization_energy"] = Quantity(
-            ionization_energies_prepared["ionization_energy"].values, "eV").cgs
 
         ionization_energies_prepared.set_index(["atomic_number", "ion_number"], inplace=True)
 
@@ -645,7 +634,7 @@ class AtomData(object):
         levels_prepared: pandas.DataFrame
             DataFrame with:
                 index: none;
-                columns: atomic_number, ion_number, level_number, energy[CGS], g[1], metastable.
+                columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable.
         """
 
         levels_prepared = self.levels.copy()
@@ -655,9 +644,6 @@ class AtomData(object):
 
         # Drop the unwanted columns
         levels_prepared.drop(["level_id"], axis=1, inplace=True)
-
-        # Covert energy to CGS
-        levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
 
         return levels_prepared
 
@@ -675,15 +661,12 @@ class AtomData(object):
                 DataFrame with:
                     index: none;
                     columns: lind_id, atomic_number, ion_number, level_number_lower, level_number_upper,
-                             wavelength[angstrom], wavelength_cm[CGS], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
+                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
         lines_prepared = self.lines.copy()
 
         # Set the index
         # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
-
-        # Create a new columns with wavelengths in the CGS units
-        lines_prepared['wavelength_cm'] = Quantity(lines_prepared['wavelength'], 'angstrom').cgs
 
         # Drop the unwanted columns
         lines_prepared.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id"], axis=1, inplace=True)
