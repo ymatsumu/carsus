@@ -644,6 +644,8 @@ class AtomData(object):
         # Set index
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
+        levels_prepared = levels_prepared.reset_index(drop=True)
+
         return levels_prepared
 
     @property
@@ -669,6 +671,8 @@ class AtomData(object):
 
         # Set the index
         # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+
+        lines_prepared = lines_prepared.reset_index(drop=True)
 
         return lines_prepared
 
@@ -910,6 +914,8 @@ class AtomData(object):
         # Rename `target_level_number` to `destination_level_number` used in TARDIS
         # Personally, I think `target_level_number` is better so I use it in Carsus.
         macro_atom_prepared = macro_atom_prepared.rename(columns={"target_level_number": "destination_level_number"})
+
+        macro_atom_prepared = macro_atom_prepared.reset_index(drop=True)
 
         return macro_atom_prepared
 
