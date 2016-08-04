@@ -508,11 +508,10 @@ class AtomData(object):
         metastable_counts = metastable_lines_grouped["upper_level_id"].count()
         metastable_counts.name = "metastable_counts"
 
-        # If there are no strong transitions for a level (the count is NaN) then the metastable flag is 1
-        # else (the count is a natural number) the metastable flag is 0
+        # If there are no strong transitions for a level (the count is NaN) then the metastable flag is True
+        # else (the count is a natural number) the metastable flag is False
         levels = levels.join(metastable_counts)
         metastable_flags = levels["metastable_counts"].isnull()
-        metastable_flags = metastable_flags.apply(lambda x: 1 if x else 0)  # convert bool to 0/1
         metastable_flags.name = "metastable"
 
         return metastable_flags
@@ -524,7 +523,7 @@ class AtomData(object):
 
         for atomic_number, _ in levels.groupby("atomic_number"):
             fully_ionized_levels.append(
-                (-1, atomic_number, atomic_number, 0, 0.0, 1, 1)
+                (-1, atomic_number, atomic_number, 0, 0.0, 1, True)
             )
 
         levels_columns = ["level_id", "atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
