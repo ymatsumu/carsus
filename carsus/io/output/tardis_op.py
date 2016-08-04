@@ -528,6 +528,23 @@ class AtomData(object):
 
         return metastable_flags
 
+    @staticmethod
+    def _create_artificial_fully_ionized(levels):
+        """ Create artificial levels for fully ionized ions. """
+        fully_ionized_levels = list()
+
+        for atomic_number, _ in levels.groupby("atomic_number"):
+            fully_ionized_levels.append(
+                (-1, atomic_number, atomic_number, 0, 0.0, 1, 1)
+            )
+
+        levels_columns = ["level_id", "atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
+        fully_ionized_levels_dtypes = [(key, levels.dtypes[key]) for key in levels_columns]
+
+        fully_ionized_levels = np.array(fully_ionized_levels, dtype=fully_ionized_levels_dtypes)
+
+        return pd.DataFrame(data=fully_ionized_levels)
+
     def create_levels_lines(self, levels_metastable_loggf_threshold=-3, lines_loggf_threshold=-3):
         """
         Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
@@ -569,7 +586,6 @@ class AtomData(object):
         lines = lines_all.join(pd.DataFrame(index=levels.index), on="lower_level_id", how="inner").\
             join(pd.DataFrame(index=levels.index), on="upper_level_id", how="inner")
 
-
         # Culling lines with low gf values
         lines = lines.loc[lines["loggf"] > lines_loggf_threshold]
 
@@ -604,28 +620,21 @@ class AtomData(object):
         lines['B_ul'] = einstein_coeff * lines['f_ul'] / (const.h.cgs.value * lines['nu'])
         lines['A_ul'] = 2 * einstein_coeff * lines['nu'] ** 2 / const.c.cgs.value ** 2 * lines['f_ul']
 
+        # Reset indexes because `level_id` cannot be an index once we
+        # add artificial levels for fully ionized ions that don't have ids (-1)
+        lines = lines.reset_index()
+        levels = levels.reset_index()
+
+        # Create and append artificial levels for fully ionized ions
+        artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels)
+        levels = levels.append(artificial_fully_ionized_levels, ignore_index=True)
+        levels = levels.sort_values(["atomic_number", "ion_number", "level_number"])
+
         return levels, lines
 
     @property
     def levels_prepared(self):
         return self.prepare_levels()
-
-    @staticmethod
-    def _create_artificial_fully_ionized(levels_prepared):
-
-        fully_ionized_levels = list()
-
-        for atomic_number, _ in levels_prepared.groupby("atomic_number"):
-            fully_ionized_levels.append(
-                (atomic_number, atomic_number, 0, 0.0, 1, 1)
-            )
-
-        levels_columns = ["atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
-        fully_ionized_levels_dtypes = [(key, levels_prepared.dtypes[key]) for key in levels_columns]
-
-        fully_ionized_levels = np.array(fully_ionized_levels, dtype=fully_ionized_levels_dtypes)
-
-        return pd.DataFrame(data=fully_ionized_levels)
 
     def prepare_levels(self):
         """
@@ -642,17 +651,10 @@ class AtomData(object):
         levels_prepared = self.levels.copy()
 
         # Set index
-        levels_prepared.reset_index(inplace=True)
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
         # Drop the unwanted columns
         levels_prepared.drop(["level_id"], axis=1, inplace=True)
-
-        # Create and append artificial fully ionized ions
-        artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels_prepared)
-
-        levels_prepared = levels_prepared.append(artificial_fully_ionized_levels, ignore_index=True)
-        levels_prepared.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
 
         # Covert energy to CGS
         levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
@@ -678,7 +680,6 @@ class AtomData(object):
         lines_prepared = self.lines.copy()
 
         # Set the index
-        lines_prepared.reset_index(inplace=True)
         # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
         # Create a new columns with wavelengths in the CGS units
@@ -720,7 +721,10 @@ class AtomData(object):
                 DataFrame with:
         """
 
-        levels_idx = self.levels.index.values
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
+
+        levels_idx = levels.index.values
         collisions_q = self._build_collisions_q(levels_idx)
 
         collisions = list()
@@ -747,9 +751,9 @@ class AtomData(object):
         collisions = pd.DataFrame.from_records(collisions, index="e_col_id")
 
         # Join atomic_number, ion_number, level_number_lower, level_number_upper
-        lower_levels = self.levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
+        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
                               loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
-        upper_levels = self.levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
                               loc[:, ["level_number_upper", "g_u", "energy_upper"]]
 
         collisions = collisions.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
@@ -859,14 +863,13 @@ class AtomData(object):
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
 
         """
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
 
-        levels = self.levels.copy()
-        lines = self.lines.copy()
+        lvl_energy_lower = levels.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
+        lvl_energy_upper = levels.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
 
-        lvl_energy_lower = self.levels.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
-        lvl_energy_upper = self.levels.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
-
-        lines = lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
+        lines = self.lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
 
         macro_atom = list()
         macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
@@ -895,7 +898,7 @@ class AtomData(object):
         macro_atom = np.array(macro_atom, dtype=macro_atom_dtype)
         macro_atom = pd.DataFrame(macro_atom)
 
-        macro_atom.sort_values(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom = macro_atom.sort_values(["atomic_number", "ion_number", "source_level_number"])
 
         return macro_atom
 
@@ -939,24 +942,22 @@ class AtomData(object):
             -------
             macro_atom_reference : pandas.DataFrame
                 DataFrame with:
-                index: level_id;
+                index: no index;
                 and columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total
         """
+        macro_atom_references = self.levels.rename(columns={"level_number": "source_level_number"}).\
+                                       loc[:, ["atomic_number", "ion_number", "source_level_number", "level_id"]]
 
-        levels = self.levels.copy()
-        lines = self.lines.copy()
-
-        macro_atom_references = levels.rename(columns={"level_number": "source_level_number"}).\
-                                       loc[:, ["atomic_number", "ion_number", "source_level_number"]]
-
-        count_down = lines.groupby("upper_level_id").size()
+        count_down = self.lines.groupby("upper_level_id").size()
         count_down.name = "count_down"
 
-        count_up = lines.groupby("lower_level_id").size()
+        count_up = self.lines.groupby("lower_level_id").size()
         count_up.name = "count_up"
 
-        macro_atom_references = macro_atom_references.join(count_down).join(count_up)
-        macro_atom_references.fillna(0, inplace=True)
+        macro_atom_references = macro_atom_references.join(count_down, on="level_id").join(count_up, on="level_id")
+        macro_atom_references = macro_atom_references.drop("level_id", axis=1)
+
+        macro_atom_references = macro_atom_references.fillna(0)
         macro_atom_references["count_total"] = 2*macro_atom_references["count_down"] + macro_atom_references["count_up"]
 
         # Convert to int

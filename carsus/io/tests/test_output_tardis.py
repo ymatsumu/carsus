@@ -112,8 +112,11 @@ def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be2, test_session):
 
 
 def test_atom_data_wo_chianti_ions_levels(atom_data_only_be2):
-    levels402 = atom_data_only_be2.levels.copy()
-    assert ((levels402["atomic_number"] == 4) & (levels402["ion_number"] == 2)).all()
+    levels402 = atom_data_only_be2.levels
+    ions_in_levels402 = levels402.loc[:, ("atomic_number", "ion_number")].to_records(index=False).tolist()
+    # Exclude fully ionized, it is supposed to be there
+    ions_in_levels402 = [ion for ion in ions_in_levels402 if ion != (4, 4)]
+    assert all([ion == (4, 2) for ion in ions_in_levels402])
 
 
 @with_test_db
@@ -288,10 +291,9 @@ def test_create_lines_loggf_treshold(lines, atomic_number, ion_number, level_num
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number", [2, 14, 30])
-def test_levels_prepare_create_artificial_ions(levels_prepared, atomic_number):
-    levels_prepared = levels_prepared.set_index(["atomic_number", "ion_number", "level_number"])
-    energy, g, metastable = levels_prepared.loc[(atomic_number, atomic_number, 0),
-                                                ["energy", "g", "metastable"]]
+def test_levels_create_artificial_fully_ionized(levels, atomic_number):
+    levels = levels.set_index(["atomic_number", "ion_number", "level_number"])
+    energy, g, metastable = levels.loc[(atomic_number, atomic_number, 0), ["energy", "g", "metastable"]]
     assert_almost_equal(energy, 0.0)
     assert g == 1
     assert metastable == 1
@@ -310,6 +312,24 @@ def test_create_macro_atom_df(macro_atom):
 @with_test_db
 def test_create_macro_atom_ref_df(macro_atom_references):
     assert True
+
+
+@with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, source_level_number", [
+    (2, 2, 0),
+    (5, 5, 0),
+    (30, 19, 0),
+    (30, 30, 0)
+])
+def test_create_macro_atom_references_levels_wo_lines(macro_atom_references, atomic_number,
+                                                      ion_number, source_level_number):
+    macro_atom_references = macro_atom_references.set_index(
+        ["atomic_number", "ion_number", "source_level_number"]
+    )
+    count_up, count_down, count_total = macro_atom_references.loc[
+        (atomic_number, ion_number, source_level_number), ("count_up", "count_down", "count_total")
+    ]
+    assert all([count == 0 for count in [count_up, count_down, count_total]])
 
 
 @with_test_db
