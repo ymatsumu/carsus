@@ -308,7 +308,8 @@ class AtomData(object):
                 index: atomic_number;
                 columns: symbol, name, mass[u].
         """
-        atom_masses_prepared = self.atom_masses.set_index("atomic_number")
+        atom_masses_prepared = self.atom_masses.loc[:, ["atomic_number", "symbol", "name", "mass"]].copy()
+        atom_masses_prepared = atom_masses_prepared.set_index("atomic_number")
 
         return atom_masses_prepared
 
@@ -367,10 +368,11 @@ class AtomData(object):
         e.g. H I - H II is described with ion_number = 0
         For this reason we add 1 to `ion_number` in this prepare method.
         """
-        ionization_energies_prepared = self.ionization_energies.copy()
-        ionization_energies_prepared["ion_number"] += 1
+        ionization_energies_prepared = self.ionization_energies.loc[:, ["atomic_number", "ion_number",
+                                                                        "ionization_energy"]].copy()
+        ionization_energies_prepared.loc[:, "ion_number"] += 1
 
-        ionization_energies_prepared.set_index(["atomic_number", "ion_number"], inplace=True)
+        ionization_energies_prepared = ionization_energies_prepared.set_index(["atomic_number", "ion_number"])
 
         return ionization_energies_prepared
 
@@ -636,13 +638,13 @@ class AtomData(object):
                 columns: atomic_number, ion_number, level_number, energy[eV], g[1], metastable.
         """
 
-        levels_prepared = self.levels.copy()
+        levels_prepared = self.levels.loc[:, ["atomic_number", "ion_number", "level_number",
+                                              "energy", "g", "metastable"]].copy()
 
         # Set index
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
-        # Drop the unwanted columns
-        levels_prepared.drop(["level_id"], axis=1, inplace=True)
+        levels_prepared = levels_prepared.reset_index(drop=True)
 
         return levels_prepared
 
@@ -659,16 +661,18 @@ class AtomData(object):
             lines_prepared : pandas.DataFrame
                 DataFrame with:
                     index: none;
-                    columns: lind_id, atomic_number, ion_number, level_number_lower, level_number_upper,
+                    columns: line_id, atomic_number, ion_number, level_number_lower, level_number_upper,
                              wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
-        lines_prepared = self.lines.copy()
+
+        lines_prepared = self.lines.loc[:, ["line_id", "wavelength", "atomic_number", "ion_number",
+                                            "f_ul", "f_lu", "level_number_lower", "level_number_upper",
+                                            "nu", "B_lu", "B_ul", "A_ul"]].copy()
 
         # Set the index
         # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
-        # Drop the unwanted columns
-        lines_prepared.drop(["g_l", "g_u", "gf", "lower_level_id", "upper_level_id"], axis=1, inplace=True)
+        lines_prepared = lines_prepared.reset_index(drop=True)
 
         return lines_prepared
 
@@ -811,15 +815,14 @@ class AtomData(object):
                     columns: e_col_id, delta_e, g_ratio, c_ul.
         """
 
-        collisions_prepared = self.collisions.copy()
-
-        # Drop the unwanted columns
-        collisions_prepared.drop(["lower_level_id", "upper_level_id", "ds_id", "btemp", "bscups",
-                            "ttype", "energy_lower", "energy_upper", "gf", "g_l", "g_u", "cups"],  axis=1, inplace=True)
+        collisions_prepared = self.collisions.loc[:, ["atomic_number", "ion_number",
+                                                      "level_number_lower", "level_number_upper",
+                                                      "e_col_id", "delta_e", "g_ratio", "c_ul"]].copy()
 
         # Set multiindex
-        collisions_prepared.reset_index(inplace=True)
-        collisions_prepared.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
+        collisions_prepared = collisions_prepared.reset_index(inplace=True)
+        collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
+                                                             "level_number_lower", "level_number_upper"], inplace=True)
 
         return collisions_prepared
 
@@ -901,12 +904,18 @@ class AtomData(object):
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
         """
-        macro_atom_prepared = self.macro_atom.copy()
+
+        macro_atom_prepared = self.macro_atom.loc[:, ["atomic_number", "ion_number",
+                                                      "source_level_number", "target_level_number",
+                                                      "transition_type", "transition_probability",
+                                                      "transition_line_id"]].copy()
 
         # ToDo: choose between `target_level_number` and `destination_level_number`
         # Rename `target_level_number` to `destination_level_number` used in TARDIS
         # Personally, I think `target_level_number` is better so I use it in Carsus.
-        macro_atom_prepared.rename(columns={"target_level_number": "destination_level_number"}, inplace=True)
+        macro_atom_prepared = macro_atom_prepared.rename(columns={"target_level_number": "destination_level_number"})
+
+        macro_atom_prepared = macro_atom_prepared.reset_index(drop=True)
 
         return macro_atom_prepared
 
@@ -964,10 +973,11 @@ class AtomData(object):
                     index: none;
                     columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
-        macro_atom_references_prepared = self.macro_atom_references.copy()
+        macro_atom_references_prepared = self.macro_atom_references.loc[:, ["atomic_number", "ion_number",
+                                                                            "source_level_number", "count_down",
+                                                                            "count_up", "count_total"]].copy()
 
-        macro_atom_references_prepared.reset_index(inplace=True)
-        # macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_references_prepared = macro_atom_references_prepared.reset_index(drop=True)
 
         return macro_atom_references_prepared
 
