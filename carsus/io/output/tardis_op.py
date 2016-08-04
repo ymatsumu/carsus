@@ -528,6 +528,23 @@ class AtomData(object):
 
         return metastable_flags
 
+    @staticmethod
+    def _create_artificial_fully_ionized(levels):
+
+        fully_ionized_levels = list()
+
+        for atomic_number, _ in levels.groupby("atomic_number"):
+            fully_ionized_levels.append(
+                (-1, atomic_number, atomic_number, 0, 0.0, 1, 1)
+            )
+
+        levels_columns = ["level_id", "atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
+        fully_ionized_levels_dtypes = [(key, levels.dtypes[key]) for key in levels_columns]
+
+        fully_ionized_levels = np.array(fully_ionized_levels, dtype=fully_ionized_levels_dtypes)
+
+        return pd.DataFrame(data=fully_ionized_levels)
+
     def create_levels_lines(self, levels_metastable_loggf_threshold=-3, lines_loggf_threshold=-3):
         """
         Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
@@ -569,7 +586,6 @@ class AtomData(object):
         lines = lines_all.join(pd.DataFrame(index=levels.index), on="lower_level_id", how="inner").\
             join(pd.DataFrame(index=levels.index), on="upper_level_id", how="inner")
 
-
         # Culling lines with low gf values
         lines = lines.loc[lines["loggf"] > lines_loggf_threshold]
 
@@ -604,28 +620,21 @@ class AtomData(object):
         lines['B_ul'] = einstein_coeff * lines['f_ul'] / (const.h.cgs.value * lines['nu'])
         lines['A_ul'] = 2 * einstein_coeff * lines['nu'] ** 2 / const.c.cgs.value ** 2 * lines['f_ul']
 
+        # Reset indexes because `level_id` cannot be an index once we
+        # add artificial levels for fully ionized ions that don't have ids (-1)
+        lines = lines.reset_index()
+        levels = levels.reset_index()
+
+        # Create and append artificial levels for fully ionized ions
+        artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels)
+        levels = levels.append(artificial_fully_ionized_levels, ignore_index=True)
+        levels = levels.sort_values(["atomic_number", "ion_number", "level_number"])
+
         return levels, lines
 
     @property
     def levels_prepared(self):
         return self.prepare_levels()
-
-    @staticmethod
-    def _create_artificial_fully_ionized(levels_prepared):
-
-        fully_ionized_levels = list()
-
-        for atomic_number, _ in levels_prepared.groupby("atomic_number"):
-            fully_ionized_levels.append(
-                (atomic_number, atomic_number, 0, 0.0, 1, 1)
-            )
-
-        levels_columns = ["atomic_number", "ion_number", "level_number", "energy", "g", "metastable"]
-        fully_ionized_levels_dtypes = [(key, levels_prepared.dtypes[key]) for key in levels_columns]
-
-        fully_ionized_levels = np.array(fully_ionized_levels, dtype=fully_ionized_levels_dtypes)
-
-        return pd.DataFrame(data=fully_ionized_levels)
 
     def prepare_levels(self):
         """
