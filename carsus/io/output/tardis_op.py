@@ -865,14 +865,13 @@ class AtomData(object):
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
 
         """
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
 
-        levels = self.levels.copy()
-        lines = self.lines.copy()
+        lvl_energy_lower = levels.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
+        lvl_energy_upper = levels.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
 
-        lvl_energy_lower = self.levels.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
-        lvl_energy_upper = self.levels.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
-
-        lines = lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
+        lines = self.lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
 
         macro_atom = list()
         macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
@@ -901,7 +900,7 @@ class AtomData(object):
         macro_atom = np.array(macro_atom, dtype=macro_atom_dtype)
         macro_atom = pd.DataFrame(macro_atom)
 
-        macro_atom.sort_values(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom = macro_atom.sort_values(["atomic_number", "ion_number", "source_level_number"])
 
         return macro_atom
 
