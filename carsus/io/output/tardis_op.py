@@ -651,7 +651,6 @@ class AtomData(object):
         levels_prepared = self.levels.copy()
 
         # Set index
-        levels_prepared.reset_index(inplace=True)
         # levels.set_index(["atomic_number", "ion_number", "level_number"], inplace=True)
 
         # Drop the unwanted columns
@@ -681,7 +680,6 @@ class AtomData(object):
         lines_prepared = self.lines.copy()
 
         # Set the index
-        lines_prepared.reset_index(inplace=True)
         # lines.set_index(["atomic_number", "ion_number", "level_number_lower", "level_number_upper"], inplace=True)
 
         # Create a new columns with wavelengths in the CGS units
