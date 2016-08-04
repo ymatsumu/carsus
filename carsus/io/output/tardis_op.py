@@ -900,12 +900,16 @@ class AtomData(object):
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
         """
-        macro_atom_prepared = self.macro_atom.copy()
+        
+        macro_atom_prepared = self.macro_atom.loc[:, ["atomic_number", "ion_number",
+                                                      "source_level_number", "target_level_number",
+                                                      "transition_type", "transition_probability",
+                                                      "transition_line_id"]].copy()
 
         # ToDo: choose between `target_level_number` and `destination_level_number`
         # Rename `target_level_number` to `destination_level_number` used in TARDIS
         # Personally, I think `target_level_number` is better so I use it in Carsus.
-        macro_atom_prepared.rename(columns={"target_level_number": "destination_level_number"}, inplace=True)
+        macro_atom_prepared = macro_atom_prepared.rename(columns={"target_level_number": "destination_level_number"})
 
         return macro_atom_prepared
 
