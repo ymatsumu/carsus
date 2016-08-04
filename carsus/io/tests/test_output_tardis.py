@@ -288,10 +288,9 @@ def test_create_lines_loggf_treshold(lines, atomic_number, ion_number, level_num
 
 @with_test_db
 @pytest.mark.parametrize("atomic_number", [2, 14, 30])
-def test_levels_prepare_create_artificial_ions(levels_prepared, atomic_number):
-    levels_prepared = levels_prepared.set_index(["atomic_number", "ion_number", "level_number"])
-    energy, g, metastable = levels_prepared.loc[(atomic_number, atomic_number, 0),
-                                                ["energy", "g", "metastable"]]
+def test_levels_create_artificial_fully_ionized(levels, atomic_number):
+    levels = levels.set_index(["atomic_number", "ion_number", "level_number"])
+    energy, g, metastable = levels.loc[(atomic_number, atomic_number, 0), ["energy", "g", "metastable"]]
     assert_almost_equal(energy, 0.0)
     assert g == 1
     assert metastable == 1
