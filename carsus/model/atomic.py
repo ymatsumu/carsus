@@ -209,6 +209,7 @@ class LineWavelength(LineQuantity):
 
     unit = u.Angstrom
 
+    medium = Column(Integer, default=0)  # 0 - vacuum, 1 - air
     line = relationship("Line", back_populates="wavelengths")
 
     __mapper_args__ = {

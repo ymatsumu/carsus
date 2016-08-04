@@ -13,6 +13,9 @@ from carsus.io.base import IngesterError
 from carsus.util import atomic_number2symbol
 from tardis.util import species_string_to_tuple
 
+GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
+MEDIUM_VACUUM = 0
+MEDIUM_AIR = 1
 
 class GFALLReader(object):
     """
@@ -408,6 +411,8 @@ class GFALLIngester(object):
                     raise IngesterError("Levels from this source have not been found."
                                         "You must ingest levels before transitions")
 
+                medium = MEDIUM_VACUUM if row["wavelength"] <= GFALL_AIR_THRESHOLD else MEDIUM_AIR
+
                 # Create a new line
                 line = Line(
                     lower_level_id=lower_level_id,
@@ -415,6 +420,7 @@ class GFALLIngester(object):
                     data_source=self.data_source,
                     wavelengths=[
                         LineWavelength(quantity=row["wavelength"] * u.nm,
+                                       medium=medium,
                                        data_source=self.data_source)
                     ],
                     gf_values=[

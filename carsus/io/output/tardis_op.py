@@ -22,9 +22,16 @@ P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
+MEDIUM_VACUUM = 0
+MEDIUM_AIR = 1
+
 LINES_MAXRQ = 10000  # for yield_limit
 
 ZETA_DATAFILE = data_path("knox_long_recombination_zeta.dat")
+
+
+class AtomDataUnrecognizedMediumError(Exception):
+    pass
 
 
 class AtomData(object):
@@ -476,11 +483,21 @@ class AtomData(object):
                 continue
             try:
                 # Try to get the first wavelength
-                wavelength = line.wavelengths[0].quantity
+                wavelength = line.wavelengths[0]
             except IndexError:
                 print "No wavelength is available for line {0}".format(line.line_id)
                 continue
-            lines.append((line.line_id, line.lower_level_id, line.upper_level_id, wavelength.value, gf.value))
+
+            if wavelength.medium == MEDIUM_VACUUM:
+                wavelength_value = wavelength.quantity.value
+            elif wavelength.medium == MEDIUM_AIR:
+                wavelength_value = convert_wavelength_air2vacuum(wavelength.quantity.value)
+            else:
+                raise AtomDataUnrecognizedMediumError(
+                    "The medium {} is not recognized (0 - vacuum, 1 - air)".format(wavelength.medium)
+                )
+
+            lines.append((line.line_id, line.lower_level_id, line.upper_level_id, wavelength_value, gf.value))
 
         lines_dtype = [("line_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
                        ("wavelength", np.float), ("gf", np.float)]
@@ -490,15 +507,6 @@ class AtomData(object):
         lines["loggf"] = np.log10(lines["gf"])
 
         return lines
-
-    def _convert_wavelength_air2vacuum(self, row):
-        # This is a hack and will be removed once the `medium` culumn has been introduced
-        atomic_number, ion_number, wavelength = row[["atomic_number", "ion_number", "wavelength"]]
-        if (atomic_number, ion_number) not in self.chianti_ions:
-            # Then they are from kurucz
-            if wavelength > 2000:
-                row["wavelength"] = convert_wavelength_air2vacuum(wavelength)
-        return row
 
     @staticmethod
     def _create_metastable_flags(levels, lines, levels_metastable_loggf_threshold=-3):
@@ -582,9 +590,6 @@ class AtomData(object):
         upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u"}). \
                               loc[:, ["level_number_upper", "g_u"]]
         lines = lines.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
-
-        # Convert wavelengths above 2000 Angstrom to vacuum (only relevant to kurucz lines)
-        lines = lines.apply(self._convert_wavelength_air2vacuum, axis=1)
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
         lines["f_lu"] = lines["gf"] / lines["g_l"]
