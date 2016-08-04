@@ -312,6 +312,24 @@ def test_create_macro_atom_ref_df(macro_atom_references):
 
 
 @with_test_db
+@pytest.mark.parametrize("atomic_number, ion_number, source_level_number", [
+    (2, 2, 0),
+    (5, 5, 0),
+    (30, 19, 0),
+    (30, 30, 0)
+])
+def test_create_macro_atom_references_levels_wo_lines(macro_atom_references, atomic_number,
+                                                      ion_number, source_level_number):
+    macro_atom_references = macro_atom_references.set_index(
+        ["atomic_number", "ion_number", "source_level_number"]
+    )
+    count_up, count_down, count_total = macro_atom_references.loc[
+        (atomic_number, ion_number, source_level_number), ("count_up", "count_down", "count_total")
+    ]
+    assert all([count == 0 for count in [count_up, count_down, count_total]])
+
+
+@with_test_db
 def test_create_zeta_data(zeta_data):
     assert True
 
