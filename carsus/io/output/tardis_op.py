@@ -657,12 +657,6 @@ class AtomData(object):
         # Drop the unwanted columns
         levels_prepared.drop(["level_id"], axis=1, inplace=True)
 
-        # Create and append artificial fully ionized ions
-        artificial_fully_ionized_levels = self._create_artificial_fully_ionized(levels_prepared)
-
-        levels_prepared = levels_prepared.append(artificial_fully_ionized_levels, ignore_index=True)
-        levels_prepared.sort_values(["atomic_number", "ion_number", "energy", "g"], inplace=True)
-
         # Covert energy to CGS
         levels_prepared["energy"] = Quantity(levels_prepared["energy"].values, 'eV').cgs
 
