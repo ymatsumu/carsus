@@ -900,7 +900,7 @@ class AtomData(object):
             Notes:
                 Refer to the docs: http://tardis.readthedocs.io/en/latest/physics/plasma/macroatom.html
         """
-        
+
         macro_atom_prepared = self.macro_atom.loc[:, ["atomic_number", "ion_number",
                                                       "source_level_number", "target_level_number",
                                                       "transition_type", "transition_probability",
@@ -967,10 +967,11 @@ class AtomData(object):
                     index: none;
                     columns: atomic_number, ion_number, source_level_number, count_down, count_up, count_total.
         """
-        macro_atom_references_prepared = self.macro_atom_references.copy()
+        macro_atom_references_prepared = self.macro_atom_references.loc[:, ["atomic_number", "ion_number",
+                                                                            "source_level_number", "count_down",
+                                                                            "count_up", "count_total"]].copy()
 
-        macro_atom_references_prepared.reset_index(inplace=True)
-        # macro_atom_ref_df.set_index(["atomic_number", "ion_number", "source_level_number"], inplace=True)
+        macro_atom_references_prepared = macro_atom_references_prepared.reset_index(drop=True)
 
         return macro_atom_references_prepared
 
