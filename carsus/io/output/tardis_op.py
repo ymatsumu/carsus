@@ -530,7 +530,7 @@ class AtomData(object):
 
     @staticmethod
     def _create_artificial_fully_ionized(levels):
-
+        """ Create artificial levels for fully ionized ions. """
         fully_ionized_levels = list()
 
         for atomic_number, _ in levels.groupby("atomic_number"):
