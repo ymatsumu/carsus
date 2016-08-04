@@ -368,10 +368,11 @@ class AtomData(object):
         e.g. H I - H II is described with ion_number = 0
         For this reason we add 1 to `ion_number` in this prepare method.
         """
-        ionization_energies_prepared = self.ionization_energies.copy()
-        ionization_energies_prepared["ion_number"] += 1
+        ionization_energies_prepared = self.ionization_energies.loc[:, ["atomic_number", "ion_number",
+                                                                        "ionization_energy"]].copy()
+        ionization_energies_prepared.loc[:, "ion_number"] += 1
 
-        ionization_energies_prepared.set_index(["atomic_number", "ion_number"], inplace=True)
+        ionization_energies_prepared = ionization_energies_prepared.set_index(["atomic_number", "ion_number"])
 
         return ionization_energies_prepared
 
