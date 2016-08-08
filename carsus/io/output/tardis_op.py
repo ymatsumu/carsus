@@ -1033,10 +1033,10 @@ class AtomData(object):
         with HDFStore(hdf5_path) as store:
 
             if store_atom_masses:
-                store.put("atom_masses", self.atom_masses_prepared)
+                store.put("atom_data", self.atom_masses_prepared)
 
             if store_ionization_energies:
-                store.put("ionization_energies", self.ionization_energies_prepared)
+                store.put("ionization_data", self.ionization_energies_prepared)
 
             if store_levels:
                 store.put("levels", self.levels_prepared)
@@ -1048,7 +1048,7 @@ class AtomData(object):
                 store.put("collisions", self.collisions_prepared)
 
             if store_macro_atom:
-                store.put("macro_atom", self.macro_atom_prepared)
+                store.put("macro_atom_data", self.macro_atom_prepared)
 
             if store_macro_atom_references:
                 store.put("macro_atom_references", self.macro_atom_references_prepared)
