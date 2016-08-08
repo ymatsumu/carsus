@@ -817,12 +817,12 @@ class AtomData(object):
 
         collisions_prepared = self.collisions.loc[:, ["atomic_number", "ion_number",
                                                       "level_number_lower", "level_number_upper",
-                                                      "e_col_id", "delta_e", "g_ratio", "c_ul"]].copy()
+                                                      "delta_e", "g_ratio", "c_ul"]].copy()
 
         # Set multiindex
-        collisions_prepared = collisions_prepared.reset_index(inplace=True)
+        collisions_prepared = collisions_prepared.reset_index()
         collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
-                                                             "level_number_lower", "level_number_upper"], inplace=True)
+                                                             "level_number_lower", "level_number_upper"])
 
         return collisions_prepared
 
