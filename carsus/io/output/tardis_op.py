@@ -854,7 +854,8 @@ class AtomData(object):
         lvl_energy_lower = levels.rename(columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
         lvl_energy_upper = levels.rename(columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
 
-        lines = self.lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
+        lines = self.lines.set_index("line_id")
+        lines = lines.join(lvl_energy_lower, on="lower_level_id").join(lvl_energy_upper, on="upper_level_id")
 
         macro_atom = list()
         macro_atom_dtype = [("atomic_number", np.int), ("ion_number", np.int),
