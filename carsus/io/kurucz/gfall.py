@@ -121,22 +121,21 @@ class GFALLReader(object):
 
         return gfall
 
-    def parse_gfall(self, gfall=None):
+    def parse_gfall(self, gfall_raw=None):
         """
         Parse raw gfall DataFrame
 
         Parameters
         ----------
-        gfall: pandas.DataFrame
+        gfall_raw: pandas.DataFrame
 
         Returns
         -------
             pandas.DataFrame
                 a level DataFrame
         """
-        if gfall is None:
-            gfall = self.gfall_raw.copy()
-
+        gfall = gfall_raw if gfall_raw is not None else self.gfall_raw.copy()
+        
         double_columns = [item.replace('_first', '') for item in gfall.columns if
                           item.endswith('first')]
 
