@@ -16,22 +16,22 @@ def gfall_rdr(gfall_fname):
 
 
 @pytest.fixture()
-def gfall_raw_df(gfall_rdr):
+def gfall_raw(gfall_rdr):
     return gfall_rdr.gfall_raw
 
 
 @pytest.fixture()
-def gfall_df(gfall_rdr):
-    return gfall_rdr.gfall_df
+def gfall(gfall_rdr):
+    return gfall_rdr.gfall
 
 
 @pytest.fixture()
-def levels_df(gfall_rdr):
-    return gfall_rdr.levels_df
+def levels(gfall_rdr):
+    return gfall_rdr.levels
 
 @pytest.fixture()
-def lines_df(gfall_rdr):
-    return gfall_rdr.lines_df
+def lines(gfall_rdr):
+    return gfall_rdr.lines
 
 
 @pytest.fixture()
@@ -43,8 +43,8 @@ def gfall_ingester(memory_session, gfall_fname):
     (14, 72.5537, 4.02, 983355.0, 1121184.0),
     (37, 2.4898, 7.05, 0.0, 4016390.0)
 ])
-def test_grall_reader_gfall_raw_df(gfall_raw_df, index, wavelength, element_code, e_first, e_second):
-    row = gfall_raw_df.loc[index]
+def test_grall_reader_gfall_raw(gfall_raw, index, wavelength, element_code, e_first, e_second):
+    row = gfall_raw.loc[index]
     assert_almost_equal(row["element_code"], element_code)
     assert_almost_equal(row["wavelength"], wavelength)
     assert_allclose([row["e_first"], row["e_second"]], [e_first, e_second])
@@ -56,9 +56,9 @@ def test_grall_reader_gfall_raw_df(gfall_raw_df, index, wavelength, element_code
     (17, 74.6230, 4, 2, 997455.000, 1131462.0, False, False),
     (41, 16.1220, 7, 5, 3385890.000, 4006160.0, False, True)
 ])
-def test_gfall_reader_gfall_df(gfall_df, index, wavelength, atomic_number, ion_charge,
+def test_gfall_reader_gfall(gfall, index, wavelength, atomic_number, ion_charge,
                                e_lower, e_upper, e_lower_predicted, e_upper_predicted):
-    row = gfall_df.loc[index]
+    row = gfall.loc[index]
     assert row["atomic_number"] == atomic_number
     assert row["ion_charge"] == ion_charge
     assert_allclose([row["wavelength"], row["e_lower"], row["e_upper"]],
@@ -67,15 +67,15 @@ def test_gfall_reader_gfall_df(gfall_df, index, wavelength, atomic_number, ion_c
     assert row["e_upper_predicted"] == e_upper_predicted
 
 
-def test_gfall_reader_gfall_df_ignore_labels(gfall_df):
+def test_gfall_reader_gfall_ignore_labels(gfall):
     ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
-    assert len(gfall_df.loc[(gfall_df["label_lower"].isin(ignored_labels)) |
-                                  (gfall_df["label_upper"].isin(ignored_labels))]) == 0
+    assert len(gfall.loc[(gfall["label_lower"].isin(ignored_labels)) |
+                         (gfall["label_upper"].isin(ignored_labels))]) == 0
 
 
-def test_gfall_reader_clean_levels_labels(levels_df):
+def test_gfall_reader_clean_levels_labels(levels):
     # One label for the ground level of Be III has an extra space
-    levels0402 = levels_df.loc[(4,2)]
+    levels0402 = levels.loc[(4, 2)]
     assert len(levels0402.loc[(np.isclose(levels0402["energy"], 0.0))]) == 1
 
 
@@ -85,9 +85,9 @@ def test_gfall_reader_clean_levels_labels(levels_df):
     (4, 2, 11, 1128300.0, 2.0, "meas"),
     (7, 5, 7, 4006160.0, 0.0,  "theor")
 ])
-def test_gfall_reader_levels_df(levels_df, atomic_number, ion_charge, level_index,
-                                energy, j, method):
-    row = levels_df.loc[(atomic_number, ion_charge, level_index)]
+def test_gfall_reader_levels(levels, atomic_number, ion_charge, level_index,
+                             energy, j, method):
+    row = levels.loc[(atomic_number, ion_charge, level_index)]
     assert_almost_equal(row["energy"], energy)
     assert_almost_equal(row["j"], j)
     assert row["method"] == method
@@ -98,9 +98,9 @@ def test_gfall_reader_levels_df(levels_df, atomic_number, ion_charge, level_inde
     (4, 2, 0, 16, 8.8309, 0.12705741),
     (4, 2, 6, 15, 74.6230, 2.1330449131)
 ])
-def test_gfall_reader_lines_df(lines_df, atomic_number, ion_charge,
-                               level_index_lower, level_index_upper, wavelength, gf):
-    row = lines_df.loc[(atomic_number, ion_charge, level_index_lower, level_index_upper)]
+def test_gfall_reader_lines(lines, atomic_number, ion_charge,
+                            level_index_lower, level_index_upper, wavelength, gf):
+    row = lines.loc[(atomic_number, ion_charge, level_index_lower, level_index_upper)]
     assert_almost_equal(row["wavelength"], wavelength)
     assert_almost_equal(row["gf"], gf)
 
