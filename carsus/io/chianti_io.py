@@ -147,8 +147,8 @@ class ChiantiIonReader(object):
 
     @property
     def bound_collisions(self):
-        bound_collision = self.filter_bound_transitions(self.collisions)
-        return bound_collision
+        bound_collisions = self.filter_bound_transitions(self.collisions)
+        return bound_collisions
 
     def _read_levels(self):
 
