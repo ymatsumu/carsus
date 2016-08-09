@@ -44,23 +44,23 @@ class ChiantiIonReader(object):
 
         Methods
         -------
-        levels_df
+        levels
             Return a DataFrame with the data for ion's levels
 
-        lines_df
+        lines
             Return a DataFrame with the data for ion's lines
 
-        collisions_df
+        collisions
             Return a DataFrame with the data for ion's electron collisions
 
-        bound_levels_df
-            Same as `levels_df`, but only for bound levels (with energy < ionization_potential)
+        bound_levels
+            Same as `levels`, but only for bound levels (with energy < ionization_potential)
 
-        bound_lines_df
-            Same as `lines_df`, but only for bound levels (with energy < ionization_potential)
+        bound_lines
+            Same as `lines`, but only for bound levels (with energy < ionization_potential)
 
-        bound_collisions_df
-            Same as `collisions_df`, but only for bound levels (with energy < ionization_potential)
+        bound_collisions
+            Same as `collisions`, but only for bound levels (with energy < ionization_potential)
     """
 
     elvlc_dict = {
@@ -96,59 +96,59 @@ class ChiantiIonReader(object):
     def __init__(self, ion_name):
 
         self.ion = ch.ion(ion_name)
-        self._levels_df = None
-        self._lines_df = None
-        self._collisions_df = None
+        self._levels = None
+        self._lines = None
+        self._collisions = None
 
     @property
-    def levels_df(self):
-        if self._levels_df is None:
+    def levels(self):
+        if self._levels is None:
             self._read_levels()
-        return self._levels_df.copy()
+        return self._levels.copy()
 
     @property
-    def lines_df(self):
-        if self._lines_df is None:
+    def lines(self):
+        if self._lines is None:
             self._read_lines()
-        return self._lines_df.copy()
+        return self._lines.copy()
 
     @property
-    def collisions_df(self):
-        if self._collisions_df is None:
+    def collisions(self):
+        if self._collisions is None:
             self._read_collisions()
-        return self._collisions_df.copy()
+        return self._collisions.copy()
 
     @property
     def last_bound_level(self):
         ionization_potential = u.eV.to(u.Unit("cm-1"), value=self.ion.Ip, equivalencies=u.spectral())
-        last_row = self.levels_df.loc[self.levels_df['energy'] < ionization_potential].tail(1)
+        last_row = self.levels.loc[self.levels['energy'] < ionization_potential].tail(1)
         return last_row.index[0]
 
     @property
-    def bound_levels_df(self):
-        return self.levels_df.loc[:self.last_bound_level]
+    def bound_levels(self):
+        return self.levels.loc[:self.last_bound_level]
 
-    def filter_bound_transitions(self, transition_df):
+    def filter_bound_transitions(self, transitions):
         """ Filter transitions DataFrames on bound levels.
 
             The most succinct and accurate way to do this is to use slicing on multi index,
             but due to some bug in pandas out-of-range rows are included in the resulting DataFrame.
         """
-        transition_df.reset_index(inplace=True)
-        transition_df = transition_df.loc[transition_df["upper_level_index"] <= self.last_bound_level]
-        transition_df.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        transition_df.sort_index(inplace=True)
-        return transition_df
+        transitions.reset_index(inplace=True)
+        transitions = transitions.loc[transitions["upper_level_index"] <= self.last_bound_level]
+        transitions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
+        transitions.sort_index(inplace=True)
+        return transitions
 
     @property
-    def bound_lines_df(self):
-        bound_lines_df = self.filter_bound_transitions(self.lines_df)
-        return bound_lines_df
+    def bound_lines(self):
+        bound_lines = self.filter_bound_transitions(self.lines)
+        return bound_lines
 
     @property
-    def bound_collisions_df(self):
-        bound_collision_df = self.filter_bound_transitions(self.collisions_df)
-        return bound_collision_df
+    def bound_collisions(self):
+        bound_collision = self.filter_bound_transitions(self.collisions)
+        return bound_collision
 
     def _read_levels(self):
 
@@ -169,17 +169,17 @@ class ChiantiIonReader(object):
         except AssertionError:
             raise ValueError('Level 0 energy is not 0.0')
 
-        self._levels_df = pd.DataFrame(levels_dict)
+        self._levels = pd.DataFrame(levels_dict)
 
         # Replace empty labels with NaN
-        self._levels_df["label"].replace(r'\s+', np.nan, regex=True, inplace=True)
+        self._levels["label"].replace(r'\s+', np.nan, regex=True, inplace=True)
 
         # Extract configuration and term from the "pretty" column
-        self._levels_df[["term", "configuration"]] = self._levels_df["pretty"].str.rsplit(' ', expand=True, n=1)
-        self._levels_df.drop("pretty", axis=1, inplace=True)
+        self._levels[["term", "configuration"]] = self._levels["pretty"].str.rsplit(' ', expand=True, n=1)
+        self._levels.drop("pretty", axis=1, inplace=True)
 
-        self._levels_df.set_index("level_index", inplace=True)
-        self._levels_df.sort_index(inplace=True)
+        self._levels.set_index("level_index", inplace=True)
+        self._levels.sort_index(inplace=True)
 
     def _read_lines(self):
 
@@ -193,10 +193,10 @@ class ChiantiIonReader(object):
         for key, col_name in self.wgfa_dict.iteritems():
             lines_dict[col_name] = wgfa.get(key)
 
-        self._lines_df = pd.DataFrame(lines_dict)
+        self._lines = pd.DataFrame(lines_dict)
 
         # two-photon transitions are given a zero wavelength and we ignore them for now
-        self._lines_df = self._lines_df.loc[~(self._lines_df["wavelength"] == 0)]
+        self._lines = self._lines.loc[~(self._lines["wavelength"] == 0)]
 
         # theoretical wavelengths have negative values
         def parse_wavelength(row):
@@ -208,10 +208,10 @@ class ChiantiIonReader(object):
                 method = "m"
             return pd.Series([wvl, method])
 
-        self._lines_df[["wavelength", "method"]] = self._lines_df.apply(parse_wavelength, axis=1)
+        self._lines[["wavelength", "method"]] = self._lines.apply(parse_wavelength, axis=1)
 
-        self._lines_df.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        self._lines_df.sort_index(inplace=True)
+        self._lines.set_index(["lower_level_index", "upper_level_index"], inplace=True)
+        self._lines.sort_index(inplace=True)
 
     def _read_collisions(self):
 
@@ -225,10 +225,10 @@ class ChiantiIonReader(object):
         for key, col_name in self.scups_dict.iteritems():
             collisions_dict[col_name] = scups.get(key)
 
-        self._collisions_df = pd.DataFrame(collisions_dict)
+        self._collisions = pd.DataFrame(collisions_dict)
 
-        self._collisions_df.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        self._collisions_df.sort_index(inplace=True)
+        self._collisions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
+        self._collisions.sort_index(inplace=True)
 
 
 class ChiantiIngester(object):
@@ -275,7 +275,7 @@ class ChiantiIngester(object):
         if self.data_source.data_source_id is None:  # To get the id if a new data source was created
             self.session.flush()
 
-    def get_lvl_index2id_df(self, ion):
+    def get_lvl_index2id(self, ion):
         """ Return a DataFrame that maps levels indexes to ids """
 
         q_ion_lvls = self.session.query(Level.level_id.label("id"),
@@ -283,15 +283,15 @@ class ChiantiIngester(object):
             filter(and_(Level.ion == ion,
                         Level.data_source == self.data_source))
 
-        lvl_index2id_data = list()
+        lvl_index2id = list()
         for id, index in q_ion_lvls:
-            lvl_index2id_data.append((index, id))
+            lvl_index2id.append((index, id))
 
         lvl_index2id_dtype = [("index", np.int), ("id", np.int)]
-        lvl_index2id_data = np.array(lvl_index2id_data, dtype=lvl_index2id_dtype)
-        lvl_index2id_df = pd.DataFrame.from_records(lvl_index2id_data, index="index")
+        lvl_index2id = np.array(lvl_index2id, dtype=lvl_index2id_dtype)
+        lvl_index2id = pd.DataFrame.from_records(lvl_index2id, index="index")
 
-        return lvl_index2id_df
+        return lvl_index2id
 
     def ingest_levels(self):
 
@@ -305,7 +305,7 @@ class ChiantiIngester(object):
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             try:
-                bound_levels_df = rdr.bound_levels_df
+                bound_levels = rdr.bound_levels
             except ChiantiIonReaderError:
                 print("Levels not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
                 continue
@@ -314,7 +314,7 @@ class ChiantiIngester(object):
 
             # ToDo: Determine parity from configuration
 
-            for index, row in bound_levels_df.iterrows():
+            for index, row in bound_levels.iterrows():
 
                 level = Level(ion=ion, data_source=self.data_source, level_index=index,
                                      configuration=row["configuration"], term=row["term"],
@@ -342,23 +342,23 @@ class ChiantiIngester(object):
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             try:
-                bound_lines_df = rdr.bound_lines_df
+                bound_lines = rdr.bound_lines
             except ChiantiIonReaderError:
                 print("Lines not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
                 continue
 
             print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
-            lvl_index2id_df = self.get_lvl_index2id_df(ion)
+            lvl_index2id = self.get_lvl_index2id(ion)
 
-            for index, row in bound_lines_df.iterrows():
+            for index, row in bound_lines.iterrows():
 
                 # index: (lower_level_index, upper_level_index)
                 lower_level_index, upper_level_index = index
 
                 try:
-                    lower_level_id = int(lvl_index2id_df.loc[lower_level_index])
-                    upper_level_id = int(lvl_index2id_df.loc[upper_level_index])
+                    lower_level_id = int(lvl_index2id.loc[lower_level_index])
+                    upper_level_id = int(lvl_index2id.loc[upper_level_index])
                 except KeyError:
                     raise IngesterError("Levels from this source have not been found."
                                         "You must ingest levels before transitions")
@@ -397,23 +397,24 @@ class ChiantiIngester(object):
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             try:
-                bound_collisions_df = rdr.bound_collisions_df
+                bound_collisions = rdr.bound_collisions
+                bound_collisions = rdr.bound_collisions
             except ChiantiIonReaderError:
                 print("Collisions not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
                 continue
 
             print("Ingesting collisions for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
-            lvl_index2id_df = self.get_lvl_index2id_df(ion)
+            lvl_index2id = self.get_lvl_index2id(ion)
 
-            for index, row in bound_collisions_df.iterrows():
+            for index, row in bound_collisions.iterrows():
 
                 # index: (lower_level_index, upper_level_index)
                 lower_level_index, upper_level_index = index
 
                 try:
-                    lower_level_id = int(lvl_index2id_df.loc[lower_level_index])
-                    upper_level_id = int(lvl_index2id_df.loc[upper_level_index])
+                    lower_level_id = int(lvl_index2id.loc[lower_level_index])
+                    upper_level_id = int(lvl_index2id.loc[upper_level_index])
                 except KeyError:
                     raise IngesterError("Levels from this source have not been found."
                                         "You must ingest levels before transitions")
