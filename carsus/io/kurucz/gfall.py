@@ -241,7 +241,7 @@ class GFALLReader(object):
 
     def extract_lines(self, gfall=None, levels=None, selected_columns=None):
         """
-        Extract lines from `gfall_df`
+        Extract lines from `gfall`
 
         Parameters
         ----------
