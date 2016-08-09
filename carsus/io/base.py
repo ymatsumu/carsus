@@ -16,13 +16,13 @@ class BaseParser(object):
 
     Attributes
     ----------
-    base_df : pandas.DataFrame
+    base : pandas.DataFrame
         Contains parsed results from the provided input data.
 
     Methods
     -------
     load(input_data)
-        Parses the input data and stores the results in the `base_df` attribute
+        Parses the input data and stores the results in the `base` attribute
 
     __call__(input_data)
         Call an instance with input data to invoke the `load` method.
@@ -31,7 +31,7 @@ class BaseParser(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, input_data=None):
-        self.base_df = pd.DataFrame()
+        self.base = pd.DataFrame()
         if input_data is not None:
             self.load(input_data)
 
@@ -49,26 +49,26 @@ class BasePyparser(BaseParser):
 
     Attributes
     ----------
-    base_df : pandas.DataFrame
+    base : pandas.DataFrame
         Contains parsed results from the provided input data.
 
     grammar : pyparsing.ParseElement
         The grammar used to parse input.
-        Its labeled tokens correspond to the columns of the `base_df`
+        Its labeled tokens correspond to the columns of the `base`
 
     columns : list of str
-        The column names of the `base_df`
+        The column names of the `base`
 
     Methods
     -------
     load(input_data)
-        Parses the input data and stores the results in the `base_df` attribute
+        Parses the input data and stores the results in the `base` attribute
 
     Notes
     -----
     Rationale: pyparsers have a specific load workflow illustrated below.
 
-    Suppose a `base_df` of some parser has three columns::
+    Suppose a `base` of some parser has three columns::
 
         atomic_mass_nominal_value | atomic_mass_std_dev | notes
 
@@ -81,7 +81,7 @@ class BasePyparser(BaseParser):
             - std_dev: 2.1e-07
 
     The `load` method then infers the columns' values from
-    the nested labels and adds the following row to the `base_df`::
+    the nested labels and adds the following row to the `base`::
 
         atomic_mass_nominal_value            37.9627
         atomic_mass_std_dev                  2.1e-07
@@ -97,11 +97,11 @@ class BasePyparser(BaseParser):
 
     def load(self, input_data):
         results = self.grammar.scanString(input_data)
-        base_df_data = list()  # list of dicts that will be passed to the base_df
+        base = list()  # list of dicts that will be passed to the base
         for tokens, start, end in results:
             tokens_dict = to_flat_dict(tokens)  # make a flattened dict with the column names as keys
-            base_df_data.append(tokens_dict)
-        self.base_df = pd.DataFrame(data=base_df_data, columns=self.columns)
+            base.append(tokens_dict)
+        self.base = pd.DataFrame(data=base, columns=self.columns)
 
 
 
