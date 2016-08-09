@@ -50,7 +50,7 @@ class NISTIonizationEnergiesParser(BaseParser):
         Class for parsers for the Ionization Energies Data from the NIST Atomic Spectra Database
         Attributes
         ----------
-        base_df : pandas.DataFrame
+        base : pandas.DataFrame
         grammar : pyparsing.ParseElement
             (default value = isotope)
         columns : list of str
@@ -58,9 +58,9 @@ class NISTIonizationEnergiesParser(BaseParser):
         Methods
         -------
         load(input_data)
-            Parses the input data and stores the results in the `base_df` attribute
-        prepare_ion_energies_df()
-            Returns a new dataframe created from `base_df` that contains ionization energies data
+            Parses the input data and stores the results in the `base` attribute
+        prepare_ion_energies()
+            Returns a new dataframe created from `base` that contains ionization energies data
     """
 
     def load(self, input_data):
@@ -70,15 +70,15 @@ class NISTIonizationEnergiesParser(BaseParser):
             a = a.sting
         text_data = pre_tag.get_text()
         column_names = ['atomic_number', 'ion_charge', 'ground_shells', 'ground_level', 'ionization_energy_str']
-        base_df = pd.read_csv(StringIO(text_data), sep='|', header=None,
+        base = pd.read_csv(StringIO(text_data), sep='|', header=None,
                          usecols=range(5), names=column_names, skiprows=3, skipfooter=1)
         for column in ['ground_shells', 'ground_level', 'ionization_energy_str']:
-                base_df[column] = base_df[column].map(lambda x: x.strip())
-        self.base_df = base_df
+                base[column] = base[column].map(lambda x: x.strip())
+        self.base = base
 
-    def prepare_ioniz_energies_df(self):
-        """ Returns a new dataframe created from `base_df` that contains ionization energies data """
-        ioniz_energies_df = self.base_df.copy()
+    def prepare_ioniz_energies(self):
+        """ Returns a new dataframe created from `base` that contains ionization energies data """
+        ioniz_energies = self.base.copy()
 
         def parse_ioniz_energy_str(row):
             ioniz_energy_str = row['ionization_energy_str']
@@ -96,20 +96,20 @@ class NISTIonizationEnergiesParser(BaseParser):
             ioniz_energy = ufloat_fromstr(ioniz_energy_str)
             return pd.Series([ioniz_energy.nominal_value, ioniz_energy.std_dev, method])
 
-        ioniz_energies_df[['ionization_energy_value', 'ionization_energy_uncert',
-                      'ionization_energy_method']] = ioniz_energies_df.apply(parse_ioniz_energy_str, axis=1)
-        ioniz_energies_df.drop('ionization_energy_str', axis=1, inplace=True)
-        ioniz_energies_df.set_index(['atomic_number', 'ion_charge'], inplace=True)
+        ioniz_energies[['ionization_energy_value', 'ionization_energy_uncert',
+                      'ionization_energy_method']] = ioniz_energies.apply(parse_ioniz_energy_str, axis=1)
+        ioniz_energies.drop('ionization_energy_str', axis=1, inplace=True)
+        ioniz_energies.set_index(['atomic_number', 'ion_charge'], inplace=True)
 
         # discard null values
-        ioniz_energies_df = ioniz_energies_df[pd.notnull(ioniz_energies_df["ionization_energy_value"])]
+        ioniz_energies = ioniz_energies[pd.notnull(ioniz_energies["ionization_energy_value"])]
 
-        return ioniz_energies_df
+        return ioniz_energies
 
-    def prepare_ground_levels_df(self):
-        """ Returns a new dataframe created from `base_df` that contains the ground levels data """
+    def prepare_ground_levels(self):
+        """ Returns a new dataframe created from `base` that contains the ground levels data """
 
-        ground_levels_df = self.base_df.loc[:,["atomic_number", "ion_charge",
+        ground_levels = self.base.loc[:, ["atomic_number", "ion_charge",
                                              "ground_shells", "ground_level"]].copy()
 
         def parse_ground_level(row):
@@ -144,13 +144,13 @@ class NISTIonizationEnergiesParser(BaseParser):
 
             return lvl
 
-        ground_levels_df[["term", "spin_multiplicity",
-                          "L", "parity", "J"]] = ground_levels_df.apply(parse_ground_level, axis=1)
+        ground_levels[["term", "spin_multiplicity",
+                          "L", "parity", "J"]] = ground_levels.apply(parse_ground_level, axis=1)
 
-        ground_levels_df.rename(columns={"ground_shells": "configuration"}, inplace=True)
-        ground_levels_df.set_index(['atomic_number', 'ion_charge'], inplace=True)
+        ground_levels.rename(columns={"ground_shells": "configuration"}, inplace=True)
+        ground_levels.set_index(['atomic_number', 'ion_charge'], inplace=True)
 
-        return ground_levels_df
+        return ground_levels
 
 
 class NISTIonizationEnergiesIngester(BaseIngester):
@@ -192,9 +192,9 @@ class NISTIonizationEnergiesIngester(BaseIngester):
     def ingest_ionization_energies(self):
         print("Ingesting ionization energies from {}".format(self.data_source.short_name))
 
-        ioniz_energies_df = self.parser.prepare_ioniz_energies_df()
+        ioniz_energies = self.parser.prepare_ioniz_energies()
 
-        for index, row in ioniz_energies_df.iterrows():
+        for index, row in ioniz_energies.iterrows():
             atomic_number, ion_charge = index
             # Query for an existing ion; create if doesn't exists
             ion = Ion.as_unique(self.session,
@@ -212,9 +212,9 @@ class NISTIonizationEnergiesIngester(BaseIngester):
     def ingest_ground_levels(self):
         print("Ingesting ground levels from {}".format(self.data_source.short_name))
 
-        ground_levels_df = self.parser.prepare_ground_levels_df()
+        ground_levels = self.parser.prepare_ground_levels()
 
-        for index, row in ground_levels_df.iterrows():
+        for index, row in ground_levels.iterrows():
             atomic_number, ion_charge = index
 
             # Replace nan with None
