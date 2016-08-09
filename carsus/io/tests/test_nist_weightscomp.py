@@ -91,7 +91,7 @@ def test_weightscomp_pyparser_prepare_atomic_index(atomic):
     assert atomic.index.name == ATOM_NUM_COL
 
 
-def test_weightscomp_pyparser_prepare_atomic_df_(atomic, expected):
+def test_weightscomp_pyparser_prepare_atomic(atomic, expected):
     assert_frame_equal(atomic, expected, check_names=False)
 
 
