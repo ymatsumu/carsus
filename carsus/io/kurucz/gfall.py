@@ -34,9 +34,9 @@ class GFALLReader(object):
     def __init__(self, fname):
         self.fname = fname
         self._gfall_raw = None
-        self._gfall_df = None
-        self._levels_df = None
-        self._lines_df = None
+        self._gfall = None
+        self._levels = None
+        self._lines = None
 
     @property
     def gfall_raw(self):
@@ -45,22 +45,22 @@ class GFALLReader(object):
         return self._gfall_raw
 
     @property
-    def gfall_df(self):
-        if self._gfall_df is None:
-            self._gfall_df = self.parse_gfall()
-        return self._gfall_df
+    def gfall(self):
+        if self._gfall is None:
+            self._gfall = self.parse_gfall()
+        return self._gfall
 
     @property
-    def levels_df(self):
-        if self._levels_df is None:
-            self._levels_df = self.extract_levels()
-        return self._levels_df
+    def levels(self):
+        if self._levels is None:
+            self._levels = self.extract_levels()
+        return self._levels
 
     @property
-    def lines_df(self):
-        if self._lines_df is None:
-            self._lines_df = self.extract_lines()
-        return self._lines_df
+    def lines(self):
+        if self._lines is None:
+            self._lines = self.extract_lines()
+        return self._lines
 
     def read_gfall_raw(self, fname=None):
         """
@@ -121,75 +121,75 @@ class GFALLReader(object):
 
         return gfall
 
-    def parse_gfall(self, gfall_df=None):
+    def parse_gfall(self, gfall=None):
         """
         Parse raw gfall DataFrame
 
         Parameters
         ----------
-        gfall_df: pandas.DataFrame
+        gfall: pandas.DataFrame
 
         Returns
         -------
             pandas.DataFrame
                 a level DataFrame
         """
-        if gfall_df is None:
-            gfall_df = self.gfall_raw.copy()
+        if gfall is None:
+            gfall = self.gfall_raw.copy()
 
-        double_columns = [item.replace('_first', '') for item in gfall_df.columns if
+        double_columns = [item.replace('_first', '') for item in gfall.columns if
                           item.endswith('first')]
 
         # due to the fact that energy is stored in 1/cm
-        order_lower_upper = (gfall_df["e_first"].abs() <
-                             gfall_df["e_second"].abs())
+        order_lower_upper = (gfall["e_first"].abs() <
+                             gfall["e_second"].abs())
 
         for column in double_columns:
-            data = pd.concat([gfall_df['{0}_first'.format(column)][order_lower_upper],
-                              gfall_df['{0}_second'.format(column)][~order_lower_upper]])
+            data = pd.concat([gfall['{0}_first'.format(column)][order_lower_upper],
+                              gfall['{0}_second'.format(column)][~order_lower_upper]])
 
-            gfall_df['{0}_lower'.format(column)] = data
+            gfall['{0}_lower'.format(column)] = data
 
-            data = pd.concat([gfall_df['{0}_first'.format(column)][~order_lower_upper], \
-                              gfall_df['{0}_second'.format(column)][order_lower_upper]])
+            data = pd.concat([gfall['{0}_first'.format(column)][~order_lower_upper], \
+                              gfall['{0}_second'.format(column)][order_lower_upper]])
 
-            gfall_df['{0}_upper'.format(column)] = data
+            gfall['{0}_upper'.format(column)] = data
 
-            del gfall_df['{0}_first'.format(column)]
-            del gfall_df['{0}_second'.format(column)]
+            del gfall['{0}_first'.format(column)]
+            del gfall['{0}_second'.format(column)]
 
         # Clean labels
-        gfall_df["label_lower"] = gfall_df["label_lower"].str.strip()
-        gfall_df["label_upper"] = gfall_df["label_upper"].str.strip()
+        gfall["label_lower"] = gfall["label_lower"].str.strip()
+        gfall["label_upper"] = gfall["label_upper"].str.strip()
 
-        gfall_df["label_lower"] = gfall_df["label_lower"].str.replace('\s+', ' ')
-        gfall_df["label_upper"] = gfall_df["label_upper"].str.replace('\s+', ' ')
+        gfall["label_lower"] = gfall["label_lower"].str.replace('\s+', ' ')
+        gfall["label_upper"] = gfall["label_upper"].str.replace('\s+', ' ')
 
         # Ignore lines with the labels "AVARAGE ENERGIES" and "CONTINUUM"
         ignored_labels = ["AVERAGE", "ENERGIES", "CONTINUUM"]
-        gfall_df = gfall_df.loc[~((gfall_df["label_lower"].isin(ignored_labels)) |
-                                  (gfall_df["label_upper"].isin(ignored_labels)))].copy()
+        gfall = gfall.loc[~((gfall["label_lower"].isin(ignored_labels)) |
+                            (gfall["label_upper"].isin(ignored_labels)))].copy()
 
-        gfall_df['e_lower_predicted'] = gfall_df["e_lower"] < 0
-        gfall_df["e_lower"] = gfall_df["e_lower"].abs()
-        gfall_df['e_upper_predicted'] = gfall_df["e_upper"] < 0
-        gfall_df["e_upper"] = gfall_df["e_upper"].abs()
+        gfall['e_lower_predicted'] = gfall["e_lower"] < 0
+        gfall["e_lower"] = gfall["e_lower"].abs()
+        gfall['e_upper_predicted'] = gfall["e_upper"] < 0
+        gfall["e_upper"] = gfall["e_upper"].abs()
 
-        gfall_df['atomic_number'] = gfall_df.element_code.astype(int)
-        gfall_df['ion_charge'] = ((gfall_df.element_code.values -
-                                        gfall_df.atomic_number.values) * 100).round().astype(int)
+        gfall['atomic_number'] = gfall.element_code.astype(int)
+        gfall['ion_charge'] = ((gfall.element_code.values -
+                                gfall.atomic_number.values) * 100).round().astype(int)
 
-        del gfall_df['element_code']
+        del gfall['element_code']
 
-        return gfall_df
+        return gfall
 
-    def extract_levels(self, gfall_df=None, selected_columns=None):
+    def extract_levels(self, gfall=None, selected_columns=None):
         """
-        Extract levels from `gfall_df`
+        Extract levels from `gfall`
 
         Parameters
         ----------
-        gfall_df: pandas.DataFrame
+        gfall: pandas.DataFrame
         selected_columns: list
             list of which columns to select (optional - default=None which selects
             a default set of columns)
@@ -200,8 +200,8 @@ class GFALLReader(object):
                 a level DataFrame
         """
 
-        if gfall_df is None:
-            gfall_df = self.gfall_df
+        if gfall is None:
+            gfall = self.gfall
 
         if selected_columns is None:
             selected_columns = ['atomic_number', 'ion_charge', 'energy', 'j',
@@ -210,11 +210,11 @@ class GFALLReader(object):
         column_renames = {'e_{0}': 'energy', 'j_{0}': 'j', 'label_{0}': 'label',
                           'e_{0}_predicted': 'theoretical'}
 
-        e_lower_levels = gfall_df.rename(
+        e_lower_levels = gfall.rename(
             columns=dict([(key.format('lower'), value)
                           for key, value in column_renames.items()]))
 
-        e_upper_levels = gfall_df.rename(
+        e_upper_levels = gfall.rename(
             columns=dict([(key.format('upper'), value)
                           for key, value in column_renames.items()]))
 
@@ -240,13 +240,13 @@ class GFALLReader(object):
         levels.set_index(["atomic_number", "ion_charge", "level_index"], inplace=True)
         return levels
 
-    def extract_lines(self, gfall_df=None, levels_df=None, selected_columns=None):
+    def extract_lines(self, gfall=None, levels=None, selected_columns=None):
         """
         Extract lines from `gfall_df`
 
         Parameters
         ----------
-        gfall_df: pandas.DataFrame
+        gfall: pandas.DataFrame
         selected_columns: list
             list of which columns to select (optional - default=None which selects
             a default set of columns)
@@ -256,30 +256,30 @@ class GFALLReader(object):
             pandas.DataFrame
                 a level DataFrame
         """
-        if gfall_df is None:
-            gfall_df = self.gfall_df
+        if gfall is None:
+            gfall = self.gfall
 
-        if levels_df is None:
-            levels_df = self.levels_df
+        if levels is None:
+            levels = self.levels
 
         if selected_columns is None:
             selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
 
-        levels_df_idx = levels_df.reset_index()
-        levels_df_idx = levels_df_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+        levels_idx = levels.reset_index()
+        levels_idx = levels_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
 
-        lines = gfall_df[selected_columns].copy()
+        lines = gfall[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall_df[['atomic_number', 'ion_charge', 'e_lower', 'j_lower', 'label_lower']].values.tolist()
+        level_lower_idx = gfall[['atomic_number', 'ion_charge', 'e_lower', 'j_lower', 'label_lower']].values.tolist()
         level_lower_idx = [tuple(item) for item in level_lower_idx]
 
-        level_upper_idx = gfall_df[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
+        level_upper_idx = gfall[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
         level_upper_idx = [tuple(item) for item in level_upper_idx]
 
-        lines['level_index_lower'] = levels_df_idx.loc[level_lower_idx, "level_index"].values
-        lines['level_index_upper'] = levels_df_idx.loc[level_upper_idx, "level_index"].values
+        lines['level_index_lower'] = levels_idx.loc[level_lower_idx, "level_index"].values
+        lines['level_index_upper'] = levels_idx.loc[level_upper_idx, "level_index"].values
 
         lines.set_index(['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'], inplace=True)
 
@@ -322,7 +322,7 @@ class GFALLIngester(object):
         if self.data_source.data_source_id is None:  # To get the id if a new data source was created
             self.session.flush()
 
-    def get_lvl_index2id_df(self, ion):
+    def get_lvl_index2id(self, ion):
         """ Return a DataFrame that maps levels indexes to ids """
 
         q_ion_lvls = self.session.query(Level.level_id.label("id"),
@@ -330,38 +330,38 @@ class GFALLIngester(object):
             filter(and_(Level.ion == ion,
                         Level.data_source == self.data_source))
 
-        lvl_index2id_data = list()
+        lvl_index2id = list()
         for id, index in q_ion_lvls:
-            lvl_index2id_data.append((index, id))
+            lvl_index2id.append((index, id))
 
         lvl_index2id_dtype = [("index", np.int), ("id", np.int)]
-        lvl_index2id_data = np.array(lvl_index2id_data, dtype=lvl_index2id_dtype)
-        lvl_index2id_df = pd.DataFrame.from_records(lvl_index2id_data, index="index")
+        lvl_index2id = np.array(lvl_index2id, dtype=lvl_index2id_dtype)
+        lvl_index2id = pd.DataFrame.from_records(lvl_index2id, index="index")
 
-        return lvl_index2id_df
+        return lvl_index2id
 
-    def ingest_levels(self, levels_df=None):
+    def ingest_levels(self, levels=None):
 
-        if levels_df is None:
-            levels_df = self.gfall_reader.levels_df
+        if levels is None:
+            levels = self.gfall_reader.levels
 
         # Select ions
         if self.ions is not None:
-            levels_df = levels_df.reset_index().\
+            levels = levels.reset_index().\
                                   join(self.ions, how="inner",
                                        on=["atomic_number", "ion_charge"]).\
                                   set_index(["atomic_number", "ion_charge", "level_index"])
 
         print("Ingesting levels from {}".format(self.data_source.short_name))
 
-        for ion_index, ion_df in levels_df.groupby(level=["atomic_number", "ion_charge"]):
+        for ion_index, ion_levels in levels.groupby(level=["atomic_number", "ion_charge"]):
 
             atomic_number, ion_charge = ion_index
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
-            for index, row in ion_df.iterrows():
+            for index, row in ion_levels.iterrows():
 
                 level_index = index[2]  # index: (atomic_number, ion_charge, level_index)
 
@@ -376,37 +376,37 @@ class GFALLIngester(object):
                           ])
                 )
 
-    def ingest_lines(self, lines_df=None):
+    def ingest_lines(self, lines=None):
 
-        if lines_df is None:
-            lines_df = self.gfall_reader.lines_df
+        if lines is None:
+            lines = self.gfall_reader.lines
 
         # Select ions
         if self.ions is not None:
-            lines_df = lines_df.reset_index(). \
+            lines = lines.reset_index(). \
                 join(self.ions, how="inner",
                      on=["atomic_number", "ion_charge"]). \
                 set_index(["atomic_number", "ion_charge", "level_index_lower", "level_index_upper"])
 
         print("Ingesting lines from {}".format(self.data_source.short_name))
 
-        for ion_index, ion_df in lines_df.groupby(level=["atomic_number", "ion_charge"]):
+        for ion_index, ion_lines in lines.groupby(level=["atomic_number", "ion_charge"]):
 
             atomic_number, ion_charge = ion_index
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
 
-            lvl_index2id_df = self.get_lvl_index2id_df(ion)
+            lvl_index2id = self.get_lvl_index2id(ion)
 
-            for index, row in ion_df.iterrows():
+            for index, row in ion_lines.iterrows():
 
                 # index: (atomic_number, ion_charge, lower_level_index, upper_level_index)
                 lower_level_index, upper_level_index = index[2:]
 
                 try:
-                    lower_level_id = int(lvl_index2id_df.loc[lower_level_index])
-                    upper_level_id = int(lvl_index2id_df.loc[upper_level_index])
+                    lower_level_id = int(lvl_index2id.loc[lower_level_index])
+                    upper_level_id = int(lvl_index2id.loc[upper_level_index])
                 except KeyError:
                     raise IngesterError("Levels from this source have not been found."
                                         "You must ingest levels before transitions")
