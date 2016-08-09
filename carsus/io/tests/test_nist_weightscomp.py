@@ -67,12 +67,12 @@ def weightscomp_pyparser():
     return NISTWeightsCompPyparser(input_data=test_input)
 
 @pytest.fixture
-def atomic_df(weightscomp_pyparser):
+def atomic(weightscomp_pyparser):
     return weightscomp_pyparser.prepare_atomic_dataframe()
 
 
 @pytest.fixture
-def expected_df():
+def expected():
     return pd.DataFrame(data=expected_dict, columns=[ATOM_NUM_COL, AW_VAL_COL, AW_SD_COL]).set_index(ATOM_NUM_COL)
 
 
@@ -83,16 +83,16 @@ def weightscomp_ingester(memory_session):
     return ingester
 
 
-def test_weightscomp_pyparser_base_df_index(weightscomp_pyparser):
-    assert weightscomp_pyparser.base_df.index.names == [ATOM_NUM_COL, MASS_NUM_COL]
+def test_weightscomp_pyparser_base_index(weightscomp_pyparser):
+    assert weightscomp_pyparser.base.index.names == [ATOM_NUM_COL, MASS_NUM_COL]
 
 
-def test_weightscomp_pyparser_prepare_atomic_df_index(atomic_df):
-    assert atomic_df.index.name == ATOM_NUM_COL
+def test_weightscomp_pyparser_prepare_atomic_index(atomic):
+    assert atomic.index.name == ATOM_NUM_COL
 
 
-def test_weightscomp_pyparser_prepare_atomic_df_(atomic_df, expected_df):
-    assert_frame_equal(atomic_df, expected_df, check_names=False)
+def test_weightscomp_pyparser_prepare_atomic_df_(atomic, expected):
+    assert_frame_equal(atomic, expected, check_names=False)
 
 
 @pytest.mark.parametrize("atomic_number, value, uncert", expected_tuples)
