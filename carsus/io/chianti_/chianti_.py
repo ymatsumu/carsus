@@ -212,8 +212,8 @@ class ChiantiIonReader(object):
 
         lines[["wavelength", "method"]] = lines.apply(parse_wavelength, axis=1)
 
-        lines.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        lines.sort_index(inplace=True)
+        lines = lines.set_index(["lower_level_index", "upper_level_index"])
+        lines = lines.sort_index()
 
         return lines
 
@@ -231,8 +231,8 @@ class ChiantiIonReader(object):
 
         collisions = pd.DataFrame(collisions_dict)
 
-        collisions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        collisions.sort_index(inplace=True)
+        collisions = collisions.set_index(["lower_level_index", "upper_level_index"])
+        collisions = collisions.sort_index()
 
         return collisions
 
