@@ -172,14 +172,14 @@ class ChiantiIonReader(object):
         levels = pd.DataFrame(levels_dict)
 
         # Replace empty labels with NaN
-        levels["label"].replace(r'\s+', np.nan, regex=True, inplace=True)
+        levels.loc[:, "label"] = levels["label"].replace(r'\s+', np.nan, regex=True)
 
         # Extract configuration and term from the "pretty" column
-        levels[["term", "configuration"]] = levels["pretty"].str.rsplit(' ', expand=True, n=1)
-        levels.drop("pretty", axis=1, inplace=True)
+        levels.loc[:, ["term", "configuration"]] = levels["pretty"].str.rsplit(' ', expand=True, n=1)
+        levels = levels.drop("pretty", axis=1)
 
-        levels.set_index("level_index", inplace=True)
-        levels.sort_index(inplace=True)
+        levels = levels.set_index("level_index")
+        levels = levels.sort_index()
 
         return levels
 
