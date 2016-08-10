@@ -103,20 +103,20 @@ class ChiantiIonReader(object):
     @property
     def levels(self):
         if self._levels is None:
-            self._read_levels()
-        return self._levels.copy()
+            self._levels = self.read_levels()
+        return self._levels
 
     @property
     def lines(self):
         if self._lines is None:
-            self._read_lines()
-        return self._lines.copy()
+            self._lines = self.read_lines()
+        return self._lines
 
     @property
     def collisions(self):
         if self._collisions is None:
-            self._read_collisions()
-        return self._collisions.copy()
+            self._collisions = self.read_collisions()
+        return self._collisions
 
     @property
     def last_bound_level(self):
@@ -126,7 +126,7 @@ class ChiantiIonReader(object):
 
     @property
     def bound_levels(self):
-        return self.levels.loc[:self.last_bound_level]
+        return self.levels.loc[:self.last_bound_level].copy()
 
     def filter_bound_transitions(self, transitions):
         """ Filter transitions DataFrames on bound levels.
@@ -142,15 +142,15 @@ class ChiantiIonReader(object):
 
     @property
     def bound_lines(self):
-        bound_lines = self.filter_bound_transitions(self.lines)
+        bound_lines = self.filter_bound_transitions(self.lines.copy())
         return bound_lines
 
     @property
     def bound_collisions(self):
-        bound_collisions = self.filter_bound_transitions(self.collisions)
+        bound_collisions = self.filter_bound_transitions(self.collisions.copy())
         return bound_collisions
 
-    def _read_levels(self):
+    def read_levels(self):
 
         try:
             elvlc = self.ion.Elvlc
@@ -169,19 +169,21 @@ class ChiantiIonReader(object):
         except AssertionError:
             raise ValueError('Level 0 energy is not 0.0')
 
-        self._levels = pd.DataFrame(levels_dict)
+        levels = pd.DataFrame(levels_dict)
 
         # Replace empty labels with NaN
-        self._levels["label"].replace(r'\s+', np.nan, regex=True, inplace=True)
+        levels["label"].replace(r'\s+', np.nan, regex=True, inplace=True)
 
         # Extract configuration and term from the "pretty" column
-        self._levels[["term", "configuration"]] = self._levels["pretty"].str.rsplit(' ', expand=True, n=1)
-        self._levels.drop("pretty", axis=1, inplace=True)
+        levels[["term", "configuration"]] = levels["pretty"].str.rsplit(' ', expand=True, n=1)
+        levels.drop("pretty", axis=1, inplace=True)
 
-        self._levels.set_index("level_index", inplace=True)
-        self._levels.sort_index(inplace=True)
+        levels.set_index("level_index", inplace=True)
+        levels.sort_index(inplace=True)
 
-    def _read_lines(self):
+        return levels
+
+    def read_lines(self):
 
         try:
             wgfa = self.ion.Wgfa
@@ -193,10 +195,10 @@ class ChiantiIonReader(object):
         for key, col_name in self.wgfa_dict.iteritems():
             lines_dict[col_name] = wgfa.get(key)
 
-        self._lines = pd.DataFrame(lines_dict)
+        lines = pd.DataFrame(lines_dict)
 
         # two-photon transitions are given a zero wavelength and we ignore them for now
-        self._lines = self._lines.loc[~(self._lines["wavelength"] == 0)]
+        lines = lines.loc[~(lines["wavelength"] == 0)]
 
         # theoretical wavelengths have negative values
         def parse_wavelength(row):
@@ -208,12 +210,14 @@ class ChiantiIonReader(object):
                 method = "m"
             return pd.Series([wvl, method])
 
-        self._lines[["wavelength", "method"]] = self._lines.apply(parse_wavelength, axis=1)
+        lines[["wavelength", "method"]] = lines.apply(parse_wavelength, axis=1)
 
-        self._lines.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        self._lines.sort_index(inplace=True)
+        lines.set_index(["lower_level_index", "upper_level_index"], inplace=True)
+        lines.sort_index(inplace=True)
 
-    def _read_collisions(self):
+        return lines
+
+    def read_collisions(self):
 
         try:
             scups = self.ion.Scups
@@ -225,10 +229,12 @@ class ChiantiIonReader(object):
         for key, col_name in self.scups_dict.iteritems():
             collisions_dict[col_name] = scups.get(key)
 
-        self._collisions = pd.DataFrame(collisions_dict)
+        collisions = pd.DataFrame(collisions_dict)
 
-        self._collisions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        self._collisions.sort_index(inplace=True)
+        collisions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
+        collisions.sort_index(inplace=True)
+
+        return collisions
 
 
 class ChiantiIngester(object):
