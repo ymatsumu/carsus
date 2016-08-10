@@ -1,5 +1,5 @@
 import pytest
-from ..chianti_io import ChiantiIonReader, ChiantiIngester
+from carsus.io.chianti_ import ChiantiIonReader, ChiantiIngester
 from carsus.model import Level, LevelEnergy, Ion, Line, ECollision
 from numpy.testing import assert_almost_equal
 
