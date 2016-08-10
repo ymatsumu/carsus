@@ -25,9 +25,8 @@ def create_test_db(test_db_fname=TEST_DB_FNAME, gfall_fname=GFALL_FNAME):
 
     test_db_f = open(test_db_fname, "w")
     test_db_f.close()
-    test_db_url = "sqlite:///" + test_db_fname
 
-    session = init_db(url=test_db_url)
+    session = init_db(test_db_fname)
     session.commit()
 
     # Ingest atomic weights

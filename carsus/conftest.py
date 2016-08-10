@@ -52,7 +52,7 @@ def pytest_addoption(parser):
 
 @pytest.fixture
 def memory_session():
-    session = init_db(url="sqlite://")
+    session = init_db()
     session.commit()
     return session
 
