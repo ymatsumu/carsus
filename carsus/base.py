@@ -8,15 +8,16 @@ basic_atomic_data_fname = os.path.join(carsus.__path__[0], 'data',
                                        'basic_atomic_data.csv')
 
 
-def init_db(url, **kwargs):
+def init_db(fname=None, **kwargs):
     """
     Initializes the database.
     If the database is empty ingests basic atomic data (atomic numbers, symbols, etc.)
 
     Parameters
     ----------
-    url : str
-        The database url
+    fname : str
+        Path to the database file. If set to None create memory session.
+        (default: None)
 
     kwargs
         Additional keyword arguments that can be passed to the `create_engine` function (e.g. echo=True)
@@ -27,6 +28,8 @@ def init_db(url, **kwargs):
 
     """
     print "Initializing the database"
+
+    url = "sqlite:////" + fname if fname is not None else "sqlite://"
     session = setup(url, **kwargs)
 
     if session.query(Atom).count() == 0:
