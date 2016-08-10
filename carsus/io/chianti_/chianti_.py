@@ -134,10 +134,10 @@ class ChiantiIonReader(object):
             The most succinct and accurate way to do this is to use slicing on multi index,
             but due to some bug in pandas out-of-range rows are included in the resulting DataFrame.
         """
-        transitions.reset_index(inplace=True)
+        transitions = transitions.reset_index()
         transitions = transitions.loc[transitions["upper_level_index"] <= self.last_bound_level]
-        transitions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        transitions.sort_index(inplace=True)
+        transitions = transitions.set_index(["lower_level_index", "upper_level_index"])
+        transitions = transitions.sort_index()
         return transitions
 
     @property
