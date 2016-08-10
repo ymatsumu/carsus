@@ -175,7 +175,7 @@ class ChiantiIonReader(object):
         levels.loc[:, "label"] = levels["label"].replace(r'\s+', np.nan, regex=True)
 
         # Extract configuration and term from the "pretty" column
-        levels.loc[:, ["term", "configuration"]] = levels["pretty"].str.rsplit(' ', expand=True, n=1)
+        levels[["term", "configuration"]] = levels["pretty"].str.rsplit(' ', expand=True, n=1)
         levels = levels.drop("pretty", axis=1)
 
         levels = levels.set_index("level_index")
