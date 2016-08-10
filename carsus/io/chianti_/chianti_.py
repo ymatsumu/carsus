@@ -404,7 +404,6 @@ class ChiantiIngester(object):
 
             try:
                 bound_collisions = rdr.bound_collisions
-                bound_collisions = rdr.bound_collisions
             except ChiantiIonReaderError:
                 print("Collisions not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
                 continue
