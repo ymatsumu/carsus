@@ -126,7 +126,7 @@ class ChiantiIonReader(object):
 
     @property
     def bound_levels(self):
-        return self.levels.loc[:self.last_bound_level].copy()
+        return self.levels.loc[:self.last_bound_level]
 
     def filter_bound_transitions(self, transitions):
         """ Filter transitions DataFrames on bound levels.
@@ -142,12 +142,12 @@ class ChiantiIonReader(object):
 
     @property
     def bound_lines(self):
-        bound_lines = self.filter_bound_transitions(self.lines.copy())
+        bound_lines = self.filter_bound_transitions(self.lines)
         return bound_lines
 
     @property
     def bound_collisions(self):
-        bound_collisions = self.filter_bound_transitions(self.collisions.copy())
+        bound_collisions = self.filter_bound_transitions(self.collisions)
         return bound_collisions
 
     def read_levels(self):
