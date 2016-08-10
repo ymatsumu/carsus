@@ -60,13 +60,13 @@ def ioniz_energies_parser():
 
 
 @pytest.fixture
-def ioniz_energies_df(ioniz_energies_parser):
-    return ioniz_energies_parser.prepare_ioniz_energies_df()
+def ioniz_energies(ioniz_energies_parser):
+    return ioniz_energies_parser.prepare_ioniz_energies()
 
 
 @pytest.fixture
-def ground_levels_df(ioniz_energies_parser):
-    return ioniz_energies_parser.prepare_ground_levels_df()
+def ground_levels(ioniz_energies_parser):
+    return ioniz_energies_parser.prepare_ground_levels()
 
 
 @pytest.fixture
@@ -93,18 +93,18 @@ def expected_series_ground_levels(request):
     return pd.Series(data=data, name=name, index=index)
 
 
-def test_prepare_ioniz_energies_df_null_values(ioniz_energies_df):
-    assert all(pd.notnull(ioniz_energies_df["ionization_energy_value"]))
+def test_prepare_ioniz_energies_null_values(ioniz_energies):
+    assert all(pd.notnull(ioniz_energies["ionization_energy_value"]))
 
 
-def test_prepare_ioniz_energies_df(ioniz_energies_df, expected_series_ioniz_energies):
-    series = ioniz_energies_df[expected_series_ioniz_energies.name]
+def test_prepare_ioniz_energies(ioniz_energies, expected_series_ioniz_energies):
+    series = ioniz_energies[expected_series_ioniz_energies.name]
     assert_series_equal(series, expected_series_ioniz_energies)
 
 
 
-def test_prepare_ground_levels_df(ground_levels_df, expected_series_ground_levels):
-    series = ground_levels_df[expected_series_ground_levels.name]
+def test_prepare_ground_levels(ground_levels, expected_series_ground_levels):
+    series = ground_levels[expected_series_ground_levels.name]
     assert_series_equal(series, expected_series_ground_levels)
 
 

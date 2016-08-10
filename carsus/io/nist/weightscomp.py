@@ -53,7 +53,7 @@ class NISTWeightsCompPyparser(BasePyparser):
 
     Attributes
     ----------
-    base_df : pandas.DataFrame
+    base : pandas.DataFrame
 
     grammar : pyparsing.ParseElement
         (default value = isotope)
@@ -64,13 +64,13 @@ class NISTWeightsCompPyparser(BasePyparser):
     Methods
     -------
     load(input_data)
-        Parses the input data and stores the results in the `base_df` attribute
+        Parses the input data and stores the results in the `base` attribute
 
     prepare_atomic_dataframe()
-        Returns a new dataframe created from the `base_df` and containing data *only* related to atoms.
+        Returns a new dataframe created from the `base` and containing data *only* related to atoms.
 
     prepare_isotopic_dataframe()
-        Returns a new dataframe created from the `base_df` and containing data *only* related to isotopes
+        Returns a new dataframe created from the `base` and containing data *only* related to isotopes
 
     """
 
@@ -82,12 +82,12 @@ class NISTWeightsCompPyparser(BasePyparser):
 
     def load(self, input_data):
         super(NISTWeightsCompPyparser, self).load(input_data)
-        self.base_df.set_index([ATOM_NUM_COL, MASS_NUM_COL], inplace=True)  # set multiindex "atomic_number","mass_number"
+        self.base.set_index([ATOM_NUM_COL, MASS_NUM_COL], inplace=True)  # set multiindex "atomic_number","mass_number"
 
-    def _prepare_atomic_weights(self, atomic_df):
-        grouped_df = atomic_df.groupby([AW_TYPE_COL])
-        interval_gr = grouped_df.get_group(INTERVAL).copy()
-        stable_mass_num_gr = grouped_df.get_group(STABLE_MASS_NUM).copy()
+    def _prepare_atomic_weights(self, atomic):
+        grouped = atomic.groupby([AW_TYPE_COL])
+        interval_gr = grouped.get_group(INTERVAL).copy()
+        stable_mass_num_gr = grouped.get_group(STABLE_MASS_NUM).copy()
 
         def atomic_weight_interval_to_nom_val_and_std(row):
             nom_val, std_dev = to_nom_val_and_std_dev([row[AW_LWR_BND_COL], row[AW_UPR_BND_COL]])
@@ -97,26 +97,26 @@ class NISTWeightsCompPyparser(BasePyparser):
             apply(atomic_weight_interval_to_nom_val_and_std, axis=1)
 
         def atomic_weight_find_stable_atom_mass(row):
-            stable_isotope = self.base_df.loc[row.name, row[AW_STABLE_MASS_NUM_COL]]
+            stable_isotope = self.base.loc[row.name, row[AW_STABLE_MASS_NUM_COL]]
             return stable_isotope[[AM_VAL_COL, AM_SD_COL]]
 
         stable_mass_num_gr[[AW_VAL_COL, AW_SD_COL]] = stable_mass_num_gr.\
             apply(atomic_weight_find_stable_atom_mass, axis=1)
 
-        atomic_df.update(interval_gr)
-        atomic_df.update(stable_mass_num_gr)
-        return atomic_df.drop([AW_TYPE_COL, AW_LWR_BND_COL, AW_UPR_BND_COL, AW_STABLE_MASS_NUM_COL], axis=1)
+        atomic.update(interval_gr)
+        atomic.update(stable_mass_num_gr)
+        return atomic.drop([AW_TYPE_COL, AW_LWR_BND_COL, AW_UPR_BND_COL, AW_STABLE_MASS_NUM_COL], axis=1)
 
     def prepare_atomic_dataframe(self):
-        """ Returns a new dataframe created from the base_df and containing data *only* related to atoms """
-        atomic_df = self.base_df[ATOM_WEIGHT_COLS].reset_index(level=MASS_NUM_COL, drop=True)
-        atomic_df = atomic_df[~atomic_df.index.duplicated()]
-        atomic_df = self._prepare_atomic_weights(atomic_df)
-        atomic_df = atomic_df[pd.notnull(atomic_df[AW_VAL_COL])]
-        return atomic_df
+        """ Returns a new dataframe created from `base` and containing data *only* related to atoms """
+        atomic = self.base[ATOM_WEIGHT_COLS].reset_index(level=MASS_NUM_COL, drop=True)
+        atomic = atomic[~atomic.index.duplicated()]
+        atomic = self._prepare_atomic_weights(atomic)
+        atomic = atomic[pd.notnull(atomic[AW_VAL_COL])]
+        return atomic
 
     def prepare_isotope_dataframe(self):
-        """ Returns a new dataframe created from the base_df and containing data *only* related to isotopes """
+        """ Returns a new dataframe created from `base` and containing data *only* related to isotopes """
         pass
 
 
@@ -163,9 +163,9 @@ class NISTWeightsCompIngester(BaseIngester):
         """ *Only* ingests atomic weights *for now* """
 
         print "Ingesting atomic weights"
-        atomic_df = self.parser.prepare_atomic_dataframe()
+        atomic = self.parser.prepare_atomic_dataframe()
 
-        for atomic_number, row in atomic_df.iterrows():
+        for atomic_number, row in atomic.iterrows():
             atom_weight = AtomWeight(atomic_number=atomic_number,
                                      data_source=self.data_source,
                                      quantity=row[AW_VAL_COL]*u.u,

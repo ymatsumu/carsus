@@ -300,17 +300,17 @@ def test_levels_create_artificial_fully_ionized(levels, atomic_number):
 
 # ToDo: Implement real tests
 @with_test_db
-def test_create_collisions_df(collisions):
+def test_create_collisions(collisions):
     assert True
 
 
 @with_test_db
-def test_create_macro_atom_df(macro_atom):
+def test_create_macro_atom(macro_atom):
     assert True
 
 
 @with_test_db
-def test_create_macro_atom_ref_df(macro_atom_references):
+def test_create_macro_atom_ref(macro_atom_references):
     assert True
 
 
