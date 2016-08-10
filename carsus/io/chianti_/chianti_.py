@@ -322,9 +322,11 @@ class ChiantiIngester(object):
 
             for index, row in bound_levels.iterrows():
 
-                level = Level(ion=ion, data_source=self.data_source, level_index=index,
-                                     configuration=row["configuration"], term=row["term"],
-                                     L=row["L"], J=row["J"], spin_multiplicity=row["spin_multiplicity"])
+                level = Level(
+                    ion=ion, data_source=self.data_source, level_index=index,
+                    configuration=row["configuration"], term=row["term"],
+                    L=row["L"], J=row["J"], spin_multiplicity=row["spin_multiplicity"]
+                )
 
                 level.energies = []
                 for column, method in [('energy', 'meas'), ('energy_theoretical', 'theor')]:
