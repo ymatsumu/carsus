@@ -21,7 +21,7 @@ DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
 NIST = "nist"
 
 
-def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
+def download_weightscomp(params=DEFAULT_PARAMS):
     """
     Downloader function for the NIST Atomic Weights and Isotopic Compositions database
 
@@ -29,9 +29,6 @@ def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
 
     Parameters
     ----------
-    url : str
-        The request url, (default="http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl")
-
     params : dict
         The GET request parameters (default={'ascii':'ascii2', 'isotype': 'some'})
 
@@ -41,7 +38,7 @@ def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
         Preformatted text data
 
     """
-    print "Downloading the data from {}".format(url)
+    print "Downloading the data from {}".format(WEIGHTSCOMP_URL)
     r = requests.get(url, params=params)
     soup = BeautifulSoup(r.text, 'html5lib')
     pre_text_data = soup.pre.get_text()
