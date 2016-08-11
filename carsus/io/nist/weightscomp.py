@@ -21,7 +21,7 @@ DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
 NIST = "nist"
 
 
-def download_weightscomp(params=DEFAULT_PARAMS):
+def download_weightscomp(ascii='ascii', isotype='some'):
     """
     Downloader function for the NIST Atomic Weights and Isotopic Compositions database
 
@@ -29,8 +29,12 @@ def download_weightscomp(params=DEFAULT_PARAMS):
 
     Parameters
     ----------
-    params : dict
-        The GET request parameters (default={'ascii':'ascii2', 'isotype': 'some'})
+    ascii: str
+        GET request parameter, refer to the NIST docs
+        (default: 'ascii')
+    isotype: str
+        GET request parameter, refer to the NIST docs
+        (default: 'some')
 
     Returns
     -------
@@ -39,7 +43,7 @@ def download_weightscomp(params=DEFAULT_PARAMS):
 
     """
     print "Downloading the data from {}".format(WEIGHTSCOMP_URL)
-    r = requests.get(url, params=params)
+    r = requests.get(WEIGHTSCOMP_URL, params={'ascii': ascii, 'isotype': isotype})
     soup = BeautifulSoup(r.text, 'html5lib')
     pre_text_data = soup.pre.get_text()
     pre_text_data = pre_text_data.replace(u'\xa0', u' ')  # replace non-breaking spaces with spaces
