@@ -260,6 +260,8 @@ class NISTIonizationEnergiesIngester(BaseIngester):
 
         if ionization_energies:
             self.ingest_ionization_energies()
+            self.session.flush()
 
         if ground_levels:
             self.ingest_ground_levels()
+            self.session.flush()
