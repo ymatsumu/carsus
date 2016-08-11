@@ -1,13 +1,10 @@
 import re
-
 import numpy as np
 import pandas as pd
 
 from astropy import units as u
-from pandas import read_sql_query
 from sqlalchemy import and_
-from sqlalchemy.orm.exc import NoResultFound
-from carsus.model import Atom, DataSource, Ion, Level, LevelEnergy,\
+from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
 from carsus.util import atomic_number2symbol
@@ -16,6 +13,7 @@ from tardis.util import species_string_to_tuple
 GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
 MEDIUM_VACUUM = 0
 MEDIUM_AIR = 1
+
 
 class GFALLReader(object):
     """
