@@ -41,7 +41,7 @@ def download_ionization_energies(spectra='h-uuh', e_out=0, e_unit=1, format_=1, 
 
     data = {k: v for k, v in data.iteritems() if v is not False}
 
-    print "Downloading ionization energies data from http://physics.nist.gov/PhysRefData/ASD/ionEnergy.html"
+    print "Downloading ionization energies from the NIST Atomic Spectra Database"
     r = requests.post(IONIZATION_ENERGIES_URL, data=data)
     return r.text
 
@@ -169,6 +169,8 @@ class NISTIonizationEnergiesIngester(BaseIngester):
 
         downloader : function
             (default value = download_ionization_energies)
+        spectra: str
+            (default value = 'h-uuh')
 
         Methods
         -------
@@ -178,22 +180,25 @@ class NISTIonizationEnergiesIngester(BaseIngester):
             Persists the downloaded data into the database
         """
 
-    def __init__(self, session, ds_short_name="nist-asd", downloader=None, parser=None):
+    def __init__(self, session, ds_short_name="nist-asd", downloader=None, parser=None, spectra="h-uuh"):
         if parser is None:
             parser = NISTIonizationEnergiesParser()
         if downloader is None:
             downloader = download_ionization_energies
+        self.spectra = spectra
         super(NISTIonizationEnergiesIngester, self). \
             __init__(session, ds_short_name=ds_short_name, parser=parser, downloader=downloader)
 
-    def download(self, spectra='h-uuh'):
-        data = self.downloader(spectra=spectra)
+    def download(self):
+        data = self.downloader(spectra=self.spectra)
         self.parser(data)
 
-    def ingest_ionization_energies(self):
-        print("Ingesting ionization energies from {}".format(self.data_source.short_name))
+    def ingest_ionization_energies(self, ioniz_energies=None):
 
-        ioniz_energies = self.parser.prepare_ioniz_energies()
+        if ioniz_energies is None:
+            ioniz_energies = self.parser.prepare_ioniz_energies()
+
+        print("Ingesting ionization energies from {}".format(self.data_source.short_name))
 
         for index, row in ioniz_energies.iterrows():
             atomic_number, ion_charge = index
@@ -210,10 +215,12 @@ class NISTIonizationEnergiesIngester(BaseIngester):
             # No need to add ion to the session, because
             # that was done in `as_unique`
 
-    def ingest_ground_levels(self):
-        print("Ingesting ground levels from {}".format(self.data_source.short_name))
+    def ingest_ground_levels(self, ground_levels=None):
 
-        ground_levels = self.parser.prepare_ground_levels()
+        if ground_levels is None:
+            ground_levels = self.parser.prepare_ground_levels()
+
+        print("Ingesting ground levels from {}".format(self.data_source.short_name))
 
         for index, row in ground_levels.iterrows():
             atomic_number, ion_charge = index
@@ -248,10 +255,14 @@ class NISTIonizationEnergiesIngester(BaseIngester):
 
     def ingest(self, ionization_energies=True, ground_levels=True):
 
-        print("Ingesting data from {}".format(self.data_source.short_name))
+        # Download data if needed
+        if self.parser.base is None:
+            self.download()
 
         if ionization_energies:
             self.ingest_ionization_energies()
+            self.session.flush()
 
         if ground_levels:
             self.ingest_ground_levels()
+            self.session.flush()

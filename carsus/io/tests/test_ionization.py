@@ -134,6 +134,5 @@ def test_ingest_ground_levels(index, exp_j, memory_session, ioniz_energies_inges
 
 @pytest.mark.remote_data
 def test_ingest_nist_asd_ion_data(memory_session):
-    ingester = NISTIonizationEnergiesIngester(memory_session)
-    ingester.download('h-uuh')
+    ingester = NISTIonizationEnergiesIngester(memory_session, spectra="h-uuh")
     ingester.ingest(ionization_energies=True, ground_levels=True)
