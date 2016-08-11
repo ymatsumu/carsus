@@ -3,16 +3,16 @@ Input module for the NIST Atomic Weights and Isotopic Compositions database
 http://www.nist.gov/pml/data/comp.cfm
 """
 
+import requests
+import pandas as pd
+
+from bs4 import BeautifulSoup
+from astropy import units as u
 from carsus.io import BasePyparser, BaseIngester, to_nom_val_and_std_dev
-from .weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
+from carsus.io.nist.weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
     AM_VAL_COL, AM_SD_COL, INTERVAL, STABLE_MASS_NUM, ATOM_WEIGHT_COLS, AW_STABLE_MASS_NUM_COL,\
     AW_TYPE_COL, AW_VAL_COL, AW_SD_COL, AW_LWR_BND_COL, AW_UPR_BND_COL
 
-from carsus.model import AtomWeight, AtomQuantity, Atom, DataSource
-from astropy import units as u
-import requests
-import pandas as pd
-from bs4 import BeautifulSoup
 
 WEIGHTSCOMP_URL = "http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl"
 DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
