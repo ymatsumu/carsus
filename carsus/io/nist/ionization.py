@@ -258,8 +258,6 @@ class NISTIonizationEnergiesIngester(BaseIngester):
         if self.parser.base is None:
             self.download()
 
-        print("Ingesting data from {}".format(self.data_source.short_name))
-
         if ionization_energies:
             self.ingest_ionization_energies()
 
