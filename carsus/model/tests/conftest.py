@@ -1,12 +1,13 @@
 
 import pytest
 import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from astropy import units as u
 from carsus.model import Base, Atom, DataSource, AtomWeight,\
     Ion, IonizationEnergy, Level, LevelEnergy, Line, LineAValue, LineWavelength, LineGFValue,\
-    ECollision, ECollisionGFValue, ECollisionEnergy, ECollisionTempStrength
-from astropy import units as u
+    ECollision, ECollisionEnergy, ECollisionTempStrength
 
 data_dir = os.path.join(os.path.dirname(__file__), 'data')
 if not os.path.exists(data_dir):

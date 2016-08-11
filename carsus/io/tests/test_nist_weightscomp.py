@@ -1,11 +1,11 @@
 import pytest
 import pandas as pd
+
 from pandas.util.testing import assert_frame_equal
 from numpy.testing import assert_almost_equal
-from astropy import units as u
 from carsus.io.nist import NISTWeightsCompIngester, NISTWeightsCompPyparser
 from carsus.io.nist.weightscomp_grammar import *
-from carsus.model import Atom, AtomWeight, DataSource
+from carsus.model import AtomWeight
 
 test_input = """
 Atomic Number = 35

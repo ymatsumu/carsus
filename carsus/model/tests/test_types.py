@@ -1,9 +1,11 @@
-from ..meta.types import DBQuantity
+
+import pytest
+
 from astropy import units as u
 from astropy.units import UnitsError, UnitConversionError
 from numpy.testing import assert_almost_equal
 from sqlalchemy import column
-import pytest
+from carsus.model.meta.types import DBQuantity
 
 
 @pytest.fixture

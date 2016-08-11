@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
+
 from pandas.util.testing import assert_frame_equal
-from carsus.model import DataSource
 from carsus.io.nist.weightscomp_grammar import AW_SD_COL, AW_VAL_COL
 
 

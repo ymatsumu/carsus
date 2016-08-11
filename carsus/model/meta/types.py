@@ -1,10 +1,11 @@
 """Types and SQL constructs specific to carsus"""
 
+import numpy as np
+
 from sqlalchemy.sql.expression import ClauseElement
 from sqlalchemy.orm.attributes import QueryableAttribute
 from astropy.units import Quantity, Unit, dimensionless_unscaled, UnitsError
-from astropy.units.quantity_helper import helper_twoarg_comparison, UFUNC_HELPERS
-import numpy as np
+from astropy.units.quantity_helper import  UFUNC_HELPERS
 
 
 class DBQuantity(Quantity):

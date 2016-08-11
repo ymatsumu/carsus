@@ -1,6 +1,7 @@
 import pytest
+
 from carsus.io.nist.weightscomp_grammar import *
-from carsus.io import to_flat_dict
+from carsus.io.util import to_flat_dict
 from numpy.testing import assert_almost_equal, assert_allclose
 
 

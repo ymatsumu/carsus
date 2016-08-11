@@ -4,9 +4,9 @@ from sqlalchemy import Column, Integer, Float, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.declarative import declared_attr
-from ..meta.types import DBQuantity
-from carsus.util import convert_camel2snake
 from astropy.units import dimensionless_unscaled, UnitsError, set_enabled_equivalencies
+from carsus.model.meta.types import DBQuantity
+from carsus.util import convert_camel2snake
 
 
 class IonListMixin(object):

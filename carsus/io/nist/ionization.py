@@ -5,12 +5,13 @@ http://physics.nist.gov/PhysRefData/ASD/ionEnergy.html
 
 import requests
 import pandas as pd
+
 from bs4 import BeautifulSoup
 from StringIO import StringIO
 from astropy import units as u
 from uncertainties import ufloat_fromstr
 from pyparsing import ParseException
-from carsus.model import DataSource, Ion, IonizationEnergy, Level, LevelEnergy
+from carsus.model import Ion, IonizationEnergy, Level, LevelEnergy
 from carsus.io.base import BaseParser, BaseIngester
 from carsus.io.nist.ionization_grammar import level
 

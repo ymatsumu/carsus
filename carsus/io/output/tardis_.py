@@ -2,21 +2,20 @@ import numpy as np
 import pandas as pd
 import hashlib
 import uuid
-import pickle
 
 from pandas import HDFStore
-from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
-from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum
 from sqlalchemy import and_, case
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.orm.exc import NoResultFound
 from astropy import constants as const
 from astropy import units as u
-from astropy.units import Quantity
 from scipy import interpolate
 from tardis.util import species_string_to_tuple
+from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
+from carsus.model.meta import yield_limit, Base, IonListMixin
+from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum
+
 
 P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0

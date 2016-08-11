@@ -1,13 +1,11 @@
 import pytest
 import pandas as pd
+
 from pandas.util.testing import assert_series_equal
-from astropy import units as u
 from numpy.testing import assert_almost_equal
-from sqlalchemy import and_
 from sqlalchemy.orm import joinedload
-from carsus.model import Ion, Atom, DataSource, IonizationEnergy
-from carsus.io.nist.ionization import download_ionization_energies, NISTIonizationEnergiesParser,\
-    NISTIonizationEnergiesIngester
+from carsus.model import Ion
+from carsus.io.nist.ionization import  NISTIonizationEnergiesParser, NISTIonizationEnergiesIngester
 
 
 test_data = """

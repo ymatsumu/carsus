@@ -1,9 +1,8 @@
 import os
 
 from carsus import init_db
-from carsus.io.nist import NISTWeightsCompIngester, NISTIonizationEnergiesIngester
-from carsus.io.kurucz import GFALLIngester
-from carsus.io.chianti_ import ChiantiIngester
+from carsus.io import NISTWeightsCompIngester, NISTIonizationEnergiesIngester,\
+     GFALLIngester, ChiantiIngester
 
 DATA_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), 'data')

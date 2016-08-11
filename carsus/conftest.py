@@ -7,12 +7,9 @@ from astropy.tests.pytest_plugins import (
         pytest_addoption as _pytest_add_option
     )
 
-from carsus import init_db
-from carsus.io.nist import NISTWeightsCompIngester, NISTIonizationEnergiesIngester
-from carsus.io.kurucz import GFALLIngester
-from carsus.io.chianti_ import ChiantiIngester
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from carsus import init_db
 
 ## exceptions
 # enable_deprecations_as_exceptions()
