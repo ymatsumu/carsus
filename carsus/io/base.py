@@ -31,7 +31,7 @@ class BaseParser(object):
     __metaclass__ = ABCMeta
 
     def __init__(self, input_data=None):
-        self.base = pd.DataFrame()
+        self.base = None
         if input_data is not None:
             self.load(input_data)
 
