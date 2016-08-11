@@ -8,6 +8,7 @@ import pandas as pd
 
 from bs4 import BeautifulSoup
 from astropy import units as u
+from carsus.model import AtomWeight
 from carsus.io.base import BasePyparser, BaseIngester
 from carsus.io.util import to_nom_val_and_std_dev
 from carsus.io.nist.weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, MASS_NUM_COL,\
