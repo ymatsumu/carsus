@@ -42,7 +42,7 @@ def download_weightscomp(ascii='ascii', isotype='some'):
         Preformatted text data
 
     """
-    print "Downloading the data from {}".format(WEIGHTSCOMP_URL)
+    print "Downloading data from the NIST Atomic Weights and Isotopic Compositions database."
     r = requests.get(WEIGHTSCOMP_URL, params={'ascii': ascii, 'isotype': isotype})
     soup = BeautifulSoup(r.text, 'html5lib')
     pre_text_data = soup.pre.get_text()
