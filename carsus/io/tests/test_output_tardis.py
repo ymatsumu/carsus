@@ -6,7 +6,7 @@ from numpy.testing import assert_almost_equal
 from astropy import units as u
 from astropy.tests.helper import assert_quantity_allclose
 from sqlalchemy import and_
-from carsus.io.output.tardis_op import AtomData
+from carsus.io.output.tardis_ import AtomData
 from carsus.model import DataSource, Ion
 
 with_test_db = pytest.mark.skipif(
