@@ -1,4 +1,5 @@
 import pytest
+
 from pyparsing import Word, Dict, Group, alphas, nums, Suppress
 from carsus.io.base import BasePyparser, BaseIngester
 from carsus.model import DataSource

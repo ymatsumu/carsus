@@ -1,14 +1,12 @@
 import pytest
 import numpy as np
-import pandas as pd
 
-from carsus.io.kurucz import GFALLReader, GFALLIngester
-from carsus.model import Ion, Level, LevelEnergy, DataSource, Line, LineWavelength, LineGFValue
 from sqlalchemy import and_
 from numpy.testing import assert_almost_equal, assert_allclose
 from astropy.tests.helper import assert_quantity_allclose
 from astropy import units as u
-
+from carsus.io.kurucz import GFALLReader, GFALLIngester
+from carsus.model import Ion, Level, LevelEnergy, DataSource, Line
 
 @pytest.fixture()
 def gfall_rdr(gfall_fname):

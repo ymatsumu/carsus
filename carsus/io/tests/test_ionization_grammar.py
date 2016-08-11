@@ -1,6 +1,7 @@
 import pytest
-from carsus.io.nist.ionization_grammar import *
+
 from numpy.testing import assert_almost_equal
+from carsus.io.nist.ionization_grammar import *
 
 
 @pytest.mark.parametrize("test_input,exp_j",[

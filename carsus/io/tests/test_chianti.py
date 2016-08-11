@@ -1,7 +1,8 @@
 import pytest
-from carsus.io.chianti_ import ChiantiIonReader, ChiantiIngester
-from carsus.model import Level, LevelEnergy, Ion, Line, ECollision
+
 from numpy.testing import assert_almost_equal
+from carsus.io.chianti_ import ChiantiIonReader, ChiantiIngester
+from carsus.model import Level, Ion, Line, ECollision
 
 
 slow = pytest.mark.skipif(

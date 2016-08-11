@@ -1,6 +1,7 @@
 import pytest
+
 from numpy.testing import assert_allclose
-from ..util import to_flat_dict, to_nom_val_and_std_dev
+from carsus.io.util import to_flat_dict, to_nom_val_and_std_dev
 
 @pytest.mark.parametrize("test_input,expected",[
     ('isotopic_comp = 2.1234132(12)',
