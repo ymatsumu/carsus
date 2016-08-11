@@ -10,7 +10,7 @@ from astropy.tests.pytest_plugins import (
 from carsus import init_db
 from carsus.io.nist import NISTWeightsCompIngester, NISTIonizationEnergiesIngester
 from carsus.io.kurucz import GFALLIngester
-from carsus.io.chianti_io import ChiantiIngester
+from carsus.io.chianti_ import ChiantiIngester
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 

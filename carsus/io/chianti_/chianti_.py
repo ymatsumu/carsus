@@ -103,20 +103,20 @@ class ChiantiIonReader(object):
     @property
     def levels(self):
         if self._levels is None:
-            self._read_levels()
-        return self._levels.copy()
+            self._levels = self.read_levels()
+        return self._levels
 
     @property
     def lines(self):
         if self._lines is None:
-            self._read_lines()
-        return self._lines.copy()
+            self._lines = self.read_lines()
+        return self._lines
 
     @property
     def collisions(self):
         if self._collisions is None:
-            self._read_collisions()
-        return self._collisions.copy()
+            self._collisions = self.read_collisions()
+        return self._collisions
 
     @property
     def last_bound_level(self):
@@ -134,10 +134,10 @@ class ChiantiIonReader(object):
             The most succinct and accurate way to do this is to use slicing on multi index,
             but due to some bug in pandas out-of-range rows are included in the resulting DataFrame.
         """
-        transitions.reset_index(inplace=True)
+        transitions = transitions.reset_index()
         transitions = transitions.loc[transitions["upper_level_index"] <= self.last_bound_level]
-        transitions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        transitions.sort_index(inplace=True)
+        transitions = transitions.set_index(["lower_level_index", "upper_level_index"])
+        transitions = transitions.sort_index()
         return transitions
 
     @property
@@ -150,7 +150,7 @@ class ChiantiIonReader(object):
         bound_collisions = self.filter_bound_transitions(self.collisions)
         return bound_collisions
 
-    def _read_levels(self):
+    def read_levels(self):
 
         try:
             elvlc = self.ion.Elvlc
@@ -169,19 +169,21 @@ class ChiantiIonReader(object):
         except AssertionError:
             raise ValueError('Level 0 energy is not 0.0')
 
-        self._levels = pd.DataFrame(levels_dict)
+        levels = pd.DataFrame(levels_dict)
 
         # Replace empty labels with NaN
-        self._levels["label"].replace(r'\s+', np.nan, regex=True, inplace=True)
+        levels.loc[:, "label"] = levels["label"].replace(r'\s+', np.nan, regex=True)
 
         # Extract configuration and term from the "pretty" column
-        self._levels[["term", "configuration"]] = self._levels["pretty"].str.rsplit(' ', expand=True, n=1)
-        self._levels.drop("pretty", axis=1, inplace=True)
+        levels[["term", "configuration"]] = levels["pretty"].str.rsplit(' ', expand=True, n=1)
+        levels = levels.drop("pretty", axis=1)
 
-        self._levels.set_index("level_index", inplace=True)
-        self._levels.sort_index(inplace=True)
+        levels = levels.set_index("level_index")
+        levels = levels.sort_index()
 
-    def _read_lines(self):
+        return levels
+
+    def read_lines(self):
 
         try:
             wgfa = self.ion.Wgfa
@@ -193,10 +195,10 @@ class ChiantiIonReader(object):
         for key, col_name in self.wgfa_dict.iteritems():
             lines_dict[col_name] = wgfa.get(key)
 
-        self._lines = pd.DataFrame(lines_dict)
+        lines = pd.DataFrame(lines_dict)
 
         # two-photon transitions are given a zero wavelength and we ignore them for now
-        self._lines = self._lines.loc[~(self._lines["wavelength"] == 0)]
+        lines = lines.loc[~(lines["wavelength"] == 0)]
 
         # theoretical wavelengths have negative values
         def parse_wavelength(row):
@@ -208,12 +210,14 @@ class ChiantiIonReader(object):
                 method = "m"
             return pd.Series([wvl, method])
 
-        self._lines[["wavelength", "method"]] = self._lines.apply(parse_wavelength, axis=1)
+        lines[["wavelength", "method"]] = lines.apply(parse_wavelength, axis=1)
 
-        self._lines.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        self._lines.sort_index(inplace=True)
+        lines = lines.set_index(["lower_level_index", "upper_level_index"])
+        lines = lines.sort_index()
 
-    def _read_collisions(self):
+        return lines
+
+    def read_collisions(self):
 
         try:
             scups = self.ion.Scups
@@ -225,10 +229,12 @@ class ChiantiIonReader(object):
         for key, col_name in self.scups_dict.iteritems():
             collisions_dict[col_name] = scups.get(key)
 
-        self._collisions = pd.DataFrame(collisions_dict)
+        collisions = pd.DataFrame(collisions_dict)
 
-        self._collisions.set_index(["lower_level_index", "upper_level_index"], inplace=True)
-        self._collisions.sort_index(inplace=True)
+        collisions = collisions.set_index(["lower_level_index", "upper_level_index"])
+        collisions = collisions.sort_index()
+
+        return collisions
 
 
 class ChiantiIngester(object):
@@ -316,9 +322,11 @@ class ChiantiIngester(object):
 
             for index, row in bound_levels.iterrows():
 
-                level = Level(ion=ion, data_source=self.data_source, level_index=index,
-                                     configuration=row["configuration"], term=row["term"],
-                                     L=row["L"], J=row["J"], spin_multiplicity=row["spin_multiplicity"])
+                level = Level(
+                    ion=ion, data_source=self.data_source, level_index=index,
+                    configuration=row["configuration"], term=row["term"],
+                    L=row["L"], J=row["J"], spin_multiplicity=row["spin_multiplicity"]
+                )
 
                 level.energies = []
                 for column, method in [('energy', 'meas'), ('energy_theoretical', 'theor')]:
@@ -397,7 +405,6 @@ class ChiantiIngester(object):
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
             try:
-                bound_collisions = rdr.bound_collisions
                 bound_collisions = rdr.bound_collisions
             except ChiantiIonReaderError:
                 print("Collisions not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
