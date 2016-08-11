@@ -254,6 +254,10 @@ class NISTIonizationEnergiesIngester(BaseIngester):
 
     def ingest(self, ionization_energies=True, ground_levels=True):
 
+        # Download data if needed
+        if self.parser.base is None:
+            self.download()
+
         print("Ingesting data from {}".format(self.data_source.short_name))
 
         if ionization_energies:
