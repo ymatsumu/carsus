@@ -40,7 +40,7 @@ def download_ionization_energies(spectra='h-uuh', e_out=0, e_unit=1, format_=1, 
 
     data = {k: v for k, v in data.iteritems() if v is not False}
 
-    print "Downloading ionization energies data from http://physics.nist.gov/PhysRefData/ASD/ionEnergy.html"
+    print "Downloading ionization energies from the NIST Atomic Spectra Database"
     r = requests.post(IONIZATION_ENERGIES_URL, data=data)
     return r.text
 
