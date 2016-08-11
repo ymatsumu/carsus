@@ -192,10 +192,12 @@ class NISTIonizationEnergiesIngester(BaseIngester):
         data = self.downloader(spectra=self.spectra)
         self.parser(data)
 
-    def ingest_ionization_energies(self):
-        print("Ingesting ionization energies from {}".format(self.data_source.short_name))
+    def ingest_ionization_energies(self, ioniz_energies=None):
 
-        ioniz_energies = self.parser.prepare_ioniz_energies()
+        if ioniz_energies is None:
+            ioniz_energies = self.parser.prepare_ioniz_energies()
+
+        print("Ingesting ionization energies from {}".format(self.data_source.short_name))
 
         for index, row in ioniz_energies.iterrows():
             atomic_number, ion_charge = index
@@ -212,10 +214,12 @@ class NISTIonizationEnergiesIngester(BaseIngester):
             # No need to add ion to the session, because
             # that was done in `as_unique`
 
-    def ingest_ground_levels(self):
-        print("Ingesting ground levels from {}".format(self.data_source.short_name))
+    def ingest_ground_levels(self, ground_levels=None):
 
-        ground_levels = self.parser.prepare_ground_levels()
+        if ground_levels is None:
+            ground_levels = self.parser.prepare_ground_levels()
+
+        print("Ingesting ground levels from {}".format(self.data_source.short_name))
 
         for index, row in ground_levels.iterrows():
             atomic_number, ion_charge = index
