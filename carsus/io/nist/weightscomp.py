@@ -17,11 +17,9 @@ from carsus.io.nist.weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, M
 
 
 WEIGHTSCOMP_URL = "http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl"
-DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
-NIST = "nist"
 
 
-def download_weightscomp(ascii='ascii', isotype='some'):
+def download_weightscomp(ascii='ascii2', isotype='some'):
     """
     Downloader function for the NIST Atomic Weights and Isotopic Compositions database
 
