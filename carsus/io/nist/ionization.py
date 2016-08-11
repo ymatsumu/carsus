@@ -168,6 +168,8 @@ class NISTIonizationEnergiesIngester(BaseIngester):
 
         downloader : function
             (default value = download_ionization_energies)
+        spectra: str
+            (default value = 'h-uuh')
 
         Methods
         -------
@@ -177,16 +179,17 @@ class NISTIonizationEnergiesIngester(BaseIngester):
             Persists the downloaded data into the database
         """
 
-    def __init__(self, session, ds_short_name="nist-asd", downloader=None, parser=None):
+    def __init__(self, session, ds_short_name="nist-asd", downloader=None, parser=None, spectra="h-uuh"):
         if parser is None:
             parser = NISTIonizationEnergiesParser()
         if downloader is None:
             downloader = download_ionization_energies
+        self.spectra = spectra
         super(NISTIonizationEnergiesIngester, self). \
             __init__(session, ds_short_name=ds_short_name, parser=parser, downloader=downloader)
 
-    def download(self, spectra='h-uuh'):
-        data = self.downloader(spectra=spectra)
+    def download(self):
+        data = self.downloader(spectra=self.spectra)
         self.parser(data)
 
     def ingest_ionization_energies(self):
