@@ -162,15 +162,23 @@ class NISTWeightsCompIngester(BaseIngester):
         data = self.downloader()
         self.parser(data)
 
-    def ingest(self):
+    def ingest_atomic_weights(self, atomic_weights=None):
+
+        if atomic_weights is None:
+            atomic_weights = self.parser.prepare_atomic_dataframe()
+
+        print "Ingesting atomic weights from {}".format(self.data_source.short_name)
+
+        for atomic_number, row in atomic_weights.iterrows():
+            weight = AtomWeight(atomic_number=atomic_number,
+                                     data_source=self.data_source,
+                                     quantity=row[AW_VAL_COL] * u.u,
+                                     uncert=row[AW_SD_COL])
+            self.session.add(weight)
+
+    def ingest(self, atomic_weights=True):
         """ *Only* ingests atomic weights *for now* """
 
-        print "Ingesting atomic weights"
-        atomic = self.parser.prepare_atomic_dataframe()
-
-        for atomic_number, row in atomic.iterrows():
-            atom_weight = AtomWeight(atomic_number=atomic_number,
-                                     data_source=self.data_source,
-                                     quantity=row[AW_VAL_COL]*u.u,
-                                     uncert=row[AW_SD_COL])
-            self.session.add(atom_weight)
+        if atomic_weights:
+            self.ingest_atomic_weights()
+            self.session.flush()
