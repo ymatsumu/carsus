@@ -1,10 +1,11 @@
 """This module defines base classes for parsers and ingesters."""
 
 import pandas as pd
+
 from util import to_flat_dict
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from carsus.model import DataSource
-from sqlalchemy import select
+
 
 class ParserError(ValueError):
     pass
