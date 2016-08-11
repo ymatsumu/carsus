@@ -179,6 +179,9 @@ class NISTWeightsCompIngester(BaseIngester):
     def ingest(self, atomic_weights=True):
         """ *Only* ingests atomic weights *for now* """
 
+        if self.parser.base is None:
+            self.download()
+
         if atomic_weights:
             self.ingest_atomic_weights()
             self.session.flush()
