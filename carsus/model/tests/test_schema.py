@@ -1,6 +1,7 @@
+
+from sqlalchemy import and_
 from carsus.model import Ion
 from carsus.model.meta import IonListMixin, Base
-from sqlalchemy import and_
 
 
 def test_ion_list_mixin_insert_values(memory_session):

@@ -1,11 +1,12 @@
 import pytest
-from carsus.model import Atom, AtomWeight, DataSource,\
-    Ion, IonizationEnergy, Level, LevelEnergy, Line, ECollision
+
 from astropy import units as u
 from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 from numpy.testing import assert_allclose, assert_almost_equal
 from astropy.tests.helper import assert_quantity_allclose
+from carsus.model import Atom, AtomWeight, DataSource,\
+    Ion, IonizationEnergy, Level, LevelEnergy, Line, ECollision
 
 
 @pytest.mark.parametrize("atomic_number, expected_symbol",[

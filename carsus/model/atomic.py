@@ -1,11 +1,11 @@
-from .meta import Base, UniqueMixin, QuantityMixin, DataSourceMixin
 
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import Column, Integer, String, Float, ForeignKey,\
-    UniqueConstraint, ForeignKeyConstraint, and_, cast
+    ForeignKeyConstraint, and_, cast
 from sqlalchemy.ext.associationproxy import association_proxy
 from astropy import units as u
+from carsus.model.meta import Base, UniqueMixin, QuantityMixin
 
 
 class Atom(Base):
