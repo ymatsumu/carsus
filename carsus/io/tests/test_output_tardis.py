@@ -18,14 +18,14 @@ with_test_db = pytest.mark.skipif(
 @pytest.fixture
 def atom_data(test_session):
     atom_data = AtomData(test_session,
-                         ions=["He II", "Be III", "B IV", "N VI", "Si II", "Zn XX"],
+                         selected_atoms="He, Be, B, N, Si, Zn",
                          chianti_ions=["He II", "N VI"])
     return atom_data
 
 
 @pytest.fixture
-def atom_data_only_be2(test_session):
-    atom_data = AtomData(test_session, ions=["Be III"])
+def atom_data_only_be(test_session):
+    atom_data = AtomData(test_session, selected_atoms="Be")
     return atom_data
 
 
@@ -89,9 +89,9 @@ def test_atom_data_init(memory_session):
     ch = DataSource.as_unique(memory_session, short_name="chianti_v8.0.2")
     ku = DataSource.as_unique(memory_session, short_name="ku_latest")
     atom_data = AtomData(memory_session,
-                         ions=["He II", "Be III", "B IV", "N VI"],
+                         selected_atoms="He, Be, B, N",
                          chianti_ions=["He II", "N VI"])
-    assert set(atom_data.ions) == set([(2,1), (4,2), (5,3), (7,5)])
+    assert set(atom_data.selected_atomic_numbers) == set([2, 4, 5, 7])
     assert set(atom_data.chianti_ions) == set([(2,1), (7,5)])
 
 
@@ -101,21 +101,19 @@ def test_atom_data_chianti_ions_subset(memory_session):
     ku = DataSource.as_unique(memory_session, short_name="ku_latest")
     with pytest.raises(ValueError):
         atom_data = AtomData(memory_session,
-                             ions=["He II", "Be III", "B IV", "N VI"],
+                             selected_atoms="He, Be, B, N VI",
                              chianti_ions=["He II", "N VI", "Si II"])
 
 
-def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be2, test_session):
-    assert atom_data_only_be2.chianti_ions == list()
-    assert test_session.query(atom_data_only_be2.chianti_ions_table).count() == 0
+def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be, test_session):
+    assert atom_data_only_be.chianti_ions == list()
+    assert test_session.query(atom_data_only_be.chianti_ions_table).count() == 0
 
 
-def test_atom_data_wo_chianti_ions_levels(atom_data_only_be2):
-    levels402 = atom_data_only_be2.levels
-    ions_in_levels402 = levels402.loc[:, ("atomic_number", "ion_number")].to_records(index=False).tolist()
-    # Exclude fully ionized, it is supposed to be there
-    ions_in_levels402 = [ion for ion in ions_in_levels402 if ion != (4, 4)]
-    assert all([ion == (4, 2) for ion in ions_in_levels402])
+def test_atom_data_wo_chianti_ions_levels(atom_data_only_be):
+    levels_be = atom_data_only_be.levels
+    atomic_numbers = levels_be["atomic_number"].values.tolist()
+    assert all([atomic_number == 4 for atomic_number in atomic_numbers])
 
 
 @with_test_db
@@ -132,13 +130,11 @@ def test_atom_data_join_on_chianti_ions_table(test_session, atom_data):
 def test_atom_data_two_instances_same_session(test_session):
 
     atom_data1 = AtomData(test_session,
-                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         selected_atoms="He, Be, B, N, Zn",
                          chianti_ions=["He II", "N VI"])
     atom_data2 = AtomData(test_session,
-                         ions=["He II", "Be III", "B IV", "N VI", "Zn XX"],
+                         selected_atoms="He, Be, B, N, Zn",
                          chianti_ions=["He II", "N VI"])
-    atom_data1.ions_table
-    atom_data2.ions_table
     atom_data1.chianti_ions_table
     atom_data2.chianti_ions_table
 
@@ -162,7 +158,7 @@ def test_create_atom_masses(atom_masses, atomic_number, exp_mass):
 
 @with_test_db
 def test_create_atom_masses_max_atomic_number(test_session):
-    atom_data = AtomData(test_session, ions=[], atom_masses_max_atomic_number=15)
+    atom_data = AtomData(test_session, selected_atoms="He, Be, B, N, Zn", atom_masses_max_atomic_number=15)
     atom_masses = atom_data.atom_masses
     assert atom_masses["atomic_number"].max() == 15
 
