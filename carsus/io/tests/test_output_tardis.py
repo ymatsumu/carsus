@@ -24,7 +24,7 @@ def atom_data(test_session):
 
 
 @pytest.fixture
-def atom_data_only_be(test_session):
+def atom_data_be(test_session):
     atom_data = AtomData(test_session, selected_atoms="Be")
     return atom_data
 
@@ -105,15 +105,20 @@ def test_atom_data_chianti_ions_subset(memory_session):
                              chianti_ions=["He II", "N VI", "Si II"])
 
 
-def test_atom_data_wo_chianti_ions_attributes(atom_data_only_be, test_session):
-    assert atom_data_only_be.chianti_ions == list()
-    assert test_session.query(atom_data_only_be.chianti_ions_table).count() == 0
+def test_atom_data_wo_chianti_ions_attributes(atom_data_be, test_session):
+    assert atom_data_be.chianti_ions == list()
+    assert test_session.query(atom_data_be.chianti_ions_table).count() == 0
 
 
-def test_atom_data_wo_chianti_ions_levels(atom_data_only_be):
-    levels_be = atom_data_only_be.levels
-    atomic_numbers = levels_be["atomic_number"].values.tolist()
-    assert all([atomic_number == 4 for atomic_number in atomic_numbers])
+def test_atom_data_only_be(atom_data_be):
+    assert all([atomic_number == 4 for atomic_number in
+                atom_data_be.atom_masses["atomic_number"].values.tolist()])
+    assert all([atomic_number == 4 for atomic_number in
+                atom_data_be.ionization_energies["atomic_number"].values.tolist()])
+    assert all([atomic_number == 4 for atomic_number in
+                atom_data_be.levels["atomic_number"].values.tolist()])
+    assert all([atomic_number == 4 for atomic_number in
+                atom_data_be.lines["atomic_number"].values.tolist()])
 
 
 @with_test_db
