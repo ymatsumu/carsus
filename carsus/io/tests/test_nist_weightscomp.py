@@ -106,8 +106,8 @@ def test_weightscomp_ingest_nonexisting_atomic_weights(atomic_number, value, unc
 
 
 @pytest.mark.remote_data
-def test_weightscomp_ingest_default_count(weightscomp_ingester, memory_session):
-    weightscomp_ingester.download()
-    weightscomp_ingester.ingest()
+def test_weightscomp_ingest_default_count(memory_session):
+    weightscomp_ingester = NISTWeightsCompIngester(memory_session)
+    weightscomp_ingester.ingest(atomic_weights=True)
     assert memory_session.query(AtomWeight).\
                filter(AtomWeight.data_source==weightscomp_ingester.data_source).count() == 94

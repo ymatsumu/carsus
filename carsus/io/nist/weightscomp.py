@@ -17,11 +17,9 @@ from carsus.io.nist.weightscomp_grammar import isotope, COLUMNS, ATOM_NUM_COL, M
 
 
 WEIGHTSCOMP_URL = "http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl"
-DEFAULT_PARAMS = {'ascii': 'ascii2', 'isotype': 'some'}
-NIST = "nist"
 
 
-def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
+def download_weightscomp(ascii='ascii2', isotype='some'):
     """
     Downloader function for the NIST Atomic Weights and Isotopic Compositions database
 
@@ -29,11 +27,12 @@ def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
 
     Parameters
     ----------
-    url : str
-        The request url, (default="http://physics.nist.gov/cgi-bin/Compositions/stand_alone.pl")
-
-    params : dict
-        The GET request parameters (default={'ascii':'ascii2', 'isotype': 'some'})
+    ascii: str
+        GET request parameter, refer to the NIST docs
+        (default: 'ascii')
+    isotype: str
+        GET request parameter, refer to the NIST docs
+        (default: 'some')
 
     Returns
     -------
@@ -41,8 +40,8 @@ def download_weightscomp(url=WEIGHTSCOMP_URL, params=DEFAULT_PARAMS):
         Preformatted text data
 
     """
-    print "Downloading the data from {}".format(url)
-    r = requests.get(url, params=params)
+    print "Downloading data from the NIST Atomic Weights and Isotopic Compositions database."
+    r = requests.get(WEIGHTSCOMP_URL, params={'ascii': ascii, 'isotype': isotype})
     soup = BeautifulSoup(r.text, 'html5lib')
     pre_text_data = soup.pre.get_text()
     pre_text_data = pre_text_data.replace(u'\xa0', u' ')  # replace non-breaking spaces with spaces
@@ -161,15 +160,27 @@ class NISTWeightsCompIngester(BaseIngester):
         data = self.downloader()
         self.parser(data)
 
-    def ingest(self):
+    def ingest_atomic_weights(self, atomic_weights=None):
+
+        if atomic_weights is None:
+            atomic_weights = self.parser.prepare_atomic_dataframe()
+
+        print "Ingesting atomic weights from {}".format(self.data_source.short_name)
+
+        for atomic_number, row in atomic_weights.iterrows():
+            weight = AtomWeight(atomic_number=atomic_number,
+                                     data_source=self.data_source,
+                                     quantity=row[AW_VAL_COL] * u.u,
+                                     uncert=row[AW_SD_COL])
+            self.session.add(weight)
+
+    def ingest(self, atomic_weights=True):
         """ *Only* ingests atomic weights *for now* """
 
-        print "Ingesting atomic weights"
-        atomic = self.parser.prepare_atomic_dataframe()
+        if self.parser.base is None:
+            self.download()
 
-        for atomic_number, row in atomic.iterrows():
-            atom_weight = AtomWeight(atomic_number=atomic_number,
-                                     data_source=self.data_source,
-                                     quantity=row[AW_VAL_COL]*u.u,
-                                     uncert=row[AW_SD_COL])
-            self.session.add(atom_weight)
+        if atomic_weights:
+            self.ingest_atomic_weights()
+            self.session.flush()
+            
