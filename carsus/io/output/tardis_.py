@@ -14,7 +14,8 @@ from scipy import interpolate
 from tardis.util import species_string_to_tuple
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum, parse_selected_atoms
+from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
+    atomic_number2symbol, parse_selected_atoms
 
 
 P_EMISSION_DOWN = -1
@@ -300,12 +301,19 @@ class AtomData(object):
                 columns: atomic_number, ion_number, ionization_energy[eV]
         """
         ionization_energies_q = self.session.query(Ion).\
+            filter(Ion.atomic_number.in_(self.selected_atomic_numbers)).\
             order_by(Ion.atomic_number, Ion.ion_charge)
 
         ionization_energies = list()
         for ion in ionization_energies_q.options(joinedload(Ion.ionization_energies)):
-            ionization_energy = ion.ionization_energies[0].quantity.value if ion.ionization_energies else None
-            ionization_energies.append((ion.atomic_number, ion.ion_charge, ionization_energy))
+            try:
+                ionization_energy = ion.ionization_energies[0].quantity
+            except IndexError:
+                print "No ionization energy is available for ion {0} {1}".format(
+                    atomic_number2symbol(ion.atomic_number), ion.ion_charge
+                )
+                continue
+            ionization_energies.append((ion.atomic_number, ion.ion_charge, ionization_energy.value))
 
         ionization_dtype = [("atomic_number", np.int), ("ion_number", np.int), ("ionization_energy", np.float)]
         ionization_energies = np.array(ionization_energies, dtype=ionization_dtype)
