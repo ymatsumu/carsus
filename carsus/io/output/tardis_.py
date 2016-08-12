@@ -57,9 +57,6 @@ class AtomData(object):
     chianti_short_name: str
         The short name of the CHIANTI datasource
         (default: "chianti_v8.0.2")
-    atom_masses_max_atomic_number: int
-        The maximum atomic number to be stored in atom_masses
-        (default: 30)
     lines_loggf_threshold: int
         log(gf) threshold for lines
     levels_metastable_loggf_threshold: int
@@ -232,18 +229,12 @@ class AtomData(object):
     @property
     def atom_masses(self):
         if self._atom_masses is None:
-            self._atom_masses = self.create_atom_masses(**self.atom_masses_param)
+            self._atom_masses = self.create_atom_masses()
         return self._atom_masses
 
-    def create_atom_masses(self, max_atomic_number=30):
+    def create_atom_masses(self):
         """
         Create a DataFrame containing *atomic masses*.
-
-        Parameters
-        ----------
-        max_atomic_number: int
-            The maximum atomic number to be stored in `atom_masses`
-            (default: 30)
 
         Returns
         -------
@@ -253,13 +244,17 @@ class AtomData(object):
                 columns: atom_masses, symbol, name, mass[u].
         """
         atom_masses_q = self.session.query(Atom). \
-            filter(Atom.atomic_number <= max_atomic_number).\
+            filter(Atom.atomic_number.in_(self.selected_atomic_numbers)).\
             order_by(Atom.atomic_number)
 
         atom_masses = list()
         for atom in atom_masses_q.options(joinedload(Atom.weights)):
-            weight = atom.weights[0].quantity.value if atom.weights else None  # Get the first weight from the collection
-            atom_masses.append((atom.atomic_number, atom.symbol, atom.name, weight))
+            try:
+                weight = atom.weights[0].quantity
+            except IndexError:
+                print "No weight is available for atom {0}".format(atom.symbol)
+                continue
+            atom_masses.append((atom.atomic_number, atom.symbol, atom.name, weight.value))
 
         atom_masses_dtype = [("atomic_number", np.int), ("symbol", "|S5"), ("name", "|S150"), ("mass", np.float)]
         atom_masses = np.array(atom_masses, dtype=atom_masses_dtype)
