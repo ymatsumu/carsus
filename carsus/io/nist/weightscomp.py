@@ -183,3 +183,4 @@ class NISTWeightsCompIngester(BaseIngester):
         if atomic_weights:
             self.ingest_atomic_weights()
             self.session.flush()
+            
