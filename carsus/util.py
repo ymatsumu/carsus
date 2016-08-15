@@ -65,3 +65,62 @@ def convert_wavelength_air2vacuum(wavelength_air):
     fact = 1.0 + 5.792105e-2/(238.0185 - sigma2) + 1.67917e-3/(57.362 - sigma2)
 
     return wavelength_air * fact
+
+
+def parse_selected_atoms(selected_atoms):
+    """
+    Parse the sting specifying selected atoms to the list of atomic numbers.
+
+    Parameters
+    ----------
+    selected_atoms: str
+        Sting that specifies selected atoms. It should consist of comma-separated entries
+        that are either single atoms (e.g. "H") or ranges (indicated by using a hyphen between, e.g "H-Zn").
+        Element symbols need **not** to be capitalized.
+
+    Returns
+    -------
+    list of int
+        List of atomic numbers
+
+    Examples
+    --------
+
+    >>> parse_selected_atoms("H")
+    [1]
+
+    >>> parse_selected_atoms("H, Li-N")
+    [1, 3, 4, 5, 6, 7]
+
+    >>> parse_selected_atoms("H, Li-N, Si, S")
+    [1, 3, 4, 5, 6, 7, 14, 16]
+
+    """
+    selected_atomic_numbers = list()
+    selected_atoms = [_.strip() for _ in selected_atoms.split(',')]
+
+    for entry in selected_atoms:
+        # Case when `entry` is a single atom
+        if "-" not in entry:
+            entry = entry[:1].upper() + entry[1:].lower()
+            try:
+                entry_atomic_number = symbol2atomic_number[entry]
+            except:
+                raise ValueError
+            selected_atomic_numbers.append(entry_atomic_number)
+
+        # Case when `entry` is a range of atoms
+        else:
+            lower, upper = tuple(_.strip() for _ in entry.split('-'))
+            lower, upper = map(lambda _: _[:1].upper() + _[1:].lower(), [lower, upper])
+            try:
+                lower_atomic_number = symbol2atomic_number[lower]
+                upper_atomic_number = symbol2atomic_number[upper]
+            except:
+                raise ValueError
+            selected_atomic_numbers += range(lower_atomic_number, upper_atomic_number + 1)
+
+    # Get rid of duplicate numbers if any
+    selected_atomic_numbers = list(set(selected_atomic_numbers))
+
+    return selected_atomic_numbers
