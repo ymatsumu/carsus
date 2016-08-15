@@ -1,14 +1,15 @@
 import os
 import re
+import carsus
 import numpy as np
 
 from collections import OrderedDict
-import numpy as np
 
 
 def data_path(fname):
     return os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), 'data', fname)
+        os.path.dirname(carsus.__file__), 'data', fname
+    )
 
 atomic_symbols_data = np.recfromtxt(data_path('basic_atomic_data.csv'), skip_header=1,
                                     delimiter=',', usecols=(0, 1), names=['atomic_number', 'symbol'])
