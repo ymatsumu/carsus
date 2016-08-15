@@ -1,6 +1,6 @@
 import pytest
 
-from carsus.util.selected_grammar import element, element_range, \
+from carsus.util.selected import element, element_range, \
     selected_atomic_numbers, parse_selected_atoms
 
 
