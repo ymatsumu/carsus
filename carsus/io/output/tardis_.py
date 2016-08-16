@@ -799,10 +799,11 @@ class AtomData(object):
                                                       "level_number_lower", "level_number_upper",
                                                       "delta_e", "g_ratio", "c_ul"]].copy()
 
-        # Set multiindex
-        collisions_prepared = collisions_prepared.reset_index()
-        collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
-                                                             "level_number_lower", "level_number_upper"])
+        collisions_prepared = collisions_prepared.reset_index(drop=True)
+
+        # ToDo: maybe set multiindex
+        # collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
+        #                                                      "level_number_lower", "level_number_upper"])
 
         return collisions_prepared
 
