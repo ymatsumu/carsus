@@ -145,7 +145,7 @@ class AtomData(object):
         }
 
         if collisions_temperatures is None:
-            collisions_temperatures = np.linspace(2000, 50000, 20, dtype=np.int64)
+            collisions_temperatures = np.arange(2000, 50000, 2000)
         else:
             collisions_temperatures = np.array(collisions_temperatures, dtype=np.int64)
 
@@ -723,6 +723,8 @@ class AtomData(object):
         kb_ev = const.k_B.cgs.to('eV / K').value
         collisions["delta_e"] = (collisions["energy_upper"] - collisions["energy_lower"])/kb_ev
 
+        c_ul_temperature_cols = ['t{:06d}'.format(t) for t in temperatures]
+
         def calculate_collisional_strength(row, temperatures):
             """
                 Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38)
@@ -766,9 +768,11 @@ class AtomData(object):
             #### 1992A&A...254..436B Equation 20 & 22 #####
 
             c_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
-            return tuple(c_ul)
 
-        collisions["c_ul"] = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+            return pd.Series(data=c_ul, index=c_ul_temperature_cols)
+
+        collisional_strengths = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+        collisions = collisions.join(collisional_strengths)
 
         # Calculate g_ratio
         collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
