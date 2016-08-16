@@ -1030,7 +1030,8 @@ class AtomData(object):
                 store.put("lines", self.lines_prepared)
 
             if store_collisions:
-                store.put("collisions", self.collisions_prepared)
+                store.put("collision_data", self.collisions_prepared)
+                store.put("collision_data_temperatures", pd.Series(self.collisions_param['temperatures']))
 
             if store_macro_atom:
                 store.put("macro_atom_data", self.macro_atom_prepared)
