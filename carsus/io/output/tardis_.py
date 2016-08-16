@@ -723,6 +723,9 @@ class AtomData(object):
         kb_ev = const.k_B.cgs.to('eV / K').value
         collisions["delta_e"] = (collisions["energy_upper"] - collisions["energy_lower"])/kb_ev
 
+        # Calculate g_ratio
+        collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
+
         c_ul_temperature_cols = ['t{:06d}'.format(t) for t in temperatures]
 
         def calculate_collisional_strength(row, temperatures):
@@ -773,9 +776,6 @@ class AtomData(object):
 
         collisional_strengths = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
         collisions = collisions.join(collisional_strengths)
-
-        # Calculate g_ratio
-        collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
 
         return collisions
 
