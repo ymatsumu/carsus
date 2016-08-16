@@ -145,9 +145,9 @@ class AtomData(object):
         }
 
         if collisions_temperatures is None:
-            collisions_temperatures = np.linspace(2000, 50000, 20)
+            collisions_temperatures = np.linspace(2000, 50000, 20, dtype=np.int64)
         else:
-            collisions_temperatures = np.array(collisions_temperatures)
+            collisions_temperatures = np.array(collisions_temperatures, dtype=np.int64)
 
         self.collisions_param = {
             "temperatures": collisions_temperatures
