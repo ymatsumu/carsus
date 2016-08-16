@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import hashlib
 import uuid
+import re
 
 from pandas import HDFStore
 from sqlalchemy import and_, case
@@ -792,12 +793,14 @@ class AtomData(object):
             collisions_prepared : pandas.DataFrame
                 DataFrame with:
                     index: atomic_number, ion_number, level_number_lower, level_number_upper;
-                    columns: e_col_id, delta_e, g_ratio, c_ul.
+                    columns: e_col_id, delta_e, g_ratio, [collision strengths].
         """
 
-        collisions_prepared = self.collisions.loc[:, ["atomic_number", "ion_number",
-                                                      "level_number_lower", "level_number_upper",
-                                                      "delta_e", "g_ratio", "c_ul"]].copy()
+        collisions_columns = ['atomic_number', 'ion_number', 'level_number_upper',
+                              'level_number_lower', 'g_ratio', 'delta_e'] + \
+                              sorted([col for col in self.collisions.columns if re.match('^t\d+$', col)])
+
+        collisions_prepared = self.collisions.loc[:, collisions_columns].copy()
 
         collisions_prepared = collisions_prepared.reset_index(drop=True)
 
