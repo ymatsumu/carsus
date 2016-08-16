@@ -726,6 +726,7 @@ class AtomData(object):
         # Calculate g_ratio
         collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
 
+        # Derive columns for collisional strenghts
         c_ul_temperature_cols = ['t{:06d}'.format(t) for t in temperatures]
 
         def calculate_collisional_strength(row, temperatures):
