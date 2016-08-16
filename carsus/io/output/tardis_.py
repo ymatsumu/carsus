@@ -310,7 +310,7 @@ class AtomData(object):
                 ionization_energy = ion.ionization_energies[0].quantity
             except IndexError:
                 print "No ionization energy is available for ion {0} {1}".format(
-                    atomic_number2symbol(ion.atomic_number), ion.ion_charge
+                    atomic_number2symbol[ion.atomic_number], ion.ion_charge
                 )
                 continue
             ionization_energies.append((ion.atomic_number, ion.ion_charge, ionization_energy.value))
