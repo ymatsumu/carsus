@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import hashlib
 import uuid
+import re
 
 from pandas import HDFStore
 from sqlalchemy import and_, case
@@ -145,9 +146,9 @@ class AtomData(object):
         }
 
         if collisions_temperatures is None:
-            collisions_temperatures = np.linspace(2000, 50000, 20)
+            collisions_temperatures = np.arange(2000, 50000, 2000)
         else:
-            collisions_temperatures = np.array(collisions_temperatures)
+            collisions_temperatures = np.array(collisions_temperatures, dtype=np.int64)
 
         self.collisions_param = {
             "temperatures": collisions_temperatures
@@ -723,6 +724,12 @@ class AtomData(object):
         kb_ev = const.k_B.cgs.to('eV / K').value
         collisions["delta_e"] = (collisions["energy_upper"] - collisions["energy_lower"])/kb_ev
 
+        # Calculate g_ratio
+        collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
+
+        # Derive columns for collisional strenghts
+        c_ul_temperature_cols = ['t{:06d}'.format(t) for t in temperatures]
+
         def calculate_collisional_strength(row, temperatures):
             """
                 Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38)
@@ -766,12 +773,11 @@ class AtomData(object):
             #### 1992A&A...254..436B Equation 20 & 22 #####
 
             c_ul = 8.63e-6 * upsilon / (g_u * temperatures**.5)
-            return tuple(c_ul)
 
-        collisions["c_ul"] = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+            return pd.Series(data=c_ul, index=c_ul_temperature_cols)
 
-        # Calculate g_ratio
-        collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
+        collisional_strengths = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
+        collisions = collisions.join(collisional_strengths)
 
         return collisions
 
@@ -787,17 +793,20 @@ class AtomData(object):
             collisions_prepared : pandas.DataFrame
                 DataFrame with:
                     index: atomic_number, ion_number, level_number_lower, level_number_upper;
-                    columns: e_col_id, delta_e, g_ratio, c_ul.
+                    columns: e_col_id, delta_e, g_ratio, [collision strengths].
         """
 
-        collisions_prepared = self.collisions.loc[:, ["atomic_number", "ion_number",
-                                                      "level_number_lower", "level_number_upper",
-                                                      "delta_e", "g_ratio", "c_ul"]].copy()
+        collisions_columns = ['atomic_number', 'ion_number', 'level_number_upper',
+                              'level_number_lower', 'g_ratio', 'delta_e'] + \
+                              sorted([col for col in self.collisions.columns if re.match('^t\d+$', col)])
 
-        # Set multiindex
-        collisions_prepared = collisions_prepared.reset_index()
-        collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
-                                                             "level_number_lower", "level_number_upper"])
+        collisions_prepared = self.collisions.loc[:, collisions_columns].copy()
+
+        collisions_prepared = collisions_prepared.reset_index(drop=True)
+
+        # ToDo: maybe set multiindex
+        # collisions_prepared = collisions_prepared.set_index(["atomic_number", "ion_number",
+        #                                                      "level_number_lower", "level_number_upper"])
 
         return collisions_prepared
 
@@ -1021,7 +1030,8 @@ class AtomData(object):
                 store.put("lines", self.lines_prepared)
 
             if store_collisions:
-                store.put("collisions", self.collisions_prepared)
+                store.put("collision_data", self.collisions_prepared)
+                store.put("collision_data_temperatures", pd.Series(self.collisions_param['temperatures']))
 
             if store_macro_atom:
                 store.put("macro_atom_data", self.macro_atom_prepared)
