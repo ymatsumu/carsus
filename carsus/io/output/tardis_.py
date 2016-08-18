@@ -116,15 +116,6 @@ class AtomData(object):
     create_macro_atom
     create_macro_atom_references
     create_zeta_data
-
-    prepare_atom_masses
-    prepare_ionization_energies
-    prepare_levels
-    prepare_lines
-    prepare_collisions
-    prepare_macro_atom
-    prepare_macro_atom_references
-
     """
 
     def __init__(self, session, selected_atoms, chianti_ions=None,
@@ -266,9 +257,6 @@ class AtomData(object):
 
     @property
     def atom_masses_prepared(self):
-        return self.prepare_atom_masses()
-
-    def prepare_atom_masses(self):
         """
         Prepare the DataFrame with atomic masses for TARDIS.
 
@@ -325,9 +313,6 @@ class AtomData(object):
 
     @property
     def ionization_energies_prepared(self):
-        return self.prepare_ionization_energies()
-
-    def prepare_ionization_energies(self):
         """
         Prepare the DataFrame with ionization energies for TARDIS
 
@@ -600,9 +585,6 @@ class AtomData(object):
 
     @property
     def levels_prepared(self):
-        return self.prepare_levels()
-
-    def prepare_levels(self):
         """
         Prepare the DataFrame with levels for TARDIS
 
@@ -626,9 +608,6 @@ class AtomData(object):
 
     @property
     def lines_prepared(self):
-        return self.prepare_lines()
-
-    def prepare_lines(self):
         """
             Prepare the DataFrame with lines for TARDIS
 
@@ -783,9 +762,6 @@ class AtomData(object):
 
     @property
     def collisions_prepared(self):
-        return self.prepare_collisions()
-
-    def prepare_collisions(self):
         """
             Prepare the DataFrame with electron collisions for TARDIS
             Returns
@@ -874,9 +850,6 @@ class AtomData(object):
 
     @property
     def macro_atom_prepared(self):
-        return self.prepare_macro_atom()
-
-    def prepare_macro_atom(self):
         """
             Prepare the DataFrame with macro atom data for TARDIS
             Returns
@@ -945,9 +918,6 @@ class AtomData(object):
 
     @property
     def macro_atom_references_prepared(self):
-        return self.prepare_macro_atom_references()
-
-    def prepare_macro_atom_references(self):
         """
             Prepare the DataFrame with macro atom references for TARDIS
 
