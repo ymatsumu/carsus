@@ -7,8 +7,7 @@ from sqlalchemy import and_
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
-from carsus.util import atomic_number2symbol
-from tardis.util import species_string_to_tuple
+from carsus.util import atomic_number2symbol, parse_selected_species
 
 GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
 MEDIUM_VACUUM = 0
@@ -292,7 +291,7 @@ class GFALLIngester(object):
         session: SQLAlchemy session
         fname: str
             The name of the gfall file to read
-        ions: list of species str
+        ions: str
             Ingest levels and lines only for these ions. If set to None then ingest all.
             (default: None)
         data_source: DataSource instance
@@ -309,9 +308,9 @@ class GFALLIngester(object):
         self.session = session
         self.gfall_reader = GFALLReader(fname)
         if ions is not None:
-            ions = [dict(zip(["atomic_number", "ion_charge"], species_string_to_tuple(species_str)))
-                    for species_str in ions]
-            self.ions = pd.DataFrame.from_records(ions, index=["atomic_number", "ion_charge"])
+            ions = parse_selected_species(ions)
+            ions = pd.DataFrame.from_records(ions, columns=["atomic_number", "ion_charge"])
+            self.ions = ions.set_index(['atomic_number', 'ion_charge'])
         else:
             self.ions = None
 
