@@ -164,7 +164,7 @@ class AtomData(object):
             try:
                 self.chianti_ions = parse_selected_species(chianti_ions)
             except ParseException:
-                raise ValueError('Input is not a valid species string {}'.format(ions))
+                raise ValueError('Input is not a valid species string {}'.format(chianti_ions))
 
             try:
                 chianti_atomic_numbers = {atomic_number for atomic_number, ion_charge in self.chianti_ions}
