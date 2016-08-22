@@ -1,5 +1,5 @@
 from pyparsing import ParseResults
-
+from carsus.util import atomic_number2symbol
 
 def to_flat_dict(tokens, parent_key='', sep='_'):
     """
@@ -47,3 +47,30 @@ def to_nom_val_and_std_dev(interval):
     sigma = (upr_bnd - lwr_bnd)/2
     mu = lwr_bnd + sigma
     return (mu, sigma)
+
+
+def convert_species_tuple2chianti_str(species):
+    """
+    Convert a species tuple to the ion name format used in `chiantipy`.
+
+    Parameters
+    -----------
+    species: tuple (atomic_number, ion_number)
+
+    Returns
+    --------
+    str
+        ion name in the chiantipy format
+
+    Examples
+    ---------
+    >>> convert_species_tuple2chianti_str((1,0))
+    'h_1'
+
+    >>> convert_species_tuple2chianti_str((14,1))
+    'si_2'
+
+    """
+    atomic_number, ion_number = species
+    chianti_ion_name = atomic_number2symbol[atomic_number].lower() + '_' + str(ion_number + 1)
+    return chianti_ion_name
