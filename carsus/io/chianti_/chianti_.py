@@ -7,8 +7,10 @@ import re
 from numpy.testing import assert_almost_equal
 from astropy import units as u
 from sqlalchemy import and_
+from pyparsing import ParseException
 from carsus.io.base import IngesterError
-from carsus.util import atomic_number2symbol
+from carsus.io.util import convert_species_tuple2chianti_str
+from carsus.util import atomic_number2symbol, parse_selected_species
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line,LineGFValue, LineAValue, LineWavelength, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
@@ -267,11 +269,18 @@ class ChiantiIngester(object):
         self.session = session
         # ToDo write a parser for Spectral Notation
         self.ion_readers = list()
+        self.ions = list()
 
-        if ions is None:
-            ions = masterlist_ions
+        if ions is not None:
+            try:
+                ions = parse_selected_species(ions)
+            except ParseException:
+                raise ValueError('Input is not a valid species string {}'.format(ions))
+            self.ions = [convert_species_tuple2chianti_str(_) for _ in ions]
+        else:
+            self.ions = masterlist_ions
 
-        for ion in ions:
+        for ion in self.ions:
             if ion in self.masterlist_ions:
                 self.ion_readers.append(ChiantiIonReader(ion))
             else:

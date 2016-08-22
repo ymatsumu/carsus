@@ -12,11 +12,11 @@ from sqlalchemy.orm.exc import NoResultFound
 from astropy import constants as const
 from astropy import units as u
 from scipy import interpolate
-from tardis.util import species_string_to_tuple
+from pyparsing import ParseException
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
-    atomic_number2symbol, parse_selected_atoms
+    atomic_number2symbol, parse_selected_atoms, parse_selected_species
 
 
 P_EMISSION_DOWN = -1
@@ -46,9 +46,9 @@ class AtomData(object):
         Sting that specifies selected atoms. It should consist of comma-separated entries
         that are either single atoms (e.g. "H") or ranges (indicated by using a hyphen between, e.g "H-Zn").
         Element symbols need **not** to be capitalized.
-    chianti_ions: list of species str
+    chianti_ions: str
         The levels data for these ions will be taken from the CHIANTI database.
-        The list *must* be a subset of `ions`
+        Chianti ions **must** be a subset of all ions of `selected_atoms`.
         (default: None)
     kurucz_short_name: str
         The short name of the Kurucz datasource
@@ -145,11 +145,19 @@ class AtomData(object):
             "temperatures": collisions_temperatures
         }
 
-        self.selected_atomic_numbers = parse_selected_atoms(selected_atoms)
+        try:
+            self.selected_atomic_numbers = parse_selected_atoms(selected_atoms)
+        except ParseException:
+            raise ValueError('Input is not a valid atoms string {}'.format(selected_atoms))
 
         if chianti_ions is not None:
             # Get a list of tuples (atomic_number, ion_charge) for the chianti ions
-            self.chianti_ions = [tuple(species_string_to_tuple(species_str)) for species_str in chianti_ions]
+
+            try:
+                self.chianti_ions = parse_selected_species(chianti_ions)
+            except ParseException:
+                raise ValueError('Input is not a valid species string {}'.format(chianti_ions))
+
             try:
                 chianti_atomic_numbers = {atomic_number for atomic_number, ion_charge in self.chianti_ions}
                 assert chianti_atomic_numbers.issubset(set(self.selected_atomic_numbers))

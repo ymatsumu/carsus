@@ -19,7 +19,7 @@ with_test_db = pytest.mark.skipif(
 def atom_data(test_session):
     atom_data = AtomData(test_session,
                          selected_atoms="He, Be, B, N, Si, Zn",
-                         chianti_ions=["He II", "N VI"])
+                         chianti_ions="He 1; N 5")
     return atom_data
 
 
@@ -90,7 +90,7 @@ def test_atom_data_init(memory_session):
     ku = DataSource.as_unique(memory_session, short_name="ku_latest")
     atom_data = AtomData(memory_session,
                          selected_atoms="He, Be, B, N",
-                         chianti_ions=["He II", "N VI"])
+                         chianti_ions="He 1; N 5")
     assert set(atom_data.selected_atomic_numbers) == set([2, 4, 5, 7])
     assert set(atom_data.chianti_ions) == set([(2,1), (7,5)])
 
@@ -102,7 +102,7 @@ def test_atom_data_chianti_ions_subset(memory_session):
     with pytest.raises(ValueError):
         atom_data = AtomData(memory_session,
                              selected_atoms="He, Be, B, N VI",
-                             chianti_ions=["He II", "N VI", "Si II"])
+                             chianti_ions="He 1; N 5; Si 1")
 
 
 @with_test_db
@@ -138,10 +138,10 @@ def test_atom_data_two_instances_same_session(test_session):
 
     atom_data1 = AtomData(test_session,
                          selected_atoms="He, Be, B, N, Zn",
-                         chianti_ions=["He II", "N VI"])
+                         chianti_ions="He 1; N 5")
     atom_data2 = AtomData(test_session,
                          selected_atoms="He, Be, B, N, Zn",
-                         chianti_ions=["He II", "N VI"])
+                         chianti_ions="He 1; N 5")
     atom_data1.chianti_ions_table
     atom_data2.chianti_ions_table
 
