@@ -10,7 +10,7 @@ from sqlalchemy import and_
 from pyparsing import ParseException
 from carsus.io.base import IngesterError
 from carsus.io.util import convert_species_tuple2chianti_str
-from carsus.util import atomic_number2symbol, parse_selected_species
+from carsus.util import convert_atomic_number2symbol, parse_selected_species
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line,LineGFValue, LineAValue, LineWavelength, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
@@ -322,10 +322,10 @@ class ChiantiIngester(object):
             try:
                 bound_levels = rdr.bound_levels
             except ChiantiIonReaderError:
-                print("Levels not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+                print("Levels not found for ion {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
                 continue
 
-            print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting levels for {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
 
             # ToDo: Determine parity from configuration
 
@@ -361,10 +361,10 @@ class ChiantiIngester(object):
             try:
                 bound_lines = rdr.bound_lines
             except ChiantiIonReaderError:
-                print("Lines not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+                print("Lines not found for ion {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
                 continue
 
-            print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting lines for {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
 
             lvl_index2id = self.get_lvl_index2id(ion)
 
@@ -416,10 +416,10 @@ class ChiantiIngester(object):
             try:
                 bound_collisions = rdr.bound_collisions
             except ChiantiIonReaderError:
-                print("Collisions not found for ion {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+                print("Collisions not found for ion {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
                 continue
 
-            print("Ingesting collisions for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting collisions for {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
 
             lvl_index2id = self.get_lvl_index2id(ion)
 

@@ -1,5 +1,5 @@
 from pyparsing import ParseResults
-from carsus.util import atomic_number2symbol
+from carsus.util import convert_atomic_number2symbol
 
 def to_flat_dict(tokens, parent_key='', sep='_'):
     """
@@ -72,5 +72,5 @@ def convert_species_tuple2chianti_str(species):
 
     """
     atomic_number, ion_number = species
-    chianti_ion_name = atomic_number2symbol[atomic_number].lower() + '_' + str(ion_number + 1)
+    chianti_ion_name = convert_atomic_number2symbol(atomic_number).lower() + '_' + str(ion_number + 1)
     return chianti_ion_name

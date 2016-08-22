@@ -11,13 +11,13 @@ def data_path(fname):
         os.path.dirname(carsus.__file__), 'data', fname
     )
 
-atomic_symbols_data = np.recfromtxt(data_path('basic_atomic_data.csv'), skip_header=1,
+ATOMIC_SYMBOLS_DATA = np.recfromtxt(data_path('basic_atomic_data.csv'), skip_header=1,
                                     delimiter=',', usecols=(0, 1), names=['atomic_number', 'symbol'])
 
-symbol2atomic_number = OrderedDict(zip(atomic_symbols_data['symbol'],
-                                       atomic_symbols_data['atomic_number']))
-atomic_number2symbol = OrderedDict(zip(atomic_symbols_data['atomic_number'],
-                                       atomic_symbols_data['symbol']))
+SYMBOL2ATOMIC_NUMBER = OrderedDict(zip(ATOMIC_SYMBOLS_DATA['symbol'],
+                                       ATOMIC_SYMBOLS_DATA['atomic_number']))
+ATOMIC_NUMBER2SYMBOL = OrderedDict(zip(ATOMIC_SYMBOLS_DATA['atomic_number'],
+                                       ATOMIC_SYMBOLS_DATA['symbol']))
 
 
 def convert_camel2snake(name):
@@ -66,3 +66,11 @@ def convert_wavelength_air2vacuum(wavelength_air):
     fact = 1.0 + 5.792105e-2/(238.0185 - sigma2) + 1.67917e-3/(57.362 - sigma2)
 
     return wavelength_air * fact
+
+
+def convert_atomic_number2symbol(atomic_number):
+    return ATOMIC_NUMBER2SYMBOL[atomic_number]
+
+
+def convert_symbol2atomic_number(symbol):
+    return SYMBOL2ATOMIC_NUMBER[symbol]
