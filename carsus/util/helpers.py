@@ -68,9 +68,9 @@ def convert_wavelength_air2vacuum(wavelength_air):
     return wavelength_air * fact
 
 
-def atomic_number2symbol(atomic_number):
+def convert_atomic_number2symbol(atomic_number):
     return ATOMIC_NUMBER2SYMBOL[atomic_number]
 
 
-def symbol2atomic_number(symbol):
+def convert_symbol2atomic_number(symbol):
     return SYMBOL2ATOMIC_NUMBER[symbol]
