@@ -18,7 +18,7 @@ def ch_ion_reader():
 
 @pytest.fixture
 def ch_ingester(memory_session):
-    ions = ['ne_2', 'cl_4']
+    ions = 'ne 1; cl 3'
     ingester = ChiantiIngester(memory_session, ions=ions)
     return ingester
 
