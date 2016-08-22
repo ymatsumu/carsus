@@ -1,7 +1,7 @@
 import pytest
 
 from carsus.util.helpers import convert_camel2snake, \
-    atomic_number2symbol, symbol2atomic_number
+    convert_atomic_number2symbol, convert_symbol2atomic_number
 
 
 @pytest.mark.parametrize("input_camel_case, expected_snake_case", [
@@ -19,8 +19,8 @@ def test_convert_camel2snake(input_camel_case, expected_snake_case):
     (30, "Zn"),
     (118, "Uuo")
 ])
-def test_atomic_number2symbol(atomic_number, expected_symbol):
-    assert atomic_number2symbol[atomic_number] == expected_symbol
+def test_convert_atomic_number2symbol(atomic_number, expected_symbol):
+    assert convert_atomic_number2symbol(atomic_number) == expected_symbol
 
 
 @pytest.mark.parametrize("symbol, expected_atomic_number", [
@@ -29,5 +29,5 @@ def test_atomic_number2symbol(atomic_number, expected_symbol):
     ("Zn", 30),
     ("Uuo", 118)
 ])
-def test_symbol2atomic_number(symbol, expected_atomic_number):
-    assert symbol2atomic_number[symbol] == expected_atomic_number
+def test_convert_symbol2atomic_number(symbol, expected_atomic_number):
+    assert convert_symbol2atomic_number(symbol) == expected_atomic_number
