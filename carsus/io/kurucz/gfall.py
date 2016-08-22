@@ -8,7 +8,7 @@ from pyparsing import ParseException
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
-from carsus.util import atomic_number2symbol, parse_selected_species
+from carsus.util import convert_atomic_number2symbol, parse_selected_species
 
 GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
 MEDIUM_VACUUM = 0
@@ -359,7 +359,7 @@ class GFALLIngester(object):
             atomic_number, ion_charge = ion_index
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
-            print("Ingesting levels for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting levels for {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
 
             for index, row in ion_levels.iterrows():
 
@@ -395,7 +395,7 @@ class GFALLIngester(object):
             atomic_number, ion_charge = ion_index
             ion = Ion.as_unique(self.session, atomic_number=atomic_number, ion_charge=ion_charge)
 
-            print("Ingesting lines for {} {}".format(atomic_number2symbol[atomic_number], ion_charge))
+            print("Ingesting lines for {} {}".format(convert_atomic_number2symbol(atomic_number), ion_charge))
 
             lvl_index2id = self.get_lvl_index2id(ion)
 

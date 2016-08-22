@@ -16,7 +16,7 @@ from pyparsing import ParseException
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
-    atomic_number2symbol, parse_selected_atoms, parse_selected_species
+    convert_atomic_number2symbol, parse_selected_atoms, parse_selected_species
 
 
 P_EMISSION_DOWN = -1
@@ -307,7 +307,7 @@ class AtomData(object):
                 ionization_energy = ion.ionization_energies[0].quantity
             except IndexError:
                 print "No ionization energy is available for ion {0} {1}".format(
-                    atomic_number2symbol[ion.atomic_number], ion.ion_charge
+                    convert_atomic_number2symbol(ion.atomic_number), ion.ion_charge
                 )
                 continue
             ionization_energies.append((ion.atomic_number, ion.ion_charge, ionization_energy.value))
