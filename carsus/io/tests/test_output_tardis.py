@@ -105,11 +105,13 @@ def test_atom_data_chianti_ions_subset(memory_session):
                              chianti_ions=["He II", "N VI", "Si II"])
 
 
+@with_test_db
 def test_atom_data_wo_chianti_ions_attributes(atom_data_be, test_session):
     assert atom_data_be.chianti_ions == list()
     assert test_session.query(atom_data_be.chianti_ions_table).count() == 0
 
 
+@with_test_db
 def test_atom_data_only_be(atom_data_be):
     assert all([atomic_number == 4 for atomic_number in
                 atom_data_be.atom_masses["atomic_number"].values.tolist()])
