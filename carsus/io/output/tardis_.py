@@ -153,7 +153,10 @@ class AtomData(object):
             "temperatures": collisions_temperatures
         }
 
-        self.selected_atomic_numbers = parse_selected_atoms(selected_atoms)
+        try:
+            self.selected_atomic_numbers = parse_selected_atoms(selected_atoms)
+        except ParseException:
+            raise ValueError('Input is not a valid atoms string {}'.format(selected_atoms))
 
         if chianti_ions is not None:
             # Get a list of tuples (atomic_number, ion_charge) for the chianti ions
