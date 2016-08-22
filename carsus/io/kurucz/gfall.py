@@ -4,6 +4,7 @@ import pandas as pd
 
 from astropy import units as u
 from sqlalchemy import and_
+from pyparsing import ParseException
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line, LineWavelength, LineGFValue
 from carsus.io.base import IngesterError
@@ -308,7 +309,10 @@ class GFALLIngester(object):
         self.session = session
         self.gfall_reader = GFALLReader(fname)
         if ions is not None:
-            ions = parse_selected_species(ions)
+            try:
+                ions = parse_selected_species(ions)
+            except ParseException:
+                raise ValueError('Input is not a valid species string {}'.format(ions))
             ions = pd.DataFrame.from_records(ions, columns=["atomic_number", "ion_charge"])
             self.ions = ions.set_index(['atomic_number', 'ion_charge'])
         else:
