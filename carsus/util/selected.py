@@ -15,7 +15,7 @@ species_entry =  selected_atoms + [ion_numbers]
 selected_species = species_entry + [';' + species_entry]*
 """
 
-from helpers import symbol2atomic_number
+from helpers import convert_symbol2atomic_number
 from pyparsing import Literal, Suppress, delimitedList,\
     Word, alphas, nums, Optional, Group
 
@@ -27,7 +27,7 @@ def parse_element(tokens):
     symbol = tokens[0]
     symbol = symbol[:1].upper() + symbol[1:].lower()
     try:
-        atomic_number = symbol2atomic_number[symbol]
+        atomic_number = convert_symbol2atomic_number(symbol)
     except KeyError:
         raise ValueError("Unrecognized atomic symbol {}".format(symbol))
 
