@@ -6,13 +6,12 @@ from astropy import units as u
 from sqlalchemy import and_
 from pyparsing import ParseException
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
-    Line, LineWavelength, LineGFValue
+    Line, LineWavelength, LineGFValue, MEDIUM_VACUUM, MEDIUM_AIR
 from carsus.io.base import IngesterError
 from carsus.util import convert_atomic_number2symbol, parse_selected_species
 
+
 GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
-MEDIUM_VACUUM = 0
-MEDIUM_AIR = 1
 
 
 class GFALLReader(object):
