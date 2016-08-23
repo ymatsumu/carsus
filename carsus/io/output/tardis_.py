@@ -15,7 +15,7 @@ from scipy import interpolate
 from pyparsing import ParseException
 from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
 from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
+from carsus.util import get_data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
     convert_atomic_number2symbol, parse_selected_atoms, parse_selected_species
 
 
@@ -28,7 +28,7 @@ MEDIUM_AIR = 1
 
 LINES_MAXRQ = 10000  # for yield_limit
 
-ZETA_DATAFILE = data_path("knox_long_recombination_zeta.dat")
+ZETA_DATAFILE = get_data_path("knox_long_recombination_zeta.dat")
 
 
 class AtomDataUnrecognizedMediumError(Exception):
