@@ -12,7 +12,7 @@ from carsus.io.base import IngesterError
 from carsus.io.util import convert_species_tuple2chianti_str
 from carsus.util import convert_atomic_number2symbol, parse_selected_species
 from carsus.model import DataSource, Ion, Level, LevelEnergy,\
-    Line,LineGFValue, LineAValue, LineWavelength, \
+    Line,LineGFValue, LineAValue, LineWavelength, MEDIUM_VACUUM, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
 
 if os.getenv('XUVTOP'):
@@ -388,6 +388,7 @@ class ChiantiIngester(object):
                     wavelengths=[
                         LineWavelength(quantity=row["wavelength"]*u.AA,
                                        data_source=self.data_source,
+                                       medium=MEDIUM_VACUUM,
                                        method=row["method"])
                     ],
                     a_values=[

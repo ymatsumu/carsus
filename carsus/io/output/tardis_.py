@@ -13,7 +13,7 @@ from astropy import constants as const
 from astropy import units as u
 from scipy import interpolate
 from pyparsing import ParseException
-from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision
+from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision, MEDIUM_AIR, MEDIUM_VACUUM
 from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import get_data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
     convert_atomic_number2symbol, parse_selected_atoms, parse_selected_species
@@ -22,9 +22,6 @@ from carsus.util import get_data_path, convert_camel2snake, convert_wavelength_a
 P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
-
-MEDIUM_VACUUM = 0
-MEDIUM_AIR = 1
 
 LINES_MAXRQ = 10000  # for yield_limit
 
