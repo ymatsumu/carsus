@@ -6,12 +6,12 @@ import numpy as np
 from collections import OrderedDict
 
 
-def data_path(fname):
+def get_data_path(fname):
     return os.path.join(
         os.path.dirname(carsus.__file__), 'data', fname
     )
 
-ATOMIC_SYMBOLS_DATA = np.recfromtxt(data_path('basic_atomic_data.csv'), skip_header=1,
+ATOMIC_SYMBOLS_DATA = np.recfromtxt(get_data_path('basic_atomic_data.csv'), skip_header=1,
                                     delimiter=',', usecols=(0, 1), names=['atomic_number', 'symbol'])
 
 SYMBOL2ATOMIC_NUMBER = OrderedDict(zip(ATOMIC_SYMBOLS_DATA['symbol'],
