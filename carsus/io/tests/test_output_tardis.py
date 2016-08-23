@@ -336,4 +336,5 @@ def test_create_zeta_data(zeta_data):
 def test_atom_data_to_hdf(atom_data, hdf5_path):
     atom_data.to_hdf(hdf5_path, store_atom_masses=True, store_ionization_energies=True,
                      store_levels=True, store_lines=True, store_macro_atom=True,
-                     store_macro_atom_references=True, store_zeta_data=True, store_collisions=True)
+                     store_zeta_data=True, store_collisions=True)
+    
