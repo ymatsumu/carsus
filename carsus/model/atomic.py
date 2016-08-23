@@ -7,6 +7,9 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from astropy import units as u
 from carsus.model.meta import Base, UniqueMixin, QuantityMixin
 
+MEDIUM_VACUUM = 0
+MEDIUM_AIR = 1
+
 
 class Atom(Base):
     __tablename__ = "atom"
@@ -209,7 +212,7 @@ class LineWavelength(LineQuantity):
 
     unit = u.Angstrom
 
-    medium = Column(Integer, default=0)  # 0 - vacuum, 1 - air
+    medium = Column(Integer, default=MEDIUM_VACUUM)
     line = relationship("Line", back_populates="wavelengths")
 
     __mapper_args__ = {

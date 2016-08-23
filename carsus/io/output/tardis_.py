@@ -23,9 +23,6 @@ P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
-MEDIUM_VACUUM = 0
-MEDIUM_AIR = 1
-
 LINES_MAXRQ = 10000  # for yield_limit
 
 ZETA_DATAFILE = get_data_path("knox_long_recombination_zeta.dat")
