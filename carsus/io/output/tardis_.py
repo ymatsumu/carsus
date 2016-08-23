@@ -957,9 +957,9 @@ class AtomData(object):
                             index=pd.MultiIndex.from_arrays(zeta_data[:, :2].transpose().astype(int)),
                             columns=t_rads)
 
-    def to_hdf(self, hdf5_path, store_atom_masses=True, store_ionization_energies=True,
-               store_levels=True, store_lines=True, store_collisions=True, store_macro_atom=True,
-               store_macro_atom_references=True, store_zeta_data=True):
+    def to_hdf(self, hdf5_path, store_atom_masses=False, store_ionization_energies=False,
+               store_levels=False, store_lines=False, store_collisions=False, store_macro_atom=False,
+               store_macro_atom_references=False, store_zeta_data=False):
         """
             Store the dataframes in an HDF5 file
 
@@ -969,28 +969,28 @@ class AtomData(object):
                 The path of the HDF5 file
             store_atom_masses: bool
                 Store the `atom_masses_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_ionization_energies: bool
                 Store the `ionization_energies_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_levels: bool
                 Store the `levels_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_lines: bool
                 Store the `lines_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_collisions: bool
                 Store the `collisions_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_macro_atom: bool
                 Store the `macro_atom_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_macro_atom_references: bool
                 Store the `macro_atom_references_prepared` DataFrame
-                (default: True)
+                (default: False)
             store_zeta_data: bool
                 Store the `zeta_data` DataFrame
-                (default: True)
+                (default: False)
         """
 
         with HDFStore(hdf5_path) as store:
