@@ -5,7 +5,11 @@ import uuid
 import re
 
 from pandas import HDFStore
-from sqlalchemy import and_, case
+from sqlalchemy import (
+        and_,
+        case,
+        func,
+        )
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.orm.exc import NoResultFound
@@ -13,10 +17,29 @@ from astropy import constants as const
 from astropy import units as u
 from scipy import interpolate
 from pyparsing import ParseException
-from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision, MEDIUM_AIR, MEDIUM_VACUUM
+from carsus.model import (
+        Atom,
+        Ion,
+        Line,
+        Level,
+        LevelEnergy,
+        DataSource,
+        ECollision,
+        MEDIUM_AIR,
+        MEDIUM_VACUUM,
+        LineGFValue,
+        LineWavelength,
+        LineAValue
+        )
 from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import get_data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
-    convert_atomic_number2symbol, parse_selected_atoms, parse_selected_species
+from carsus.util import (
+        get_data_path,
+        convert_camel2snake,
+        convert_wavelength_air2vacuum,
+        convert_atomic_number2symbol,
+        parse_selected_atoms,
+        parse_selected_species
+        )
 
 
 P_EMISSION_DOWN = -1
@@ -356,8 +379,7 @@ class AtomData(object):
             self._levels, self._lines = self.create_levels_lines(**self.levels_lines_param)
         return self._lines
 
-    def _build_levels_q(self):
-
+    def data_source_case(self):
         lvl_alias = aliased(Level)
 
         whens = list()
@@ -365,34 +387,53 @@ class AtomData(object):
         if self.chianti_ions:
             # 1. If ion is in `chianti_ions` and there exist levels for this ion from
             #    the chianti source in the database, then select from the chianti source
-            whens.append(
-                 (self.session.query(lvl_alias). \
-                 join(self.chianti_ions_table,
-                      and_(lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
-                           lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)). \
-                 filter(and_(lvl_alias.atomic_number == Level.atomic_number,
-                             lvl_alias.ion_charge == Level.ion_charge),
-                        lvl_alias.data_source == self.ch_ds).exists(), self.ch_ds.data_source_id)
-            )
+            whens.append((
+                self.session.
+                query(lvl_alias).
+                join(
+                    self.chianti_ions_table,
+                    and_(
+                        lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
+                        lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)
+                    ).
+                filter(
+                    and_(
+                        lvl_alias.atomic_number == Level.atomic_number,
+                        lvl_alias.ion_charge == Level.ion_charge
+                        ),
+                    lvl_alias.data_source == self.ch_ds
+                    ).
+                exists(),
+                self.ch_ds.data_source_id
+                ))
 
         # 2. Else if there exist levels from kurucz for this ion then select from the kurucz source
-        whens.append((self.session.query(lvl_alias). \
-                     filter(and_(lvl_alias.atomic_number == Level.atomic_number,
-                                 lvl_alias.ion_charge == Level.ion_charge),
-                                 lvl_alias.data_source == self.ku_ds).exists(), self.ku_ds.data_source_id))
+        whens.append((
+            self.session.
+            query(lvl_alias).
+            filter(
+                and_(
+                    lvl_alias.atomic_number == Level.atomic_number,
+                    lvl_alias.ion_charge == Level.ion_charge),
+                lvl_alias.data_source == self.ku_ds
+                ).
+            exists(),
+            self.ku_ds.data_source_id
+            ))
 
         # 3. Else select from the nist source (the ground levels)
-        case_stmt = case(whens=whens, else_=self.nist_ds.data_source_id)
+        return case(whens=whens, else_=self.nist_ds.data_source_id)
 
-        levels_q = self.session.query(Level).\
-            filter(Level.atomic_number.in_(self.selected_atomic_numbers)).\
-            filter(Level.data_source_id == case_stmt)
+    def _build_levels_q(self):
 
-        return levels_q
+        levels_q = (
+                self.session.
+                query(Level.level_id).
+                filter(Level.atomic_number.in_(self.selected_atomic_numbers)).
+                filter(Level.data_source_id == self.data_source_case)
+                )
 
-    def _build_lines_q(self, levels_ids):
-        levels_subq = self.session.query(Level.level_id.label("level_id")). \
-            filter(Level.level_id.in_(levels_ids)).subquery()
+        return levels_q.subquery()
 
         lines_q = self.session.query(Line). \
             join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
@@ -501,7 +542,10 @@ class AtomData(object):
 
         return pd.DataFrame(data=fully_ionized_levels)
 
-    def create_levels_lines(self, levels_metastable_loggf_threshold=-3, lines_loggf_threshold=-3):
+    def create_levels_lines(
+            self,
+            levels_metastable_loggf_threshold=-3,
+            lines_loggf_threshold=-3):
         """
         Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
 
@@ -557,10 +601,16 @@ class AtomData(object):
         levels["level_number"] = levels["level_number"].astype(np.int)
 
         # Join atomic_number, ion_number, level_number_lower, level_number_upper on lines
-        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l"}). \
-                              loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l"]]
-        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u"}). \
-                              loc[:, ["level_number_upper", "g_u"]]
+        lower_levels = levels.rename(
+                columns={
+                    "level_number": "level_number_lower",
+                    "g": "g_l"}
+                ).loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l"]]
+        upper_levels = levels.rename(
+                columns={
+                    "level_number": "level_number_upper",
+                    "g": "g_u"}
+                ).loc[:, ["level_number_upper", "g_u"]]
         lines = lines.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
