@@ -30,7 +30,7 @@ def init_db(fname=None, **kwargs):
     """
     print "Initializing the database"
 
-    url = "sqlite:////" + fname if fname is not None else "sqlite://"
+    url = "sqlite:///" + fname if fname is not None else "sqlite://"
     session = setup(url, **kwargs)
 
     if session.query(Atom).count() == 0:
