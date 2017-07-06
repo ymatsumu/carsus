@@ -98,7 +98,7 @@ class NISTWeightsCompPyparser(BasePyparser):
             apply(atomic_weight_interval_to_nom_val_and_std, axis=1)
 
         def atomic_weight_find_stable_atom_mass(row):
-            stable_isotope = self.base.loc[row.name, row[AW_STABLE_MASS_NUM_COL]]
+            stable_isotope = self.base.loc[row.name, int(row[AW_STABLE_MASS_NUM_COL])]
             return stable_isotope[[AM_VAL_COL, AM_SD_COL]]
 
         stable_mass_num_gr[[AW_VAL_COL, AW_SD_COL]] = stable_mass_num_gr.\
@@ -183,4 +183,3 @@ class NISTWeightsCompIngester(BaseIngester):
         if atomic_weights:
             self.ingest_atomic_weights()
             self.session.flush()
-            
