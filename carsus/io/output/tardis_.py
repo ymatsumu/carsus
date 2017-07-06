@@ -435,41 +435,79 @@ class AtomData(object):
 
         return levels_q.subquery()
 
-        lines_q = self.session.query(Line). \
-            join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
+    def _build_lines_q(self, levels_subq):
 
-        return lines_q
+        lines_q = self.session.query(Line.line_id).join(
+                levels_subq,
+                Line.lower_level_id == levels_subq.c.level_id)
 
-    @staticmethod
-    def _get_all_levels_data(levels_q):
-        levels = list()
-        for lvl in levels_q.options(joinedload(Level.energies)):
-            try:
-                energy = None
-                # Try to find the measured energy for this level
-                for nrg in lvl.energies:
-                    if nrg.method == "meas":
-                        energy = nrg.quantity
-                        break
-                # If the measured energy is not available, try to get the first one
-                if energy is None:
-                    energy = lvl.energies[0].quantity
-            except IndexError:
-                print "No energy is available for level {0}".format(lvl.level_id)
-                continue
-            levels.append(
-                (lvl.level_id, lvl.atomic_number, lvl.ion_charge, energy.value, lvl.g))
+        return lines_q.subquery()
 
-        # Create a dataframe with the levels data
-        levels_dtype = [("level_id", np.int), ("atomic_number", np.int),
-                        ("ion_number", np.int), ("energy", np.float), ("g", np.int)]
-        levels = np.array(levels, dtype=levels_dtype)
-        levels = pd.DataFrame.from_records(levels, index="level_id")
+    def _get_all_levels_data(self, levels_q):
+        subq = levels_q
+        levels_data_q = (
+                self.session.
+                query(
+                    Level.level_id,
+                    Level.atomic_number,
+                    Level.ion_charge,
+                    Level.g,
+                    ).
+                join(
+                    subq,
+                    Level.level_id == subq.c.level_id
+                    )
+                )
 
-        return levels
+        def get_energies(method):
+            data = pd.DataFrame(
+                    self.session.
+                    query(
+                        LevelEnergy.level_id,
+                        LevelEnergy._value
+                        ).
+                    join(
+                        subq,
+                        #LevelEnergy.level
+                        ).
+                    filter(
+                        LevelEnergy.method == method
+                        ).all(),
+                    columns=['level_id', 'energy']
+                    ).set_index('level_id')
+            data['energy'] = u.Quantity(
+                    data.pop('energy'),
+                    LevelEnergy.unit
+                    ).to('eV')  # FIXME hardcoded unit
+            return data
+
+        data = pd.DataFrame(
+                levels_data_q.all(),
+                columns=[
+                    'level_id', 'atomic_number',
+                    'ion_charge', 'g'],
+                dtype=np.int
+                ).set_index('level_id')
+
+        energies = [get_energies(k) for k in ['meas', 'theor', None]]
+
+        data.insert(len(data.columns) - 1, 'energy', np.nan)
+
+        for v in energies:
+            # update data based on index
+            data.update(v, overwrite=False)
+
+        if data.isnull().any():
+            raise ValueError(
+                    'Inconsistent databse, some values are None.' +
+                    str(data[data.isnull()]))
+
+        return data
 
     @staticmethod
     def _get_all_lines_data(lines_q):
+
+
         lines = list()
         for line in yield_limit(lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)),
                                 Line.line_id, maxrq=LINES_MAXRQ):
