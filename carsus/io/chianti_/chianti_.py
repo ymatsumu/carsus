@@ -15,21 +15,20 @@ from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line,LineGFValue, LineAValue, LineWavelength, MEDIUM_VACUUM, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
 
-if os.getenv('XUVTOP'):
-    import chianti.core as ch
-    masterlist_ions_path = os.path.join(
-        os.getenv('XUVTOP'), "masterlist", "masterlist_ions.pkl"
-    )
+import ChiantiPy
+import ChiantiPy.core as ch
 
-    masterlist_ions_file = open(masterlist_ions_path, 'rb')
-    masterlist_ions = pickle.load(masterlist_ions_file).keys()
-    # Exclude the "d" ions for now
-    masterlist_ions = [_ for _ in masterlist_ions
-                       if re.match("^[a-z]+_\d+$", _)]
+masterlist_ions_path = os.path.join(
+    os.getenv('XUVTOP'), "masterlist", "masterlist_ions.pkl"
+)
 
-else:
-    print "Chianti database is not installed!"
-    masterlist_ions = list()
+masterlist_ions_file = open(masterlist_ions_path, 'rb')
+masterlist_ions = pickle.load(masterlist_ions_file).keys()
+# Exclude the "d" ions for now
+masterlist_ions = [_ for _ in masterlist_ions
+                   if re.match("^[a-z]+_\d+$", _)]
+
+masterlist_version = ChiantiPy.tools.io.versionRead()
 
 
 class ChiantiIonReaderError(Exception):
@@ -264,8 +263,14 @@ class ChiantiIngester(object):
     """
 
     masterlist_ions = masterlist_ions
+    ds_prefix = 'chianti'
 
-    def __init__(self, session, ions=None, ds_short_name="chianti_v8.0.2"):
+    def __init__(self, session, ions=None, ds_short_name=None):
+        if ds_short_name is None:
+            ds_short_name = '{}_v{}'.format(
+                    self.ds_prefix,
+                    masterlist_version)
+
         self.session = session
         # ToDo write a parser for Spectral Notation
         self.ion_readers = list()
@@ -287,7 +292,8 @@ class ChiantiIngester(object):
                 print("Ion {0} is not available".format(ion))
 
         self.data_source = DataSource.as_unique(self.session, short_name=ds_short_name)
-        if self.data_source.data_source_id is None:  # To get the id if a new data source was created
+        # To get the id if a new data source was created
+        if self.data_source.data_source_id is None:
             self.session.flush()
 
     def get_lvl_index2id(self, ion):
