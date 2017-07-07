@@ -438,11 +438,11 @@ class AtomData(object):
 
     def _build_lines_q(self, levels_subq):
 
-        lines_q = self.session.query(Line.line_id).join(
+        lines_q = self.session.query(Line).join(
                 levels_subq,
                 Line.lower_level_id == levels_subq.c.level_id)
 
-        return lines_q.subquery()
+        return lines_q
 
     def _get_all_levels_data(self, levels_q):
         subq = levels_q
@@ -611,7 +611,7 @@ class AtomData(object):
         levels_q = self._build_levels_q()
         levels_all = self._get_all_levels_data(levels_q)
 
-        lines_q = self._build_lines_q(levels_all.index.values)
+        lines_q = self._build_lines_q(levels_q)
         lines_all = self._get_all_lines_data(lines_q)
 
         # Culling autoionization levels
