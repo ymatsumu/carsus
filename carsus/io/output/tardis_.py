@@ -536,6 +536,10 @@ class AtomData(object):
         lines.pop('wl_medium')
 
         lines['loggf'] = np.log10(lines['gf'])
+
+        if lines.index.duplicated().any():
+            raise ValueError(
+                    'There are duplicated line_ids, something went wrong!')
         return lines
 
     @staticmethod
