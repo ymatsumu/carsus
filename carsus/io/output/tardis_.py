@@ -444,8 +444,8 @@ class AtomData(object):
 
         return lines_q
 
-    def _get_all_levels_data(self, levels_q):
-        subq = levels_q
+    def _get_all_levels_data(self):
+        subq = self._build_levels_q()
         levels_data_q = (
                 self.session.
                 query(
@@ -605,11 +605,10 @@ class AtomData(object):
                 columns: atomic_number, ion_number, level_number_lower, level_number_upper,
                          wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
-        levels_q = self._build_levels_q()
-        levels_all = self._get_all_levels_data(levels_q)
 
-        lines_q = self._build_lines_q(levels_q)
-        lines_all = self._get_all_lines_data(lines_q)
+        levels_all = self._get_all_levels_data()
+
+        lines_all = self._get_all_lines_data()
 
         # Culling autoionization levels
         ionization_energies = self.ionization_energies.set_index(["atomic_number", "ion_number"])
