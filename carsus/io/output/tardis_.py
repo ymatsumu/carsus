@@ -379,6 +379,7 @@ class AtomData(object):
             self._levels, self._lines = self.create_levels_lines(**self.levels_lines_param)
         return self._lines
 
+    @property
     def data_source_case(self):
         lvl_alias = aliased(Level)
 
