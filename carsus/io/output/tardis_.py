@@ -485,25 +485,25 @@ class AtomData(object):
                         ).to('eV')  # FIXME hardcoded unit
                 return data
 
-        data = pd.DataFrame(
+        levels = pd.DataFrame(
                 levels_data_q.all(),
                 dtype=np.int
                 ).set_index('level_id')
 
         energies = [get_energies(k) for k in ['meas', 'theor', None]]
 
-        data.insert(len(data.columns) - 1, 'energy', np.nan)
+        levels.insert(len(levels.columns) - 1, 'energy', np.nan)
 
         for v in energies:
             # update data based on index
-            data.update(v, overwrite=False)
+            levels.update(v, overwrite=False)
 
-        if data.isnull().any().any():
+        if levels.isnull().any().any():
             raise ValueError(
-                    'Inconsistent databse, some values are None.' +
-                    str(data[data.isnull()]))
+                    'Inconsistent database, some values are None.' +
+                    str(levels[levels.isnull()]))
 
-        return data
+        return levels
 
     def _get_all_lines_data(self):
         levels_subq = self._build_levels_q()
