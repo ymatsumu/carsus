@@ -451,8 +451,8 @@ class AtomData(object):
                 query(
                     Level.level_id,
                     Level.atomic_number,
-                    Level.ion_charge,
-                    Level.g,
+                    Level.ion_charge.label('ion_number'),
+                    Level.g.label('g'),
                     ).
                 join(
                     subq,
@@ -476,17 +476,17 @@ class AtomData(object):
                         ).all(),
                     columns=['level_id', 'energy']
                     ).set_index('level_id')
-            data['energy'] = u.Quantity(
-                    data.pop('energy'),
-                    LevelEnergy.unit
-                    ).to('eV')  # FIXME hardcoded unit
-            return data
+            if data.empty:
+                return data
+            else:
+                data['energy'] = u.Quantity(
+                        data.pop('energy'),
+                        LevelEnergy.unit
+                        ).to('eV')  # FIXME hardcoded unit
+                return data
 
         data = pd.DataFrame(
                 levels_data_q.all(),
-                columns=[
-                    'level_id', 'atomic_number',
-                    'ion_charge', 'g'],
                 dtype=np.int
                 ).set_index('level_id')
 
@@ -498,7 +498,7 @@ class AtomData(object):
             # update data based on index
             data.update(v, overwrite=False)
 
-        if data.isnull().any():
+        if data.isnull().any().any():
             raise ValueError(
                     'Inconsistent databse, some values are None.' +
                     str(data[data.isnull()]))
