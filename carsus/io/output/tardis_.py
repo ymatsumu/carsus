@@ -505,44 +505,37 @@ class AtomData(object):
 
         return data
 
-    @staticmethod
-    def _get_all_lines_data(lines_q):
+    def _get_all_lines_data(self):
+        levels_subq = self._build_levels_q()
 
+        wavelength = aliased(LineWavelength)
+        gf = aliased(LineGFValue)
 
-        lines = list()
-        for line in yield_limit(lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)),
-                                Line.line_id, maxrq=LINES_MAXRQ):
-            try:
-                # Try to get the first gf value
-                gf = line.gf_values[0].quantity
-            except IndexError:
-                print "No gf value is available for line {0}".format(line.line_id)
-                continue
-            try:
-                # Try to get the first wavelength
-                wavelength = line.wavelengths[0]
-            except IndexError:
-                print "No wavelength is available for line {0}".format(line.line_id)
-                continue
-
-            if wavelength.medium == MEDIUM_VACUUM:
-                wavelength_value = wavelength.quantity.value
-            elif wavelength.medium == MEDIUM_AIR:
-                wavelength_value = convert_wavelength_air2vacuum(wavelength.quantity.value)
-            else:
-                raise AtomDataUnrecognizedMediumError(
-                    "The medium {} is not recognized (0 - vacuum, 1 - air)".format(wavelength.medium)
+        lines_q = (
+                self.session.
+                query(
+                    Line.line_id,
+                    Line.lower_level_id,
+                    Line.upper_level_id,
+                    wavelength._value.label('wavelength'),
+                    gf._value.label('gf'),
+                    wavelength.medium.label('wl_medium')
+                    ).
+                join(wavelength).
+                join(gf).
+                join(
+                    levels_subq,
+                    Line.lower_level_id == levels_subq.c.level_id)
                 )
 
-            lines.append((line.line_id, line.lower_level_id, line.upper_level_id, wavelength_value, gf.value))
+        lines = pd.DataFrame(lines_q.all()).set_index('line_id')
 
-        lines_dtype = [("line_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
-                       ("wavelength", np.float), ("gf", np.float)]
-        lines = np.array(lines, dtype=lines_dtype)
-        lines = pd.DataFrame.from_records(lines, index="line_id")
+        air_mask = lines['wl_medium'] == MEDIUM_AIR
+        lines.loc[air_mask, 'wavelength'] = convert_wavelength_air2vacuum(
+            lines.loc[air_mask, 'wavelength'])
+        lines.pop('wl_medium')
 
-        lines["loggf"] = np.log10(lines["gf"])
-
+        lines['loggf'] = np.log10(lines['gf'])
         return lines
 
     @staticmethod
