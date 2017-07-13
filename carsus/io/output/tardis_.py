@@ -465,7 +465,7 @@ class AtomData(object):
                     self.session.
                     query(
                         LevelEnergy.level_id,
-                        LevelEnergy._value
+                        LevelEnergy.quantity.to('eV').value
                         ).
                     join(
                         subq,
@@ -476,14 +476,7 @@ class AtomData(object):
                         ).all(),
                     columns=['level_id', 'energy']
                     ).set_index('level_id')
-            if data.empty:
-                return data
-            else:
-                data['energy'] = u.Quantity(
-                        data.pop('energy'),
-                        LevelEnergy.unit
-                        ).to('eV')  # FIXME hardcoded unit
-                return data
+            return data
 
         levels = pd.DataFrame(
                 levels_data_q.all(),
@@ -517,8 +510,8 @@ class AtomData(object):
                     Line.line_id,
                     Line.lower_level_id,
                     Line.upper_level_id,
-                    wavelength._value.label('wavelength'),
-                    gf._value.label('gf'),
+                    wavelength.quantity.to('nm').value.label('wavelength'),
+                    gf.quantity.value.label('gf'),
                     wavelength.medium.label('wl_medium')
                     ).
                 join(wavelength).
