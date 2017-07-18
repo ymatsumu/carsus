@@ -15,12 +15,25 @@ from carsus.model import Ion, IonizationEnergy, Level, LevelEnergy
 from carsus.io.base import BaseParser, BaseIngester
 from carsus.io.nist.ionization_grammar import level
 
-IONIZATION_ENERGIES_URL = 'http://physics.nist.gov/cgi-bin/ASD/ie.pl'
+IONIZATION_ENERGIES_URL = 'https://physics.nist.gov/cgi-bin/ASD/ie.pl'
 
 
-def download_ionization_energies(spectra='h-uuh', e_out=0, e_unit=1, format_=1, at_num_out=True, sp_name_out=False,
-                                 ion_charge_out=True, el_name_out=False, seq_out=False, shells_out=True,
-                                 conf_out=False, level_out=True, ion_conf_out=False, unc_out=True, biblio=False):
+def download_ionization_energies(
+        spectra='h-uuh',
+        e_out=0,
+        e_unit=1,
+        format_=1,
+        at_num_out=True,
+        sp_name_out=False,
+        ion_charge_out=True,
+        el_name_out=False,
+        seq_out=False,
+        shells_out=True,
+        conf_out=False,
+        level_out=True,
+        ion_conf_out=False,
+        unc_out=True,
+        biblio=False):
     """
         Downloader function for the Ionization Energies Data from the NIST Atomic Spectra Database
         Parameters
