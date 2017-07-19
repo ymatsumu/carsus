@@ -721,11 +721,16 @@ class AtomData(object):
         return self._collisions
 
     def _build_collisions_q(self, levels_ids):
-        levels_subq = self.session.query(Level.level_id.label("level_id")). \
-            filter(Level.level_id.in_(levels_ids)).subquery()
+        levels_subq = self._build_levels_q()
 
-        collisions_q = self.session.query(ECollision). \
-            join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
+        collisions_q = (
+                self.session.
+                query(ECollision).
+                join(
+                    levels_subq,
+                    ECollision.lower_level_id == levels_subq.c.level_id
+                    )
+                )
 
         return collisions_q
 
