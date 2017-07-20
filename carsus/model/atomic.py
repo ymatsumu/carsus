@@ -337,3 +337,46 @@ class DataSource(UniqueMixin, Base):
 
     def __repr__(self):
         return "<Data Source: {}>".format(self.short_name)
+
+
+class RecombinationRate(Base):
+    __tablename__ = 'zeta'
+
+    id = Column(Integer, primary_key=True)
+
+    # Ion FKC
+    atomic_number = Column(Integer, nullable=False)
+    ion_charge = Column(Integer, nullable=False)
+
+    zeta = Column(Float)
+
+    temp_id = Column(Integer, ForeignKey('temperature.id'), nullable=False)
+    data_source_id = Column(
+            Integer,
+            ForeignKey('data_source.data_source_id'),
+            nullable=False)
+
+    temp = relationship('Temperature')
+    data_source = relationship("DataSource", backref="zeta_data")
+
+    __table_args__ = (ForeignKeyConstraint(['atomic_number', 'ion_charge'],
+                                           ['ion.atomic_number', 'ion.ion_charge']),)
+
+
+class Temperature(UniqueMixin, Base):
+    __tablename__ = 'temperature'
+
+    id = Column(Integer, primary_key=True)
+
+    value = Column(Float)  # Temperature in Kelvin
+
+    @classmethod
+    def unique_hash(cls, value, *args, **kwargs):
+        return "temperature:{0}".format(value)
+
+    @classmethod
+    def unique_filter(cls, query, value, *args, **kwargs):
+        return query.filter(Temperature.value == value)
+
+    def __repr__(self):
+        return "<Temperature {0} K>".format(self.value)
