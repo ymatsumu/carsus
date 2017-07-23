@@ -15,8 +15,23 @@ from carsus.model import DataSource, Ion, Level, LevelEnergy,\
     Line,LineGFValue, LineAValue, LineWavelength, MEDIUM_VACUUM, \
     ECollision, ECollisionEnergy, ECollisionGFValue, ECollisionTempStrength
 
-import ChiantiPy
-import ChiantiPy.core as ch
+# Compatibility with older versions and pip versions:
+try:
+    from ChiantiPy.tools.io import versionRead
+    import ChiantiPy.core as ch
+except ImportError:
+    # Shamefully copied from their github source:
+    def versionRead():
+        """
+        Read the version number of the CHIANTI database
+        """
+        xuvtop = os.environ['XUVTOP']
+        vFileName = os.path.join(xuvtop, 'VERSION')
+        vFile = open(vFileName)
+        versionStr = vFile.readline()
+        vFile.close()
+        return versionStr.strip()
+    import chianti.core as ch
 
 masterlist_ions_path = os.path.join(
     os.getenv('XUVTOP'), "masterlist", "masterlist_ions.pkl"
@@ -28,7 +43,7 @@ masterlist_ions = pickle.load(masterlist_ions_file).keys()
 masterlist_ions = [_ for _ in masterlist_ions
                    if re.match("^[a-z]+_\d+$", _)]
 
-masterlist_version = ChiantiPy.tools.io.versionRead()
+masterlist_version = versionRead()
 
 
 class ChiantiIonReaderError(Exception):
