@@ -12,7 +12,10 @@ class KnoxLongZetaIngester(object):
     def __init__(self, session, data_fn, ds_name='knox_long'):
         self.session = session
         self.data_fn = data_fn
-        self.data_source = DataSource.as_unique(self.session, short_name=ds_name)
+        self.data_source = DataSource.as_unique(
+                self.session,
+                short_name=ds_name
+                )
         if self.data_source.data_source_id is None:
             self.session.flush()
 
@@ -32,12 +35,12 @@ class KnoxLongZetaIngester(object):
                     ['atomic_number', 'ion_charge']).T
                 )
 
+        data = list()
         for i, s in zeta_df.iterrows():
             T = Temperature.as_unique(self.session, value=int(i))
             if T.id is None:
                 self.session.flush()
 
-            data = list()
             for (atomic_number, ion_charge), rate in s.iteritems():
                 data.append(
                     RecombinationRate(
