@@ -449,8 +449,8 @@ class AtomData(object):
         levels_data_q = (
                 self.session.
                 query(
-                    Level.level_id,
-                    Level.atomic_number,
+                    Level.level_id.label('level_id'),
+                    Level.atomic_number.label('atomic_number'),
                     Level.ion_charge.label('ion_number'),
                     Level.g.label('g'),
                     ).
@@ -461,11 +461,11 @@ class AtomData(object):
                 )
 
         def get_energies(method):
-            data = pd.DataFrame(
+            data = pd.read_sql_query(
                     self.session.
                     query(
-                        LevelEnergy.level_id,
-                        LevelEnergy.quantity.to('eV').value
+                        LevelEnergy.level_id.label('level_id'),
+                        LevelEnergy.quantity.to('eV').value.label('energy')
                         ).
                     join(
                         subq,
@@ -473,23 +473,28 @@ class AtomData(object):
                         ).
                     filter(
                         LevelEnergy.method == method
-                        ).all(),
-                    columns=['level_id', 'energy']
-                    ).set_index('level_id')
+                        ).selectable,
+                    self.session.bind,
+                    index_col='level_id'
+                    )
             return data
 
-        levels = pd.DataFrame(
-                levels_data_q.all(),
-                dtype=np.int
-                ).set_index('level_id')
+        levels = pd.read_sql_query(
+                levels_data_q.selectable,
+                self.session.bind,
+                index_col='level_id'
+                )
 
         energies = [get_energies(k) for k in ['meas', 'theor', None]]
 
-        levels.insert(len(levels.columns) - 1, 'energy', np.nan)
+        energy = pd.DataFrame(index=levels.index)
+        energy['energy'] = np.nan
 
-        for v in energies:
+        for df in energies:  # Go backwards and skip the last
             # update data based on index
-            levels.update(v, overwrite=False)
+            energy.update(df, overwrite=False)
+
+        levels['energy'] = energy.energy
 
         if levels.isnull().any().any():
             raise ValueError(
@@ -510,7 +515,7 @@ class AtomData(object):
                     Line.line_id,
                     Line.lower_level_id,
                     Line.upper_level_id,
-                    wavelength.quantity.to('nm').value.label('wavelength'),
+                    wavelength.quantity.to('angstrom').value.label('wavelength'),
                     gf.quantity.value.label('gf'),
                     wavelength.medium.label('wl_medium')
                     ).
