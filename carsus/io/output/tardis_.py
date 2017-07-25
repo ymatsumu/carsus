@@ -381,6 +381,9 @@ class AtomData(object):
 
     @property
     def data_source_case(self):
+        '''
+        Function to select levels based on the requested datasources
+        '''
         lvl_alias = aliased(Level)
 
         whens = list()
@@ -426,6 +429,11 @@ class AtomData(object):
         return case(whens=whens, else_=self.nist_ds.data_source_id)
 
     def _build_levels_q(self):
+        '''
+        Helper function that returns a subquery that can be joined to other
+        queries to limit the query to levels from the selected atoms coming
+        from the selected DataSources.
+        '''
 
         levels_q = (
                 self.session.
@@ -436,15 +444,20 @@ class AtomData(object):
 
         return levels_q.subquery()
 
-    def _build_lines_q(self, levels_subq):
-
-        lines_q = self.session.query(Line).join(
-                levels_subq,
-                Line.lower_level_id == levels_subq.c.level_id)
-
-        return lines_q
-
     def _get_all_levels_data(self):
+        """
+        This function returns level data about the selected atoms from the selected
+        DataSources. The data is returned in a pandas DataFrame.  The index is
+        'level_id' and the following columns exist:
+        atomic_number, ion_number, g, energy [eV]
+
+        Note about the energy: The database has three different values for the
+        method of determining the energy: meas(ured), theor(etical) and None
+        (for ground states from NIST afaik) A level can have multiple energies
+        associated, that is a measured and a theoretical energy.  In that case,
+        we pick the energy in order of availability according to the list above
+        (1st measured etc.)
+        """
         subq = self._build_levels_q()
         levels_data_q = (
                 self.session.
@@ -461,6 +474,10 @@ class AtomData(object):
                 )
 
         def get_energies(method):
+            '''
+            Small helper method to query all energies for the selected levels
+            that match a specific method.
+            '''
             data = pd.read_sql_query(
                     self.session.
                     query(
@@ -469,7 +486,7 @@ class AtomData(object):
                         ).
                     join(
                         subq,
-                        #LevelEnergy.level
+                        LevelEnergy.level_id == subq.c.level_id
                         ).
                     filter(
                         LevelEnergy.method == method
@@ -504,6 +521,14 @@ class AtomData(object):
         return levels
 
     def _get_all_lines_data(self):
+        """
+        This function returns line data about the selected atoms from the selected
+        DataSources. The data is returned in a pandas DataFrame.  The index is
+        'line_id' and the following columns exist:
+        lower_level_id, upper_level_id, wavelength [angstrom], gf, loggf
+
+        Note that the wavelength is given as vacuum wavelength
+        """
         levels_subq = self._build_levels_q()
 
         wavelength = aliased(LineWavelength)
@@ -512,9 +537,9 @@ class AtomData(object):
         lines_q = (
                 self.session.
                 query(
-                    Line.line_id,
-                    Line.lower_level_id,
-                    Line.upper_level_id,
+                    Line.line_id.label('line_id'),
+                    Line.lower_level_id.label('lower_level_id'),
+                    Line.upper_level_id.label('upper_level_id'),
                     wavelength.quantity.to('angstrom').value.label('wavelength'),
                     gf.quantity.value.label('gf'),
                     wavelength.medium.label('wl_medium')
@@ -526,7 +551,12 @@ class AtomData(object):
                     Line.lower_level_id == levels_subq.c.level_id)
                 )
 
-        lines = pd.DataFrame(lines_q.all()).set_index('line_id')
+        lines = pd.read_sql_query(
+                lines_q.selectable,
+                self.session.bind,
+                index_col='line_id'
+                )
+        # lines = pd.DataFrame(lines_q.all()).set_index('line_id')
 
         air_mask = lines['wl_medium'] == MEDIUM_AIR
         lines.loc[air_mask, 'wavelength'] = convert_wavelength_air2vacuum(
@@ -651,7 +681,7 @@ class AtomData(object):
         lines["f_ul"] = lines["gf"] / lines["g_u"]
 
         # Calculate frequency
-        lines['nu'] = u.Unit('angstrom').to('Hz', lines['wavelength'], u.spectral())
+        lines['nu'] = u.Quantity(lines['wavelength'], 'angstrom').to('Hz', u.spectral())
 
         # Calculate Einstein coefficients
         einstein_coeff = (4 * np.pi ** 2 * const.e.gauss.value ** 2) / (const.m_e.cgs.value * const.c.cgs.value)
