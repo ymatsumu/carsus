@@ -74,3 +74,7 @@ def convert_atomic_number2symbol(atomic_number):
 
 def convert_symbol2atomic_number(symbol):
     return SYMBOL2ATOMIC_NUMBER[symbol]
+
+
+def query_columns(query):
+    return [v['name'] for v in query.column_descriptions]

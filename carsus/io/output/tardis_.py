@@ -38,7 +38,8 @@ from carsus.util import (
         convert_wavelength_air2vacuum,
         convert_atomic_number2symbol,
         parse_selected_atoms,
-        parse_selected_species
+        parse_selected_species,
+        query_columns
         )
 
 
@@ -478,7 +479,7 @@ class AtomData(object):
             Small helper method to query all energies for the selected levels
             that match a specific method.
             '''
-            data = pd.DataFrame(
+            q = (
                     self.session.
                     query(
                         LevelEnergy.level_id.label('level_id'),
@@ -490,12 +491,16 @@ class AtomData(object):
                         ).
                     filter(
                         LevelEnergy.method == method
-                        ).all()
+                        )
+                    )
+            return pd.DataFrame(
+                    q.all(),
+                    columns=query_columns(q)
                     ).set_index('level_id')
-            return data
 
         levels = pd.DataFrame(
-                levels_data_q.all()
+                levels_data_q.all(),
+                columns=query_columns(levels_data_q)
                 ).set_index('level_id')
 
         energies = [get_energies(k) for k in ['meas', 'theor', None]]
@@ -548,7 +553,8 @@ class AtomData(object):
                 )
 
         lines = pd.DataFrame(
-                lines_q.all()
+                lines_q.all(),
+                columns=query_columns(lines_q)
                 ).set_index('line_id')
 
         air_mask = lines['wl_medium'] == MEDIUM_AIR
