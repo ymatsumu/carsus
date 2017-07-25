@@ -478,7 +478,7 @@ class AtomData(object):
             Small helper method to query all energies for the selected levels
             that match a specific method.
             '''
-            data = pd.read_sql_query(
+            data = pd.DataFrame(
                     self.session.
                     query(
                         LevelEnergy.level_id.label('level_id'),
@@ -490,17 +490,13 @@ class AtomData(object):
                         ).
                     filter(
                         LevelEnergy.method == method
-                        ).selectable,
-                    self.session.bind,
-                    index_col='level_id'
-                    )
+                        ).all()
+                    ).set_index('level_id')
             return data
 
-        levels = pd.read_sql_query(
-                levels_data_q.selectable,
-                self.session.bind,
-                index_col='level_id'
-                )
+        levels = pd.DataFrame(
+                levels_data_q.all()
+                ).set_index('level_id')
 
         energies = [get_energies(k) for k in ['meas', 'theor', None]]
 
@@ -551,12 +547,9 @@ class AtomData(object):
                     Line.lower_level_id == levels_subq.c.level_id)
                 )
 
-        lines = pd.read_sql_query(
-                lines_q.selectable,
-                self.session.bind,
-                index_col='line_id'
-                )
-        # lines = pd.DataFrame(lines_q.all()).set_index('line_id')
+        lines = pd.DataFrame(
+                lines_q.all()
+                ).set_index('line_id')
 
         air_mask = lines['wl_medium'] == MEDIUM_AIR
         lines.loc[air_mask, 'wavelength'] = convert_wavelength_air2vacuum(
