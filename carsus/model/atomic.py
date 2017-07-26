@@ -7,6 +7,8 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from astropy import units as u
 from carsus.model.meta import Base, UniqueMixin, QuantityMixin
 
+# constants to differentiate the medium a wavelength is specified in.
+# TODO: Maybe write as an enum
 MEDIUM_VACUUM = 0
 MEDIUM_AIR = 1
 
