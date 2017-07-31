@@ -49,7 +49,7 @@ def pytest_addoption(parser):
 
 @pytest.fixture
 def memory_session():
-    session = init_db()
+    session = init_db('sqlite://')
     session.commit()
     return session
 
