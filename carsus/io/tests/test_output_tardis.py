@@ -16,11 +16,22 @@ with_test_db = pytest.mark.skipif(
 
 
 @pytest.fixture
-def atom_data(test_session):
+def atom_data(test_session, chianti_short_name):
     atom_data = AtomData(test_session,
                          selected_atoms="He, Be, B, N, Si, Zn",
-                         chianti_ions="He 1; N 5")
+                         chianti_ions="He 1; N 5",
+                         chianti_short_name=chianti_short_name
+                         )
     return atom_data
+
+
+@pytest.fixture
+def chianti_short_name(test_session):
+    return (
+            test_session.
+            query(DataSource.short_name).
+            filter(DataSource.short_name.like('chianti%'))
+            ).one()[0]
 
 
 @pytest.fixture
@@ -134,14 +145,20 @@ def test_atom_data_join_on_chianti_ions_table(test_session, atom_data):
 
 
 @with_test_db
-def test_atom_data_two_instances_same_session(test_session):
+def test_atom_data_two_instances_same_session(
+        test_session,
+        chianti_short_name):
 
-    atom_data1 = AtomData(test_session,
-                         selected_atoms="He, Be, B, N, Zn",
-                         chianti_ions="He 1; N 5")
-    atom_data2 = AtomData(test_session,
-                         selected_atoms="He, Be, B, N, Zn",
-                         chianti_ions="He 1; N 5")
+    atom_data1 = AtomData(
+            test_session,
+            selected_atoms="He, Be, B, N, Zn",
+            chianti_ions="He 1; N 5",
+            chianti_short_name=chianti_short_name)
+    atom_data2 = AtomData(
+            test_session,
+            selected_atoms="He, Be, B, N, Zn",
+            chianti_ions="He 1; N 5",
+            chianti_short_name=chianti_short_name)
     atom_data1.chianti_ions_table
     atom_data2.chianti_ions_table
 
@@ -337,4 +354,3 @@ def test_atom_data_to_hdf(atom_data, hdf5_path):
     atom_data.to_hdf(hdf5_path, store_atom_masses=True, store_ionization_energies=True,
                      store_levels=True, store_lines=True, store_macro_atom=True,
                      store_zeta_data=True, store_collisions=True)
-    
