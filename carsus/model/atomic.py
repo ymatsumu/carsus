@@ -339,7 +339,7 @@ class DataSource(UniqueMixin, Base):
         return "<Data Source: {}>".format(self.short_name)
 
 
-class RecombinationRate(Base):
+class Zeta(Base):
     __tablename__ = 'zeta'
 
     id = Column(Integer, primary_key=True)

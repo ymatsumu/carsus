@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from carsus.model import (
-        RecombinationRate,
+        Zeta,
         Temperature,
         DataSource
         )
@@ -43,7 +43,7 @@ class KnoxLongZetaIngester(object):
 
             for (atomic_number, ion_charge), rate in s.iteritems():
                 data.append(
-                    RecombinationRate(
+                    Zeta(
                             atomic_number=atomic_number,
                             ion_charge=ion_charge,
                             data_source=self.data_source,

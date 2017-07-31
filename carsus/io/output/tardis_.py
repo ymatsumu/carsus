@@ -30,7 +30,7 @@ from carsus.model import (
         LineGFValue,
         LineWavelength,
         LineAValue,
-        RecombinationRate,
+        Zeta,
         Temperature
         )
 from carsus.model.meta import yield_limit, Base, IonListMixin
@@ -1065,9 +1065,9 @@ class AtomData(object):
         q = (
                 self.session.
                 query(
-                    RecombinationRate.atomic_number,
-                    RecombinationRate.ion_charge,
-                    RecombinationRate.zeta,
+                    Zeta.atomic_number,
+                    Zeta.ion_charge,
+                    Zeta.zeta,
                     Temperature.value).
                 join(Temperature)
                 )

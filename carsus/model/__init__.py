@@ -4,5 +4,5 @@ from carsus.model.atomic import (
         Transition, Line, LineQuantity, LineAValue, LineWavelength, LineGFValue,
         ECollision, ECollisionQuantity, ECollisionGFValue, ECollisionEnergy, ECollisionTempStrength,
         MEDIUM_VACUUM, MEDIUM_AIR,
-        RecombinationRate, Temperature)
+        Zeta, Temperature)
 from carsus.model.meta import Base, setup
