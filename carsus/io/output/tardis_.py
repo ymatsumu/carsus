@@ -5,7 +5,11 @@ import uuid
 import re
 
 from pandas import HDFStore
-from sqlalchemy import and_, case
+from sqlalchemy import (
+        and_,
+        case,
+        func,
+        )
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.orm.exc import NoResultFound
@@ -13,10 +17,30 @@ from astropy import constants as const
 from astropy import units as u
 from scipy import interpolate
 from pyparsing import ParseException
-from carsus.model import Atom, Ion, Line, Level, DataSource, ECollision, MEDIUM_AIR, MEDIUM_VACUUM
+from carsus.model import (
+        Atom,
+        Ion,
+        Line,
+        Level,
+        LevelEnergy,
+        DataSource,
+        ECollision,
+        MEDIUM_AIR,
+        MEDIUM_VACUUM,
+        LineGFValue,
+        LineWavelength,
+        LineAValue
+        )
 from carsus.model.meta import yield_limit, Base, IonListMixin
-from carsus.util import get_data_path, convert_camel2snake, convert_wavelength_air2vacuum,\
-    convert_atomic_number2symbol, parse_selected_atoms, parse_selected_species
+from carsus.util import (
+        get_data_path,
+        convert_camel2snake,
+        convert_wavelength_air2vacuum,
+        convert_atomic_number2symbol,
+        parse_selected_atoms,
+        parse_selected_species,
+        query_columns
+        )
 
 
 P_EMISSION_DOWN = -1
@@ -356,8 +380,11 @@ class AtomData(object):
             self._levels, self._lines = self.create_levels_lines(**self.levels_lines_param)
         return self._lines
 
-    def _build_levels_q(self):
-
+    @property
+    def data_source_case(self):
+        '''
+        Function to select levels based on the requested datasources
+        '''
         lvl_alias = aliased(Level)
 
         whens = list()
@@ -365,104 +392,181 @@ class AtomData(object):
         if self.chianti_ions:
             # 1. If ion is in `chianti_ions` and there exist levels for this ion from
             #    the chianti source in the database, then select from the chianti source
-            whens.append(
-                 (self.session.query(lvl_alias). \
-                 join(self.chianti_ions_table,
-                      and_(lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
-                           lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)). \
-                 filter(and_(lvl_alias.atomic_number == Level.atomic_number,
-                             lvl_alias.ion_charge == Level.ion_charge),
-                        lvl_alias.data_source == self.ch_ds).exists(), self.ch_ds.data_source_id)
-            )
+            whens.append((
+                self.session.
+                query(lvl_alias).
+                join(
+                    self.chianti_ions_table,
+                    and_(
+                        lvl_alias.atomic_number == self.chianti_ions_table.c.atomic_number,
+                        lvl_alias.ion_charge == self.chianti_ions_table.c.ion_charge)
+                    ).
+                filter(
+                    and_(
+                        lvl_alias.atomic_number == Level.atomic_number,
+                        lvl_alias.ion_charge == Level.ion_charge
+                        ),
+                    lvl_alias.data_source == self.ch_ds
+                    ).
+                exists(),
+                self.ch_ds.data_source_id
+                ))
 
         # 2. Else if there exist levels from kurucz for this ion then select from the kurucz source
-        whens.append((self.session.query(lvl_alias). \
-                     filter(and_(lvl_alias.atomic_number == Level.atomic_number,
-                                 lvl_alias.ion_charge == Level.ion_charge),
-                                 lvl_alias.data_source == self.ku_ds).exists(), self.ku_ds.data_source_id))
+        whens.append((
+            self.session.
+            query(lvl_alias).
+            filter(
+                and_(
+                    lvl_alias.atomic_number == Level.atomic_number,
+                    lvl_alias.ion_charge == Level.ion_charge),
+                lvl_alias.data_source == self.ku_ds
+                ).
+            exists(),
+            self.ku_ds.data_source_id
+            ))
 
         # 3. Else select from the nist source (the ground levels)
-        case_stmt = case(whens=whens, else_=self.nist_ds.data_source_id)
+        return case(whens=whens, else_=self.nist_ds.data_source_id)
 
-        levels_q = self.session.query(Level).\
-            filter(Level.atomic_number.in_(self.selected_atomic_numbers)).\
-            filter(Level.data_source_id == case_stmt)
+    def _build_levels_q(self):
+        '''
+        Helper function that returns a subquery that can be joined to other
+        queries to limit the query to levels from the selected atoms coming
+        from the selected DataSources.
+        '''
 
-        return levels_q
+        levels_q = (
+                self.session.
+                query(Level.level_id).
+                filter(Level.atomic_number.in_(self.selected_atomic_numbers)).
+                filter(Level.data_source_id == self.data_source_case)
+                )
 
-    def _build_lines_q(self, levels_ids):
-        levels_subq = self.session.query(Level.level_id.label("level_id")). \
-            filter(Level.level_id.in_(levels_ids)).subquery()
+        return levels_q.subquery()
 
-        lines_q = self.session.query(Line). \
-            join(levels_subq, Line.lower_level_id == levels_subq.c.level_id)
+    def _get_all_levels_data(self):
+        """
+        This function returns level data about the selected atoms from the selected
+        DataSources. The data is returned in a pandas DataFrame.  The index is
+        'level_id' and the following columns exist:
+        atomic_number, ion_number, g, energy [eV]
 
-        return lines_q
+        Note about the energy: The database has three different values for the
+        method of determining the energy: meas(ured), theor(etical) and None
+        (for ground states from NIST afaik) A level can have multiple energies
+        associated, that is a measured and a theoretical energy.  In that case,
+        we pick the energy in order of availability according to the list above
+        (1st measured etc.)
+        """
+        subq = self._build_levels_q()
+        levels_data_q = (
+                self.session.
+                query(
+                    Level.level_id.label('level_id'),
+                    Level.atomic_number.label('atomic_number'),
+                    Level.ion_charge.label('ion_number'),
+                    Level.g.label('g'),
+                    ).
+                join(
+                    subq,
+                    Level.level_id == subq.c.level_id
+                    )
+                )
 
-    @staticmethod
-    def _get_all_levels_data(levels_q):
-        levels = list()
-        for lvl in levels_q.options(joinedload(Level.energies)):
-            try:
-                energy = None
-                # Try to find the measured energy for this level
-                for nrg in lvl.energies:
-                    if nrg.method == "meas":
-                        energy = nrg.quantity
-                        break
-                # If the measured energy is not available, try to get the first one
-                if energy is None:
-                    energy = lvl.energies[0].quantity
-            except IndexError:
-                print "No energy is available for level {0}".format(lvl.level_id)
-                continue
-            levels.append(
-                (lvl.level_id, lvl.atomic_number, lvl.ion_charge, energy.value, lvl.g))
+        def get_energies(method):
+            '''
+            Small helper method to query all energies for the selected levels
+            that match a specific method.
+            '''
+            q = (
+                    self.session.
+                    query(
+                        LevelEnergy.level_id.label('level_id'),
+                        LevelEnergy.quantity.to('eV').value.label('energy')
+                        ).
+                    join(
+                        subq,
+                        LevelEnergy.level_id == subq.c.level_id
+                        ).
+                    filter(
+                        LevelEnergy.method == method
+                        )
+                    )
+            return pd.DataFrame(
+                    q.all(),
+                    columns=query_columns(q)
+                    ).set_index('level_id')
 
-        # Create a dataframe with the levels data
-        levels_dtype = [("level_id", np.int), ("atomic_number", np.int),
-                        ("ion_number", np.int), ("energy", np.float), ("g", np.int)]
-        levels = np.array(levels, dtype=levels_dtype)
-        levels = pd.DataFrame.from_records(levels, index="level_id")
+        levels = pd.DataFrame(
+                levels_data_q.all(),
+                columns=query_columns(levels_data_q)
+                ).set_index('level_id')
+
+        energies = [get_energies(k) for k in ['meas', 'theor', None]]
+
+        energy = pd.DataFrame(index=levels.index)
+        energy['energy'] = np.nan
+
+        for df in energies:  # Go backwards and skip the last
+            # update data based on index
+            energy.update(df, overwrite=False)
+
+        levels['energy'] = energy.energy
+
+        if levels.isnull().any().any():
+            raise ValueError(
+                    'Inconsistent database, some values are None.' +
+                    str(levels[levels.isnull()]))
 
         return levels
 
-    @staticmethod
-    def _get_all_lines_data(lines_q):
-        lines = list()
-        for line in yield_limit(lines_q.options(joinedload(Line.wavelengths), joinedload(Line.gf_values)),
-                                Line.line_id, maxrq=LINES_MAXRQ):
-            try:
-                # Try to get the first gf value
-                gf = line.gf_values[0].quantity
-            except IndexError:
-                print "No gf value is available for line {0}".format(line.line_id)
-                continue
-            try:
-                # Try to get the first wavelength
-                wavelength = line.wavelengths[0]
-            except IndexError:
-                print "No wavelength is available for line {0}".format(line.line_id)
-                continue
+    def _get_all_lines_data(self):
+        """
+        This function returns line data about the selected atoms from the selected
+        DataSources. The data is returned in a pandas DataFrame.  The index is
+        'line_id' and the following columns exist:
+        lower_level_id, upper_level_id, wavelength [angstrom], gf, loggf
 
-            if wavelength.medium == MEDIUM_VACUUM:
-                wavelength_value = wavelength.quantity.value
-            elif wavelength.medium == MEDIUM_AIR:
-                wavelength_value = convert_wavelength_air2vacuum(wavelength.quantity.value)
-            else:
-                raise AtomDataUnrecognizedMediumError(
-                    "The medium {} is not recognized (0 - vacuum, 1 - air)".format(wavelength.medium)
+        Note that the wavelength is given as vacuum wavelength
+        """
+        levels_subq = self._build_levels_q()
+
+        wavelength = aliased(LineWavelength)
+        gf = aliased(LineGFValue)
+
+        lines_q = (
+                self.session.
+                query(
+                    Line.line_id.label('line_id'),
+                    Line.lower_level_id.label('lower_level_id'),
+                    Line.upper_level_id.label('upper_level_id'),
+                    wavelength.quantity.to('angstrom').value.label('wavelength'),
+                    gf.quantity.value.label('gf'),
+                    wavelength.medium.label('wl_medium')
+                    ).
+                join(wavelength).
+                join(gf).
+                join(
+                    levels_subq,
+                    Line.lower_level_id == levels_subq.c.level_id)
                 )
 
-            lines.append((line.line_id, line.lower_level_id, line.upper_level_id, wavelength_value, gf.value))
+        lines = pd.DataFrame(
+                lines_q.all(),
+                columns=query_columns(lines_q)
+                ).set_index('line_id')
 
-        lines_dtype = [("line_id", np.int), ("lower_level_id", np.int), ("upper_level_id", np.int),
-                       ("wavelength", np.float), ("gf", np.float)]
-        lines = np.array(lines, dtype=lines_dtype)
-        lines = pd.DataFrame.from_records(lines, index="line_id")
+        air_mask = lines['wl_medium'] == MEDIUM_AIR
+        lines.loc[air_mask, 'wavelength'] = convert_wavelength_air2vacuum(
+            lines.loc[air_mask, 'wavelength'])
+        lines.pop('wl_medium')
 
-        lines["loggf"] = np.log10(lines["gf"])
+        lines['loggf'] = np.log10(lines['gf'])
 
+        if lines.index.duplicated().any():
+            raise ValueError(
+                    'There are duplicated line_ids, something went wrong!')
         return lines
 
     @staticmethod
@@ -501,7 +605,10 @@ class AtomData(object):
 
         return pd.DataFrame(data=fully_ionized_levels)
 
-    def create_levels_lines(self, levels_metastable_loggf_threshold=-3, lines_loggf_threshold=-3):
+    def create_levels_lines(
+            self,
+            levels_metastable_loggf_threshold=-3,
+            lines_loggf_threshold=-3):
         """
         Create a DataFrame containing *levels data* and a DataFrame containing *lines data*.
 
@@ -525,11 +632,10 @@ class AtomData(object):
                 columns: atomic_number, ion_number, level_number_lower, level_number_upper,
                          wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1], B_ul[?], B_ul[?], A_ul[1/s].
         """
-        levels_q = self._build_levels_q()
-        levels_all = self._get_all_levels_data(levels_q)
 
-        lines_q = self._build_lines_q(levels_all.index.values)
-        lines_all = self._get_all_lines_data(lines_q)
+        levels_all = self._get_all_levels_data()
+
+        lines_all = self._get_all_lines_data()
 
         # Culling autoionization levels
         ionization_energies = self.ionization_energies.set_index(["atomic_number", "ion_number"])
@@ -557,10 +663,16 @@ class AtomData(object):
         levels["level_number"] = levels["level_number"].astype(np.int)
 
         # Join atomic_number, ion_number, level_number_lower, level_number_upper on lines
-        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l"}). \
-                              loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l"]]
-        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u"}). \
-                              loc[:, ["level_number_upper", "g_u"]]
+        lower_levels = levels.rename(
+                columns={
+                    "level_number": "level_number_lower",
+                    "g": "g_l"}
+                ).loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l"]]
+        upper_levels = levels.rename(
+                columns={
+                    "level_number": "level_number_upper",
+                    "g": "g_u"}
+                ).loc[:, ["level_number_upper", "g_u"]]
         lines = lines.join(lower_levels, on="lower_level_id").join(upper_levels, on="upper_level_id")
 
         # Calculate absorption oscillator strength f_lu and emission oscillator strength f_ul
@@ -568,7 +680,7 @@ class AtomData(object):
         lines["f_ul"] = lines["gf"] / lines["g_u"]
 
         # Calculate frequency
-        lines['nu'] = u.Unit('angstrom').to('Hz', lines['wavelength'], u.spectral())
+        lines['nu'] = u.Quantity(lines['wavelength'], 'angstrom').to('Hz', u.spectral())
 
         # Calculate Einstein coefficients
         einstein_coeff = (4 * np.pi ** 2 * const.e.gauss.value ** 2) / (const.m_e.cgs.value * const.c.cgs.value)
@@ -643,11 +755,16 @@ class AtomData(object):
         return self._collisions
 
     def _build_collisions_q(self, levels_ids):
-        levels_subq = self.session.query(Level.level_id.label("level_id")). \
-            filter(Level.level_id.in_(levels_ids)).subquery()
+        levels_subq = self._build_levels_q()
 
-        collisions_q = self.session.query(ECollision). \
-            join(levels_subq, ECollision.lower_level_id == levels_subq.c.level_id)
+        collisions_q = (
+                self.session.
+                query(ECollision).
+                join(
+                    levels_subq,
+                    ECollision.lower_level_id == levels_subq.c.level_id
+                    )
+                )
 
         return collisions_q
 

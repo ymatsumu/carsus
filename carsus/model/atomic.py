@@ -7,6 +7,8 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from astropy import units as u
 from carsus.model.meta import Base, UniqueMixin, QuantityMixin
 
+# constants to differentiate the medium a wavelength is specified in.
+# TODO: Maybe write as an enum
 MEDIUM_VACUUM = 0
 MEDIUM_AIR = 1
 
@@ -121,7 +123,7 @@ class Level(Base):
 
     energies = relationship("LevelEnergy", back_populates="level")
     ion = relationship("Ion", back_populates="levels")
-    data_source = relationship("DataSource", back_populates="levels")
+    data_source = relationship("DataSource", backref="levels")
 
     @hybrid_property
     def g(self):
@@ -129,7 +131,7 @@ class Level(Base):
 
     @g.expression
     def g(cls):
-        return cast(2 * cls.J + 1, Integer)
+        return cast(2 * cls.J + 1, Integer).label('g')
 
     __table_args__ = (ForeignKeyConstraint(['atomic_number', 'ion_charge'],
                                            ['ion.atomic_number', 'ion.ion_charge']),)
@@ -173,7 +175,7 @@ class Transition(Base):
     lower_level = relationship("Level", foreign_keys=[lower_level_id])
     upper_level = relationship("Level", foreign_keys=[upper_level_id])
 
-    data_source = relationship("DataSource", back_populates="transitions")
+    data_source = relationship("DataSource", backref="transitions")
 
     __mapper_args__ = {
         'polymorphic_identity': 'transition',
@@ -330,8 +332,8 @@ class DataSource(UniqueMixin, Base):
     description = Column(String(800))
     data_source_quality = Column(Integer)
 
-    levels = relationship("Level", back_populates="data_source")
-    transitions = relationship("Transition", back_populates="data_source")
+    # levels = relationship("Level", back_populates="data_source")
+    # transitions = relationship("Transition", back_populates="data_source")
 
     def __repr__(self):
         return "<Data Source: {}>".format(self.short_name)
