@@ -1,38 +1,44 @@
 '''
-DataBase Models in carsus
+Atomic Models in carsus
 ==========================
 
 Introduction
 ~~~~~~~~~~~~~
 
-`Carsus` uses sqlalchemy to link database rows to python objects. This makes it
-very easy to query for a filtered subset of data.
+`Carsus` uses sqlalchemy to associate (experimental) data about real objects,
+such as atoms, with tables in a database. This allows us to store all data in
+one big database but we can use it as if it were simple python objects.
+Additionally, operations like filtering the data are performed on the database
+instead of in python which is a lot better for the performance.
 
-classes define objects. each class is mapped to a database table and instances
-of a class are mapped to rows of that table.  all classes inherit from Base
-which is a declarative_base from sqlalchemy.  Each class has a "Primary Key"
-which has to be unique for each object. Typically this is an integer starting
-at 1. The primary key should be called 'id'.  Attributes of instances are
-declared as special class attributes. To map an attribute to a database column
-it has to be a Column object.  It is possible to define relationships with the
-relationship function. This links two instances of an object together based on
-one column, usually the primary key.
+At the core of this system are the database models. These are python classes
+with special class attributes that are mapped to database columns by
+sqlalchemy.  In the database, each class has its own table and instances of the
+class represent one specific row of that table.  All models have to inherit
+from Base which is defined in `carsus.model.meta`.  Each model has a "Primary
+Key" which has to be unique for each object and is used to identify it.
+Typically this is an integer but it is also possible to use a combination of
+multiple values to form the primary key (see IonQuantity for example).  If the
+primary key is a single integer, it should be called 'id'.
 
-each class own column (share columns inheritance?)
+Attributes of instances are declared as instances of
+:class:`~sqlalchemy.Column` which is a special class attribute pointing to a
+column in a table.  Relationships between models are defined with
+:func:`~sqlalchemy.orm.relationship` linking two instances of an object
+together where usually one column points to the primary key of another table.
+Defining the relationships is important so sqlalchemy can automatically join
+the models together if a join operation is added to the query.
 
-operations mostly done on the database and not python -> fast
-
-There are several types of classes describing the atomic data for us. First, we
-have general models, like `Atom` and `Ion`. These are universal and independent
-of the source of the data. They serve as anchors for datasource dependent
-objects to be linked against.  Next is Data that is not universal but comes
-from a source, for example IonizationEnergy. We are using data which is
-provided by NIST but there are other sources aswell. To easily allow the same
-data from different sources in the database, we link them to a source. This is
-very important because when we extract the data, we always have to specify the
-source of the data we want to extract.
-
-In carsus we create This file contains all models linked to database tables.
+We have several types of models for the atomic data. First, we have general
+models, like :class:`~carsus.model.atomic.Atom` and
+:class:`~carsus.model.atomic.Ion`. These are universal and independent of the
+source of the data. They serve as anchors for datasource dependent quantities
+to be linked against. These are not universal, like for example the
+:class:`~carsus.model.atomic.IonizationEnergy`, but come from sources such as
+NIST. To easily allow the data from different sources for the same quantity in
+the database, they are linked to a source. This is very important because when
+extracting the data, we always have to specify the source of the data we want
+to extract.
 '''
 
 from sqlalchemy.orm import relationship
@@ -101,7 +107,7 @@ class Atom(Base):
 
 class AtomQuantity(QuantityMixin, Base):
     '''
-    Base class for all quantities of an :py:class:`~carsus.atomic.Atom`. Mixes in the QuantityMixin to
+    Base class for all quantities of an :class:`~carsus.model.atomic.Atom`. Mixes in the QuantityMixin to
     expose the auantity interface.
     '''
 
