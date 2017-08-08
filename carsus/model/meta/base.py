@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 
 Base = declarative_base()
+'''
+Base class for all models mapping to a database with sqlalchemy.
+'''
 
 
 def setup(url, **kwargs):

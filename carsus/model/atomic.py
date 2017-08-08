@@ -1,9 +1,6 @@
 '''
-Atomic Models in carsus
-==========================
-
 Introduction
-~~~~~~~~~~~~~
+============
 
 `Carsus` uses sqlalchemy to associate (experimental) data about real objects,
 such as atoms, with tables in a database. This allows us to store all data in
@@ -39,6 +36,9 @@ NIST. To easily allow the data from different sources for the same quantity in
 the database, they are linked to a source. This is very important because when
 extracting the data, we always have to specify the source of the data we want
 to extract.
+
+Classes
+========
 '''
 
 from sqlalchemy.orm import relationship
@@ -203,6 +203,7 @@ class IonQuantity(QuantityMixin, Base):
 class IonizationEnergy(IonQuantity):
     '''
     Ionization energy of an Ion in electron volt [eV].
+    foo
     '''
 
     unit = u.eV
