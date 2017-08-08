@@ -98,8 +98,8 @@ class Atom(Base):
     group = Column(Integer)
     period = Column(Integer)
 
-    weights = relationship("AtomWeight", back_populates='atom')
-    ions = relationship("Ion", back_populates='atom')
+    # weights = relationship("AtomWeight", back_populates='atom')
+    # ions = relationship("Ion", back_populates='atom')
 
     def __repr__(self):
         return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
@@ -135,7 +135,7 @@ class AtomWeight(AtomQuantity):
     '''
 
     unit = u.u
-    atom = relationship("Atom", back_populates='weights')
+    atom = relationship("Atom", backref='weights')
 
     __mapper_args__ = {
         'polymorphic_identity': 'weight'
@@ -171,7 +171,7 @@ class Ion(UniqueMixin, Base):
     #: Relationship to Level
     levels = relationship("Level", back_populates="ion")
     #: Relationship to Atom
-    atom = relationship("Atom", back_populates='ions')
+    atom = relationship("Atom", backref='ions')
 
     def __repr__(self):
         return "<Ion Z={0} +{1}>".format(self.atomic_number, self.ion_charge)
