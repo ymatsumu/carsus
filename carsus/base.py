@@ -9,7 +9,7 @@ basic_atomic_data_fname = os.path.join(carsus.__path__[0], 'data',
                                        'basic_atomic_data.csv')
 
 
-def init_db(db_url, **kwargs):
+def init_db(db_url='sqlite://', **kwargs):
     """
     Initializes the database.
     If the database is empty ingests basic atomic data (atomic numbers, symbols, etc.)
@@ -28,7 +28,7 @@ def init_db(db_url, **kwargs):
     an instance of the sqlalchemy.orm.session.Session class
 
     """
-    print "Initializing the database"
+    print("Initializing the database at {}".format(db_url))
 
     session = setup(db_url, **kwargs)
 
