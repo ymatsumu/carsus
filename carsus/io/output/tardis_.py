@@ -1142,13 +1142,14 @@ class AtomData(object):
             # It seems that the only way to set the root attributes is to use `_v_attrs`
             store.root._v_attrs["database_version"] = "v0.9"
 
-            print "Signing AtomData with MD5 and UUID1"
 
             md5_hash = hashlib.md5()
             for key in store.keys():
                 md5_hash.update(store[key].values.data)
 
             uuid1 = uuid.uuid1().hex
+
+            print("Signing AtomData: \nMD5: {}\nUUID1: {}".format(md5_hash.hexdigest(), uuid1))
 
             store.root._v_attrs['md5'] = md5_hash.hexdigest()
             store.root._v_attrs['uuid1'] = uuid1
