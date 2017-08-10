@@ -1068,13 +1068,16 @@ class AtomData(object):
                     Zeta.atomic_number,
                     Zeta.ion_charge,
                     Zeta.zeta,
-                    Temperature.value).
+                    Temperature.value.label('temp')).
                 join(Temperature)
                 )
-        return pd.DataFrame(
+        df = pd.DataFrame(
                 q.all()).set_index(
-                        ['atomic_number', 'ion_charge', 'value']
-                        ).unstack('value')
+                        ['atomic_number', 'ion_charge', 'temp']
+                        ).unstack('temp')
+        # Drop the index with value 'zeta' from the multiindex
+        df.columns = df.columns.droplevel(None)
+        return df
 
     def to_hdf(self, hdf5_path, store_atom_masses=False, store_ionization_energies=False,
                store_levels=False, store_lines=False, store_collisions=False, store_macro_atom=False,
