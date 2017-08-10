@@ -21,3 +21,5 @@ Contents:
     notebooks/nist_weights_comp.ipynb
     api
     model
+    macroatom
+    notebooks/kurucz_chianti_h_he.ipynb
