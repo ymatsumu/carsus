@@ -29,7 +29,9 @@ from carsus.model import (
         MEDIUM_VACUUM,
         LineGFValue,
         LineWavelength,
-        LineAValue
+        LineAValue,
+        Zeta,
+        Temperature
         )
 from carsus.model.meta import yield_limit, Base, IonListMixin
 from carsus.util import (
@@ -48,8 +50,6 @@ P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
 
 LINES_MAXRQ = 10000  # for yield_limit
-
-ZETA_DATAFILE = get_data_path("knox_long_recombination_zeta.dat")
 
 
 class AtomDataUnrecognizedMediumError(Exception):
@@ -87,7 +87,6 @@ class AtomData(object):
         (default: -3)
     temperatures: np.array
         The temperatures for calculating collision strengths
-    zeta_datafile: none
 
     Attributes:
     ------------
@@ -143,7 +142,7 @@ class AtomData(object):
                  kurucz_short_name="ku_latest", chianti_short_name="chianti_v8.0.2", nist_short_name="nist-asd",
                  atom_masses_max_atomic_number=30, lines_loggf_threshold=-3, levels_metastable_loggf_threshold=-3,
                  collisions_temperatures=None,
-                 zeta_datafile=ZETA_DATAFILE):
+                 ):
 
         self.session = session
 
@@ -209,8 +208,6 @@ class AtomData(object):
                 self.ch_ds = session.query(DataSource).filter(DataSource.short_name == chianti_short_name).one()
             except NoResultFound:
                 raise NoResultFound("Chianti data source is not found!")
-
-        self.zeta_datafile = zeta_datafile
 
         self._atom_masses = None
         self._ionization_energies = None
@@ -1065,11 +1062,19 @@ class AtomData(object):
         return self._zeta_data
 
     def create_zeta_data(self):
-        zeta_data = np.loadtxt(self.zeta_datafile, usecols=xrange(1, 23), dtype=np.float64)
-        t_rads = np.arange(2000, 42000, 2000)
-        return pd.DataFrame(zeta_data[:, 2:],
-                            index=pd.MultiIndex.from_arrays(zeta_data[:, :2].transpose().astype(int)),
-                            columns=t_rads)
+        q = (
+                self.session.
+                query(
+                    Zeta.atomic_number,
+                    Zeta.ion_charge,
+                    Zeta.zeta,
+                    Temperature.value).
+                join(Temperature)
+                )
+        return pd.DataFrame(
+                q.all()).set_index(
+                        ['atomic_number', 'ion_charge', 'value']
+                        ).unstack('value')
 
     def to_hdf(self, hdf5_path, store_atom_masses=False, store_ionization_energies=False,
                store_levels=False, store_lines=False, store_collisions=False, store_macro_atom=False,
