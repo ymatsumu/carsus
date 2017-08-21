@@ -877,6 +877,14 @@ class AtomData(object):
         collisional_strengths = collisions.apply(calculate_collisional_strength, axis=1, args=(temperatures,))
         collisions = collisions.join(collisional_strengths)
 
+# Setting the index
+# index: atomic_number, ion_number, level_number_lower, level_number_upper;
+        collisions.set_index([
+                'atomic_number',
+                'ion_number',
+                'level_number_lower',
+                'level_number_upper'
+                ], inplace=True)
         return collisions
 
     @property
