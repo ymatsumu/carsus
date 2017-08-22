@@ -746,7 +746,9 @@ class AtomData(object):
             "nu", "B_lu", "B_ul", "A_ul"]].copy()
 
         # Set the index
-        lines_prepared.set_index('line_id', inplace=True)
+        lines_prepared.set_index([
+                    "atomic_number", "ion_number",
+                    "level_number_lower", "level_number_upper"], inplace=True)
 
         return lines_prepared
 
