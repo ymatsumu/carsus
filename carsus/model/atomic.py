@@ -1,3 +1,45 @@
+'''
+Introduction
+============
+
+`Carsus` uses sqlalchemy to associate (experimental) data about real objects,
+such as atoms, with tables in a database. This allows us to store all data in
+one big database but we can use it as if it were simple python objects.
+Additionally, operations like filtering the data are performed on the database
+instead of in python which is a lot better for the performance.
+
+At the core of this system are the database models. These are python classes
+with special class attributes that are mapped to database columns by
+sqlalchemy.  In the database, each class has its own table and instances of the
+class represent one specific row of that table.  All models have to inherit
+from Base which is defined in `carsus.model.meta`.  Each model has a "Primary
+Key" which has to be unique for each object and is used to identify it.
+Typically this is an integer but it is also possible to use a combination of
+multiple values to form the primary key (see IonQuantity for example).  If the
+primary key is a single integer, it should be called 'id'.
+
+Attributes of instances are declared as instances of
+:class:`~sqlalchemy.Column` which is a special class attribute pointing to a
+column in a table.  Relationships between models are defined with
+:func:`~sqlalchemy.orm.relationship` linking two instances of an object
+together where usually one column points to the primary key of another table.
+Defining the relationships is important so sqlalchemy can automatically join
+the models together if a join operation is added to the query.
+
+We have several types of models for the atomic data. First, we have general
+models, like :class:`~carsus.model.atomic.Atom` and
+:class:`~carsus.model.atomic.Ion`. These are universal and independent of the
+source of the data. They serve as anchors for datasource dependent quantities
+to be linked against. These are not universal, like for example the
+:class:`~carsus.model.atomic.IonizationEnergy`, but come from sources such as
+NIST. To easily allow the data from different sources for the same quantity in
+the database, they are linked to a source. This is very important because when
+extracting the data, we always have to specify the source of the data we want
+to extract.
+
+Classes
+========
+'''
 
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -12,27 +54,72 @@ from carsus.model.meta import Base, UniqueMixin, QuantityMixin
 MEDIUM_VACUUM = 0
 MEDIUM_AIR = 1
 
+__all__ = [
+        'Atom',
+        'AtomQuantity',
+        'AtomWeight',
+
+        'Ion',
+        'IonQuantity',
+        'IonizationEnergy',
+
+        'Level',
+        'LevelQuantity',
+        'LevelEnergy',
+
+        'Transition',
+        'Line',
+        'LineQuantity',
+        'LineWavelength',
+        'LineAValue',
+        'LineGFValue',
+
+        'ECollision',
+        'ECollisionQuantity',
+        'ECollisionEnergy',
+        'ECollisionGFValue',
+        'ECollisionTempStrength',
+
+        'DataSource',
+        ]
+
 
 class Atom(Base):
+    '''
+    Model describing a simple Atom.
+    '''
+
     __tablename__ = "atom"
     atomic_number = Column(Integer, primary_key=True)
+    '''Atomic number of the Atom'''
+
     symbol = Column(String(5), nullable=False)
     name = Column(String(150))
     group = Column(Integer)
     period = Column(Integer)
 
-    weights = relationship("AtomWeight", back_populates='atom')
-    ions = relationship("Ion", back_populates='atom')
+    # weights = relationship("AtomWeight", back_populates='atom')
+    # ions = relationship("Ion", back_populates='atom')
 
     def __repr__(self):
         return "<Atom {0}, Z={1}>".format(self.symbol, self.atomic_number)
 
 
 class AtomQuantity(QuantityMixin, Base):
+    '''
+    Base class for all quantities of an :class:`~carsus.model.atomic.Atom`. Mixes in the QuantityMixin to
+    expose the auantity interface.
+    '''
+
     __tablename__ = "atom_quantity"
 
+    #: Primary Key
     atom_qty_id = Column(Integer, primary_key=True)
-    atomic_number= Column(Integer, ForeignKey("atom.atomic_number"), nullable=False)
+
+    #: ForeignKey linking a AtomQuantity to an Atom
+    atomic_number = Column(
+            Integer,
+            ForeignKey("atom.atomic_number"), nullable=False)
     type = Column(String(20))
 
     # __table_args__ = (UniqueConstraint('data_source_id', 'atomic_number', 'type', 'method'),)
@@ -43,9 +130,12 @@ class AtomQuantity(QuantityMixin, Base):
 
 
 class AtomWeight(AtomQuantity):
+    '''
+    Weight of an Atom in atomic units ['u'].
+    '''
 
     unit = u.u
-    atom = relationship("Atom", back_populates='weights')
+    atom = relationship("Atom", backref='weights')
 
     __mapper_args__ = {
         'polymorphic_identity': 'weight'
@@ -53,6 +143,10 @@ class AtomWeight(AtomQuantity):
 
 
 class Ion(UniqueMixin, Base):
+    '''
+    Model describing an Ion. Inherits the UniqueMixin to guarantee no
+    duplicates.
+    '''
     __tablename__ = "ion"
 
     @classmethod
@@ -64,23 +158,37 @@ class Ion(UniqueMixin, Base):
         return query.filter(and_(Ion.atomic_number == atomic_number,
                                  Ion.ion_charge == ion_charge))
 
-    atomic_number = Column(Integer, ForeignKey('atom.atomic_number'), primary_key=True)
+    #: ForeignKey linking an Ion to an Atom
+    atomic_number = Column(
+            Integer,
+            ForeignKey('atom.atomic_number'), primary_key=True)
+    #: Charge of the ion
     ion_charge = Column(Integer, primary_key=True)
 
+    #: Relationship to IonizationEnergy
     ionization_energies = relationship("IonizationEnergy",
                                        back_populates='ion')
+    #: Relationship to Level
     levels = relationship("Level", back_populates="ion")
-    atom = relationship("Atom", back_populates='ions')
+    #: Relationship to Atom
+    atom = relationship("Atom", backref='ions')
 
     def __repr__(self):
         return "<Ion Z={0} +{1}>".format(self.atomic_number, self.ion_charge)
 
 
 class IonQuantity(QuantityMixin, Base):
+    '''
+    Base class for all quantities of an Ion. Mixes in the QuantityMixin to
+    expose the auantity interface.
+    '''
     __tablename__ = "ion_quantity"
 
+    #: Primary Key
     ion_qty_id = Column(Integer, primary_key=True)
+    #: ForeignKeyConstraint linking to an Ion
     atomic_number= Column(Integer, nullable=False)
+    #: ForeignKeyConstraint linking to an Ion
     ion_charge = Column(Integer, nullable=False)
     type = Column(String(20))
 
@@ -93,6 +201,10 @@ class IonQuantity(QuantityMixin, Base):
 
 
 class IonizationEnergy(IonQuantity):
+    '''
+    Ionization energy of an Ion in electron volt [eV].
+    foo
+    '''
 
     unit = u.eV
     ion = relationship("Ion", back_populates='ionization_energies')
@@ -103,21 +215,31 @@ class IonizationEnergy(IonQuantity):
 
 
 class Level(Base):
+    '''
+    Level of an Ion.
+    '''
     __tablename__ = "level"
 
+    #: Primary Key
     level_id = Column(Integer, primary_key=True)
 
     # Ion CFK
+    #: ForeignKeyConstraint linking to an Ion
     atomic_number = Column(Integer, nullable=False)
+    #: ForeignKeyConstraint linking to an Ion
     ion_charge = Column(Integer, nullable=False)
 
+    #: Id of the datasource of this level
     data_source_id = Column(Integer, ForeignKey('data_source.data_source_id'), nullable=False)
-    level_index = Column(Integer)  # Index of this level from its data source
+    #: Index of this level from its data source
+    level_index = Column(Integer)
+    #: Configuration of the level
     configuration = Column(String(50))
-    L = Column(String(2))  # total orbital angular momentum
-    J = Column(Float)  # total angular momentum
-    spin_multiplicity = Column(Integer)  # 2*S+1, where S is total spin
-    parity = Column(Integer)  # 0 - even, 1 - odd
+    L = Column(String(2))  #: total orbital angular momentum
+    J = Column(Float)  #: total angular momentum
+    #: spin_multiplicity 2*S+1, where S is total spin
+    spin_multiplicity = Column(Integer)
+    parity = Column(Integer)  #: Parity 0 - even, 1 - odd
     # ToDo I think that term column can be derived from L, S, parity and configuration
     term = Column(String(20))
 
@@ -138,6 +260,10 @@ class Level(Base):
 
 
 class LevelQuantity(QuantityMixin, Base):
+    '''
+    Base class for all quantities of a level. Mixes in the QuantityMixin to
+    expose the auantity interface.
+    '''
     __tablename__ = "level_quantity"
 
     level_qty_id = Column(Integer, primary_key=True)
@@ -198,6 +324,10 @@ class Line(Transition):
 
 
 class LineQuantity(QuantityMixin, Base):
+    '''
+    Base class for all quantities of a line. Mixes in the QuantityMixin to
+    expose the auantity interface.
+    '''
     __tablename__ = "line_quantity"
 
     line_qty_id = Column(Integer, primary_key=True)
@@ -263,6 +393,10 @@ class ECollision(Transition):
 
 
 class ECollisionQuantity(QuantityMixin, Base):
+    '''
+    Base class for all quantities of an electron collision. Mixes in the
+    QuantityMixin to expose the auantity interface.
+    '''
     __tablename__ = "e_collision_qty"
 
     e_col_qty_id = Column(Integer, primary_key=Transition)

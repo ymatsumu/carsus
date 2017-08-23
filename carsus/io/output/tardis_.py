@@ -1068,13 +1068,16 @@ class AtomData(object):
                     Zeta.atomic_number,
                     Zeta.ion_charge,
                     Zeta.zeta,
-                    Temperature.value).
+                    Temperature.value.label('temp')).
                 join(Temperature)
                 )
-        return pd.DataFrame(
+        df = pd.DataFrame(
                 q.all()).set_index(
-                        ['atomic_number', 'ion_charge', 'value']
-                        ).unstack('value')
+                        ['atomic_number', 'ion_charge', 'temp']
+                        ).unstack('temp')
+        # Drop the index with value 'zeta' from the multiindex
+        df.columns = df.columns.droplevel(None)
+        return df
 
     def to_hdf(self, hdf5_path, store_atom_masses=False, store_ionization_energies=False,
                store_levels=False, store_lines=False, store_collisions=False, store_macro_atom=False,
@@ -1139,13 +1142,14 @@ class AtomData(object):
             # It seems that the only way to set the root attributes is to use `_v_attrs`
             store.root._v_attrs["database_version"] = "v0.9"
 
-            print "Signing AtomData with MD5 and UUID1"
 
             md5_hash = hashlib.md5()
             for key in store.keys():
                 md5_hash.update(store[key].values.data)
 
             uuid1 = uuid.uuid1().hex
+
+            print("Signing AtomData: \nMD5: {}\nUUID1: {}".format(md5_hash.hexdigest(), uuid1))
 
             store.root._v_attrs['md5'] = md5_hash.hexdigest()
             store.root._v_attrs['uuid1'] = uuid1
