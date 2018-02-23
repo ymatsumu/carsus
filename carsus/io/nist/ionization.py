@@ -84,7 +84,7 @@ class NISTIonizationEnergiesParser(BaseParser):
             a = a.sting
         text_data = pre_tag.get_text()
         processed_text_data = ''
-        for line in text_data.split('\n'):
+        for line in text_data.split('\n')[2:]:
             if line.startswith('----'):
                 continue
             if line.startswith('Notes'):
@@ -93,7 +93,7 @@ class NISTIonizationEnergiesParser(BaseParser):
             processed_text_data += line + '\n'
         column_names = ['atomic_number', 'ion_charge', 'ground_shells', 'ground_level', 'ionization_energy_str']
         base = pd.read_csv(StringIO(processed_text_data), sep='|', header=None,
-                         usecols=range(5), names=column_names, skiprows=3, skipfooter=1)
+                         usecols=range(5), names=column_names)
         for column in ['ground_shells', 'ground_level', 'ionization_energy_str']:
                 base[column] = base[column].map(lambda x: x.strip())
         self.base = base
