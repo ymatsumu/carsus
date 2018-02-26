@@ -87,6 +87,8 @@ class NISTIonizationEnergiesParser(BaseParser):
         for line in text_data.split('\n')[2:]:
             if line.startswith('----'):
                 continue
+            if line.startswith('If'):
+                break
             if line.startswith('Notes'):
                 break
             line.strip('|')
