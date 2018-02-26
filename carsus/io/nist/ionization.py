@@ -83,9 +83,17 @@ class NISTIonizationEnergiesParser(BaseParser):
         for a in pre_tag.find_all("a"):
             a = a.sting
         text_data = pre_tag.get_text()
+        processed_text_data = ''
+        for line in text_data.split('\n')[2:]:
+            if line.startswith('----'):
+                continue
+            if line.startswith('Notes'):
+                break
+            line.strip('|')
+            processed_text_data += line + '\n'
         column_names = ['atomic_number', 'ion_charge', 'ground_shells', 'ground_level', 'ionization_energy_str']
-        base = pd.read_csv(StringIO(text_data), sep='|', header=None,
-                         usecols=range(5), names=column_names, skiprows=3, skipfooter=1)
+        base = pd.read_csv(StringIO(processed_text_data), sep='|', header=None,
+                         usecols=range(5), names=column_names)
         for column in ['ground_shells', 'ground_level', 'ionization_energy_str']:
                 base[column] = base[column].map(lambda x: x.strip())
         self.base = base
@@ -100,7 +108,8 @@ class NISTIonizationEnergiesParser(BaseParser):
                 return None
             if ioniz_energy_str.startswith('('):
                 method = 'theor' # theoretical
-                ioniz_energy_str = ioniz_energy_str.strip('(').replace('))', ')')
+                ioniz_energy_str = ioniz_energy_str.strip('()')
+                #.replace('))', ')') - not clear why that exists
             elif ioniz_energy_str.startswith('['):
                 method = 'intrpl' # interpolated
                 ioniz_energy_str = ioniz_energy_str.strip('[]')
