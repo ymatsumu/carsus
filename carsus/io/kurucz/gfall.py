@@ -238,9 +238,10 @@ class GFALLReader(object):
         levels = pd.concat([e_lower_levels[selected_columns],
                             e_upper_levels[selected_columns]])
         unique_level_id = ['atomic_number', 'ion_charge'] + self.unique_level_identifier
-        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j', 'label']).\
-            drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+
         levels.drop_duplicates(unique_level_id, inplace=True)
+        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j', 'label']).
+
         levels["method"] = levels["theoretical"].\
             apply(lambda x: "theor" if x else "meas")  # Theoretical or measured
         levels.drop("theoretical", 1, inplace=True)
