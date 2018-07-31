@@ -33,7 +33,7 @@ class GFALLReader(object):
                              'A10,F6.2,F6.2,F6.2,A4,I2,I2,I3,F6.3,I3,F6.3,I5,I5,'
                              '1X,I1,A1,1X,I1,A1,I1,A3,I5,I5,I6')
 
-    columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
+    gfall_columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
                'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
                'label_second', 'log_gamma_rad', 'log_gamma_stark',
                'log_gamma_vderwaals', 'ref', 'nlte_level_no_first',
@@ -44,6 +44,7 @@ class GFALLReader(object):
                'hyperfine_note_second', 'line_strength_class', 'line_code',
                'lande_g_first', 'lande_g_second', 'isotopic_shift']
 
+    duplicate_level_identifier = ['energy', 'j']
     def __init__(self, fname):
         self.fname = fname
         self._gfall_raw = None
@@ -99,27 +100,18 @@ class GFALLReader(object):
 
         number_match = re.compile(r'\d+(\.\d+)?')
         type_match = re.compile(r'[FIXA]')
-        type_dict = {'F': np.float64, 'I': np.int64, 'X': 'S1', 'A': 'S10'}
+        type_dict = {'F': np.float64, 'I': np.int64, 'X': str, 'A': str}
         field_types = tuple([type_dict[item] for item in number_match.sub(
             '', self.gfall_fortran_format).split(',')])
 
-        field_widths = type_match.sub('', gfall_fortran_format)
+        field_widths = type_match.sub('', self.gfall_fortran_format)
         field_widths = map(int, re.sub(r'\.\d+', '', field_widths).split(','))
 
-        def read_remove_empty(fname):
-            """ Generator to remove empty lines from the gfall file"""
-            with open(fname, "r") as f:
-                for line in f:
-                    if not re.match(r'^\s*$', line):
-                        yield line
-
-        gfall = np.genfromtxt(read_remove_empty(fname), dtype=field_types,
-                              delimiter=field_widths)
-
-
-
-        gfall = pd.DataFrame(gfall)
-        gfall.columns = columns
+        field_type_dict = {col:dtype for col, dtype in zip(self.gfall_columns, field_types)}
+        gfall = pd.read_fwf(fname, widths=field_widths, skip_blank_lines=True,
+                            names=self.gfall_columns, dtypes=field_type_dict)
+        #remove empty lines
+        gfall = gfall[~gfall.isnull().all(axis=1)]
 
         return gfall
 
@@ -186,7 +178,8 @@ class GFALLReader(object):
 
     def extract_levels(self, gfall=None, selected_columns=None):
         """
-        Extract levels from `gfall`
+        Extract levels from `gfall`. We first generate a concatenated DataFrame
+        of all lower and upper levels. Then we drop the duplicate leves
 
         Parameters
         ----------
