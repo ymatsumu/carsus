@@ -240,14 +240,15 @@ class GFALLReader(object):
         unique_level_id = ['atomic_number', 'ion_charge'] + self.unique_level_identifier
 
         levels.drop_duplicates(unique_level_id, inplace=True)
-        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j', 'label']).
+        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy',
+                                     'j', 'label'])
 
         levels["method"] = levels["theoretical"].\
             apply(lambda x: "theor" if x else "meas")  # Theoretical or measured
         levels.drop("theoretical", 1, inplace=True)
 
         levels["level_index"] = levels.groupby(['atomic_number', 'ion_charge'])['j'].\
-            transform(lambda x: np.arange(len(x))).values
+            transform(lambda x: np.arange(len(x), dtype=np.int64)).values
         levels["level_index"] = levels["level_index"].astype(int)
 
         # ToDo: The commented block below does not work with all lines. Find a way to parse it.
@@ -283,6 +284,7 @@ class GFALLReader(object):
         if selected_columns is None:
             selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
 
+        logger.info('Extracting line data: {0}'.format(', '.join(selected_columns)))
         levels_idx = levels.reset_index()
         levels_idx = levels_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
 
@@ -296,8 +298,8 @@ class GFALLReader(object):
         level_upper_idx = gfall[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
         level_upper_idx = [tuple(item) for item in level_upper_idx]
 
-        lines['level_index_lower'] = levels_idx.loc[level_lower_idx, "level_index"].values
-        lines['level_index_upper'] = levels_idx.loc[level_upper_idx, "level_index"].values
+        lines['level_index_lower'] = levels_idx.loc[level_lower_idx, "level_index"].values.astype(np.int64)
+        lines['level_index_upper'] = levels_idx.loc[level_upper_idx, "level_index"].values.astype(np.int64)
 
         lines.set_index(['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'], inplace=True)
 
