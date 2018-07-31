@@ -46,13 +46,30 @@ class GFALLReader(object):
                'hyperfine_note_second', 'line_strength_class', 'line_code',
                'lande_g_first', 'lande_g_second', 'isotopic_shift']
 
-    duplicate_level_identifier = ['energy', 'j']
-    def __init__(self, fname):
+    default_unique_level_identifier = ['energy', 'j']
+    def __init__(self, fname, unique_level_identifier=None):
+        """
+
+        Parameters
+        ----------
+        fname: str
+            path to the gfall file
+
+        unique_level_identifier: list
+            list of attributes to identify unique levels from. Will always use
+            atomic_number and ion charge in addition.
+        """
         self.fname = fname
         self._gfall_raw = None
         self._gfall = None
         self._levels = None
         self._lines = None
+        if unique_level_identifier is None:
+            logger.warn('A specific combination to identify unique levels from '
+                        'the gfall data has not been given. Defaulting to '
+                        '["energy", "j"].')
+            self.unique_level_identifier = self.default_unique_level_identifier
+
 
     @property
     def gfall_raw(self):
@@ -220,10 +237,10 @@ class GFALLReader(object):
 
         levels = pd.concat([e_lower_levels[selected_columns],
                             e_upper_levels[selected_columns]])
-
+        unique_level_id = ['atomic_number', 'ion_charge'] + self.unique_level_identifier
         levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j', 'label']).\
             drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
-
+        levels.drop_duplicates(unique_level_id, inplace=True)
         levels["method"] = levels["theoretical"].\
             apply(lambda x: "theor" if x else "meas")  # Theoretical or measured
         levels.drop("theoretical", 1, inplace=True)
