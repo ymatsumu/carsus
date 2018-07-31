@@ -1,4 +1,5 @@
-import re
+import re, logging
+
 import numpy as np
 import pandas as pd
 
@@ -13,6 +14,7 @@ from carsus.util import convert_atomic_number2symbol, parse_selected_species
 
 GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
 
+logger = logging.getLogger(__name__)
 
 class GFALLReader(object):
     """
@@ -94,6 +96,8 @@ class GFALLReader(object):
         if fname is None:
             fname = self.fname
 
+        logger.info('Parsing GFALL {0}'.format(fname))
+
         # FORMAT(F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,A10,
         # 3F6.2,A4,2I2,I3,F6.3,I3,F6.3,2I5,1X,A1,A1,1X,A1,A1,i1,A3,2I5,I6)
 
@@ -128,6 +132,8 @@ class GFALLReader(object):
             pandas.DataFrame
                 a level DataFrame
         """
+
+
         gfall = gfall_raw if gfall_raw is not None else self.gfall_raw.copy()
         
         double_columns = [item.replace('_first', '') for item in gfall.columns if
