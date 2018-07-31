@@ -28,6 +28,22 @@ class GFALLReader(object):
             Return pandas DataFrame representation of gfall
 
     """
+
+    gfall_fortran_format = ('F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,'
+                             'A10,F6.2,F6.2,F6.2,A4,I2,I2,I3,F6.3,I3,F6.3,I5,I5,'
+                             '1X,I1,A1,1X,I1,A1,I1,A3,I5,I5,I6')
+
+    columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
+               'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
+               'label_second', 'log_gamma_rad', 'log_gamma_stark',
+               'log_gamma_vderwaals', 'ref', 'nlte_level_no_first',
+               'nlte_level_no_second', 'isotope', 'log_f_hyperfine',
+               'isotope2', 'log_iso_abundance', 'hyper_shift_first',
+               'hyper_shift_second', 'blank3', 'hyperfine_f_first',
+               'hyperfine_note_first', 'blank4', 'hyperfine_f_second',
+               'hyperfine_note_second', 'line_strength_class', 'line_code',
+               'lande_g_first', 'lande_g_second', 'isotopic_shift']
+
     def __init__(self, fname):
         self.fname = fname
         self._gfall_raw = None
@@ -80,17 +96,14 @@ class GFALLReader(object):
         # FORMAT(F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,A10,
         # 3F6.2,A4,2I2,I3,F6.3,I3,F6.3,2I5,1X,A1,A1,1X,A1,A1,i1,A3,2I5,I6)
 
-        kurucz_fortran_format = ('F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,'
-                                 'A10,F6.2,F6.2,F6.2,A4,I2,I2,I3,F6.3,I3,F6.3,I5,I5,'
-                                 '1X,I1,A1,1X,I1,A1,I1,A3,I5,I5,I6')
 
         number_match = re.compile(r'\d+(\.\d+)?')
         type_match = re.compile(r'[FIXA]')
         type_dict = {'F': np.float64, 'I': np.int64, 'X': 'S1', 'A': 'S10'}
         field_types = tuple([type_dict[item] for item in number_match.sub(
-            '', kurucz_fortran_format).split(',')])
+            '', self.gfall_fortran_format).split(',')])
 
-        field_widths = type_match.sub('', kurucz_fortran_format)
+        field_widths = type_match.sub('', gfall_fortran_format)
         field_widths = map(int, re.sub(r'\.\d+', '', field_widths).split(','))
 
         def read_remove_empty(fname):
@@ -100,18 +113,10 @@ class GFALLReader(object):
                     if not re.match(r'^\s*$', line):
                         yield line
 
-        gfall = np.genfromtxt(read_remove_empty(fname), dtype=field_types, delimiter=field_widths)
+        gfall = np.genfromtxt(read_remove_empty(fname), dtype=field_types,
+                              delimiter=field_widths)
 
-        columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
-                   'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
-                   'label_second', 'log_gamma_rad', 'log_gamma_stark',
-                   'log_gamma_vderwaals', 'ref', 'nlte_level_no_first',
-                   'nlte_level_no_second', 'isotope', 'log_f_hyperfine',
-                   'isotope2', 'log_iso_abundance', 'hyper_shift_first',
-                   'hyper_shift_second', 'blank3', 'hyperfine_f_first',
-                   'hyperfine_note_first', 'blank4', 'hyperfine_f_second',
-                   'hyperfine_note_second', 'line_strength_class', 'line_code',
-                   'lande_g_first', 'lande_g_second', 'isotopic_shift']
+
 
         gfall = pd.DataFrame(gfall)
         gfall.columns = columns
