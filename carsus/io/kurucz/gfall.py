@@ -152,13 +152,14 @@ class GFALLReader(object):
 
 
         gfall = gfall_raw if gfall_raw is not None else self.gfall_raw.copy()
-        
+        gfall = gfall.rename(columns={'e_first':'energy_first',
+                                      'e_second':'energy_second'})
         double_columns = [item.replace('_first', '') for item in gfall.columns if
                           item.endswith('first')]
 
         # due to the fact that energy is stored in 1/cm
-        order_lower_upper = (gfall["e_first"].abs() <
-                             gfall["e_second"].abs())
+        order_lower_upper = (gfall["energy_first"].abs() <
+                             gfall["energy_second"].abs())
 
         for column in double_columns:
             data = pd.concat([gfall['{0}_first'.format(column)][order_lower_upper],
@@ -186,10 +187,10 @@ class GFALLReader(object):
         gfall = gfall.loc[~((gfall["label_lower"].isin(ignored_labels)) |
                             (gfall["label_upper"].isin(ignored_labels)))].copy()
 
-        gfall['e_lower_predicted'] = gfall["e_lower"] < 0
-        gfall["e_lower"] = gfall["e_lower"].abs()
-        gfall['e_upper_predicted'] = gfall["e_upper"] < 0
-        gfall["e_upper"] = gfall["e_upper"].abs()
+        gfall['energy_lower_predicted'] = gfall["energy_lower"] < 0
+        gfall["energy_lower"] = gfall["energy_lower"].abs()
+        gfall['energy_upper_predicted'] = gfall["energy_upper"] < 0
+        gfall["energy_upper"] = gfall["energy_upper"].abs()
 
         gfall['atomic_number'] = gfall.element_code.astype(int)
         gfall['ion_charge'] = ((gfall.element_code.values -
@@ -224,8 +225,8 @@ class GFALLReader(object):
             selected_columns = ['atomic_number', 'ion_charge', 'energy', 'j',
                                 'label', 'theoretical']
 
-        column_renames = {'e_{0}': 'energy', 'j_{0}': 'j', 'label_{0}': 'label',
-                          'e_{0}_predicted': 'theoretical'}
+        column_renames = {'energy_{0}': 'energy', 'j_{0}': 'j', 'label_{0}': 'label',
+                          'energy_{0}_predicted': 'theoretical'}
 
         e_lower_levels = gfall.rename(
             columns=dict([(key.format('lower'), value)
@@ -282,26 +283,36 @@ class GFALLReader(object):
             levels = self.levels
 
         if selected_columns is None:
-            selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
+            selected_columns = ['atomic_number', 'ion_charge']
+            selected_columns += [item + '_lower' for item in self.unique_level_identifier]
+            selected_columns += [item + '_upper' for item in self.unique_level_identifier]
+            selected_columns += ['wavelength', 'loggf']
+
 
         logger.info('Extracting line data: {0}'.format(', '.join(selected_columns)))
+        unique_level_id = ['atomic_number', 'ion_charge'] + self.unique_level_identifier
         levels_idx = levels.reset_index()
-        levels_idx = levels_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+        levels_idx = levels_idx.set_index(unique_level_id)
 
         lines = gfall[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall[['atomic_number', 'ion_charge', 'e_lower', 'j_lower', 'label_lower']].values.tolist()
-        level_lower_idx = [tuple(item) for item in level_lower_idx]
+        # Assigning levels to lines
 
-        level_upper_idx = gfall[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
-        level_upper_idx = [tuple(item) for item in level_upper_idx]
+        levels_unique_idxed = self.levels.reset_index().set_index(['atomic_number', 'ion_charge'] + self.unique_level_identifier)
 
-        lines['level_index_lower'] = levels_idx.loc[level_lower_idx, "level_index"].values.astype(np.int64)
-        lines['level_index_upper'] = levels_idx.loc[level_upper_idx, "level_index"].values.astype(np.int64)
-
-        lines.set_index(['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'], inplace=True)
+        lines_lower_unique_idx = (['atomic_number', 'ion_charge'] +
+                                  [item + '_lower' for item in self.unique_level_identifier])
+        lines_upper_unique_idx = (['atomic_number', 'ion_charge'] +
+                                  [item + '_upper' for item in self.unique_level_identifier])
+        lines_lower_idx = lines.set_index(lines_lower_unique_idx)
+        lines_lower_idx['level_index_lower'] = levels_unique_idxed['level_index']
+        lines_upper_idx = lines_lower_idx.reset_index().set_index(lines_upper_unique_idx)
+        lines_upper_idx['level_index_upper'] = levels_unique_idxed['level_index']
+        lines = lines_upper_idx.reset_index().set_index(
+            ['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'])
+        
 
         return lines
 
