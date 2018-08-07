@@ -51,7 +51,7 @@ import datetime
 
 
 import sphinx_bootstrap_theme
-
+import sphinx_rtd_theme
 extensions = [
     'sphinx.ext.autodoc',
     'numpydoc',
@@ -120,8 +120,8 @@ release = carsus.__version__
 # Add any paths that contain custom themes here, relative to this directory.
 # To use a different custom theme, add the directory containing the theme.
 #html_theme_path = []
-html_theme = 'bootstrap'
-html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
+html_theme = 'sphinx_rtd_theme'
+html_theme_path = sphinx_rtd_theme.get_html_theme_path()
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes. To override the custom theme, set this to the

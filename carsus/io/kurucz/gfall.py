@@ -1,4 +1,5 @@
-import re
+import re, logging
+
 import numpy as np
 import pandas as pd
 
@@ -13,6 +14,7 @@ from carsus.util import convert_atomic_number2symbol, parse_selected_species
 
 GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
 
+logger = logging.getLogger(__name__)
 
 class GFALLReader(object):
     """
@@ -28,12 +30,46 @@ class GFALLReader(object):
             Return pandas DataFrame representation of gfall
 
     """
-    def __init__(self, fname):
+
+    gfall_fortran_format = ('F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,'
+                             'A10,F6.2,F6.2,F6.2,A4,I2,I2,I3,F6.3,I3,F6.3,I5,I5,'
+                             '1X,I1,A1,1X,I1,A1,I1,A3,I5,I5,I6')
+
+    gfall_columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
+               'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
+               'label_second', 'log_gamma_rad', 'log_gamma_stark',
+               'log_gamma_vderwaals', 'ref', 'nlte_level_no_first',
+               'nlte_level_no_second', 'isotope', 'log_f_hyperfine',
+               'isotope2', 'log_iso_abundance', 'hyper_shift_first',
+               'hyper_shift_second', 'blank3', 'hyperfine_f_first',
+               'hyperfine_note_first', 'blank4', 'hyperfine_f_second',
+               'hyperfine_note_second', 'line_strength_class', 'line_code',
+               'lande_g_first', 'lande_g_second', 'isotopic_shift']
+
+    default_unique_level_identifier = ['energy', 'j']
+    def __init__(self, fname, unique_level_identifier=None):
+        """
+
+        Parameters
+        ----------
+        fname: str
+            path to the gfall file
+
+        unique_level_identifier: list
+            list of attributes to identify unique levels from. Will always use
+            atomic_number and ion charge in addition.
+        """
         self.fname = fname
         self._gfall_raw = None
         self._gfall = None
         self._levels = None
         self._lines = None
+        if unique_level_identifier is None:
+            logger.warn('A specific combination to identify unique levels from '
+                        'the gfall data has not been given. Defaulting to '
+                        '["energy", "j"].')
+            self.unique_level_identifier = self.default_unique_level_identifier
+
 
     @property
     def gfall_raw(self):
@@ -77,44 +113,26 @@ class GFALLReader(object):
         if fname is None:
             fname = self.fname
 
+        logger.info('Parsing GFALL {0}'.format(fname))
+
         # FORMAT(F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,A10,
         # 3F6.2,A4,2I2,I3,F6.3,I3,F6.3,2I5,1X,A1,A1,1X,A1,A1,i1,A3,2I5,I6)
 
-        kurucz_fortran_format = ('F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,'
-                                 'A10,F6.2,F6.2,F6.2,A4,I2,I2,I3,F6.3,I3,F6.3,I5,I5,'
-                                 '1X,I1,A1,1X,I1,A1,I1,A3,I5,I5,I6')
 
         number_match = re.compile(r'\d+(\.\d+)?')
         type_match = re.compile(r'[FIXA]')
-        type_dict = {'F': np.float64, 'I': np.int64, 'X': 'S1', 'A': 'S10'}
+        type_dict = {'F': np.float64, 'I': np.int64, 'X': str, 'A': str}
         field_types = tuple([type_dict[item] for item in number_match.sub(
-            '', kurucz_fortran_format).split(',')])
+            '', self.gfall_fortran_format).split(',')])
 
-        field_widths = type_match.sub('', kurucz_fortran_format)
+        field_widths = type_match.sub('', self.gfall_fortran_format)
         field_widths = map(int, re.sub(r'\.\d+', '', field_widths).split(','))
 
-        def read_remove_empty(fname):
-            """ Generator to remove empty lines from the gfall file"""
-            with open(fname, "r") as f:
-                for line in f:
-                    if not re.match(r'^\s*$', line):
-                        yield line
-
-        gfall = np.genfromtxt(read_remove_empty(fname), dtype=field_types, delimiter=field_widths)
-
-        columns = ['wavelength', 'loggf', 'element_code', 'e_first', 'j_first',
-                   'blank1', 'label_first', 'e_second', 'j_second', 'blank2',
-                   'label_second', 'log_gamma_rad', 'log_gamma_stark',
-                   'log_gamma_vderwaals', 'ref', 'nlte_level_no_first',
-                   'nlte_level_no_second', 'isotope', 'log_f_hyperfine',
-                   'isotope2', 'log_iso_abundance', 'hyper_shift_first',
-                   'hyper_shift_second', 'blank3', 'hyperfine_f_first',
-                   'hyperfine_note_first', 'blank4', 'hyperfine_f_second',
-                   'hyperfine_note_second', 'line_strength_class', 'line_code',
-                   'lande_g_first', 'lande_g_second', 'isotopic_shift']
-
-        gfall = pd.DataFrame(gfall)
-        gfall.columns = columns
+        field_type_dict = {col:dtype for col, dtype in zip(self.gfall_columns, field_types)}
+        gfall = pd.read_fwf(fname, widths=field_widths, skip_blank_lines=True,
+                            names=self.gfall_columns, dtypes=field_type_dict)
+        #remove empty lines
+        gfall = gfall[~gfall.isnull().all(axis=1)]
 
         return gfall
 
@@ -131,14 +149,17 @@ class GFALLReader(object):
             pandas.DataFrame
                 a level DataFrame
         """
+
+
         gfall = gfall_raw if gfall_raw is not None else self.gfall_raw.copy()
-        
+        gfall = gfall.rename(columns={'e_first':'energy_first',
+                                      'e_second':'energy_second'})
         double_columns = [item.replace('_first', '') for item in gfall.columns if
                           item.endswith('first')]
 
         # due to the fact that energy is stored in 1/cm
-        order_lower_upper = (gfall["e_first"].abs() <
-                             gfall["e_second"].abs())
+        order_lower_upper = (gfall["energy_first"].abs() <
+                             gfall["energy_second"].abs())
 
         for column in double_columns:
             data = pd.concat([gfall['{0}_first'.format(column)][order_lower_upper],
@@ -166,10 +187,10 @@ class GFALLReader(object):
         gfall = gfall.loc[~((gfall["label_lower"].isin(ignored_labels)) |
                             (gfall["label_upper"].isin(ignored_labels)))].copy()
 
-        gfall['e_lower_predicted'] = gfall["e_lower"] < 0
-        gfall["e_lower"] = gfall["e_lower"].abs()
-        gfall['e_upper_predicted'] = gfall["e_upper"] < 0
-        gfall["e_upper"] = gfall["e_upper"].abs()
+        gfall['energy_lower_predicted'] = gfall["energy_lower"] < 0
+        gfall["energy_lower"] = gfall["energy_lower"].abs()
+        gfall['energy_upper_predicted'] = gfall["energy_upper"] < 0
+        gfall["energy_upper"] = gfall["energy_upper"].abs()
 
         gfall['atomic_number'] = gfall.element_code.astype(int)
         gfall['ion_charge'] = ((gfall.element_code.values -
@@ -181,7 +202,8 @@ class GFALLReader(object):
 
     def extract_levels(self, gfall=None, selected_columns=None):
         """
-        Extract levels from `gfall`
+        Extract levels from `gfall`. We first generate a concatenated DataFrame
+        of all lower and upper levels. Then we drop the duplicate leves
 
         Parameters
         ----------
@@ -203,8 +225,8 @@ class GFALLReader(object):
             selected_columns = ['atomic_number', 'ion_charge', 'energy', 'j',
                                 'label', 'theoretical']
 
-        column_renames = {'e_{0}': 'energy', 'j_{0}': 'j', 'label_{0}': 'label',
-                          'e_{0}_predicted': 'theoretical'}
+        column_renames = {'energy_{0}': 'energy', 'j_{0}': 'j', 'label_{0}': 'label',
+                          'energy_{0}_predicted': 'theoretical'}
 
         e_lower_levels = gfall.rename(
             columns=dict([(key.format('lower'), value)
@@ -216,16 +238,18 @@ class GFALLReader(object):
 
         levels = pd.concat([e_lower_levels[selected_columns],
                             e_upper_levels[selected_columns]])
+        unique_level_id = ['atomic_number', 'ion_charge'] + self.unique_level_identifier
 
-        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy', 'j', 'label']).\
-            drop_duplicates(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+        levels.drop_duplicates(unique_level_id, inplace=True)
+        levels = levels.sort_values(['atomic_number', 'ion_charge', 'energy',
+                                     'j', 'label'])
 
         levels["method"] = levels["theoretical"].\
             apply(lambda x: "theor" if x else "meas")  # Theoretical or measured
         levels.drop("theoretical", 1, inplace=True)
 
         levels["level_index"] = levels.groupby(['atomic_number', 'ion_charge'])['j'].\
-            transform(lambda x: np.arange(len(x))).values
+            transform(lambda x: np.arange(len(x), dtype=np.int64)).values
         levels["level_index"] = levels["level_index"].astype(int)
 
         # ToDo: The commented block below does not work with all lines. Find a way to parse it.
@@ -259,25 +283,36 @@ class GFALLReader(object):
             levels = self.levels
 
         if selected_columns is None:
-            selected_columns = ['wavelength', 'loggf', 'atomic_number', 'ion_charge']
+            selected_columns = ['atomic_number', 'ion_charge']
+            selected_columns += [item + '_lower' for item in self.unique_level_identifier]
+            selected_columns += [item + '_upper' for item in self.unique_level_identifier]
+            selected_columns += ['wavelength', 'loggf']
 
+
+        logger.info('Extracting line data: {0}'.format(', '.join(selected_columns)))
+        unique_level_id = ['atomic_number', 'ion_charge'] + self.unique_level_identifier
         levels_idx = levels.reset_index()
-        levels_idx = levels_idx.set_index(['atomic_number', 'ion_charge', 'energy', 'j', 'label'])
+        levels_idx = levels_idx.set_index(unique_level_id)
 
         lines = gfall[selected_columns].copy()
         lines["gf"] = np.power(10, lines["loggf"])
         lines = lines.drop(["loggf"], 1)
 
-        level_lower_idx = gfall[['atomic_number', 'ion_charge', 'e_lower', 'j_lower', 'label_lower']].values.tolist()
-        level_lower_idx = [tuple(item) for item in level_lower_idx]
+        # Assigning levels to lines
 
-        level_upper_idx = gfall[['atomic_number', 'ion_charge', 'e_upper', 'j_upper', 'label_upper']].values.tolist()
-        level_upper_idx = [tuple(item) for item in level_upper_idx]
+        levels_unique_idxed = self.levels.reset_index().set_index(['atomic_number', 'ion_charge'] + self.unique_level_identifier)
 
-        lines['level_index_lower'] = levels_idx.loc[level_lower_idx, "level_index"].values
-        lines['level_index_upper'] = levels_idx.loc[level_upper_idx, "level_index"].values
+        lines_lower_unique_idx = (['atomic_number', 'ion_charge'] +
+                                  [item + '_lower' for item in self.unique_level_identifier])
+        lines_upper_unique_idx = (['atomic_number', 'ion_charge'] +
+                                  [item + '_upper' for item in self.unique_level_identifier])
+        lines_lower_idx = lines.set_index(lines_lower_unique_idx)
+        lines_lower_idx['level_index_lower'] = levels_unique_idxed['level_index']
+        lines_upper_idx = lines_lower_idx.reset_index().set_index(lines_upper_unique_idx)
+        lines_upper_idx['level_index_upper'] = levels_unique_idxed['level_index']
+        lines = lines_upper_idx.reset_index().set_index(
+            ['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'])
 
-        lines.set_index(['atomic_number', 'ion_charge', 'level_index_lower', 'level_index_upper'], inplace=True)
 
         return lines
 
