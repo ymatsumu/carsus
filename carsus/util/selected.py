@@ -15,7 +15,7 @@ species_entry =  selected_atoms + [ion_numbers]
 selected_species = species_entry + [';' + species_entry]*
 """
 
-from .helpers import convert_symbol2atomic_number
+from helpers import convert_symbol2atomic_number
 from pyparsing import Literal, Suppress, delimitedList,\
     Word, alphas, nums, Optional, Group
 
