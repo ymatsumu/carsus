@@ -41,7 +41,7 @@ def init_db(db_url='sqlite://', **kwargs):
 def _init_empty_db(session):
     """ Ingests basic atomic data to an empty database """
     basic_atomic_data = pd.read_csv(basic_atomic_data_fname)
-    print "Ingesting basic atomic data"
+    print("Ingesting basic atomic data")
     for i, row in basic_atomic_data.iterrows():
         session.add(Atom(atomic_number=row['atomic_number'], name=row['name'],
                           symbol=row['symbol'], group=row['group'],
