@@ -7,7 +7,7 @@ import requests
 import pandas as pd
 
 from bs4 import BeautifulSoup
-from StringIO import StringIO
+from io import StringIO
 from astropy import units as u
 from uncertainties import ufloat_fromstr
 from pyparsing import ParseException
@@ -52,9 +52,9 @@ def download_ionization_energies(
             'level_out': level_out, 'ion_conf_out': ion_conf_out, 'e_out': e_out,
             'unc_out': unc_out, 'biblio': biblio}
 
-    data = {k: v for k, v in data.iteritems() if v is not False}
+    data = {k: v for k, v in data.items() if v is not False}
 
-    print "Downloading ionization energies from the NIST Atomic Spectra Database"
+    print("Downloading ionization energies from the NIST Atomic Spectra Database")
     r = requests.post(IONIZATION_ENERGIES_URL, data=data)
     return r.text
 
@@ -110,7 +110,7 @@ class NISTIonizationEnergiesParser(BaseParser):
                 return None
             if ioniz_energy_str.startswith('('):
                 method = 'theor' # theoretical
-                ioniz_energy_str = ioniz_energy_str.strip('()')
+                ioniz_energy_str = ioniz_energy_str[1:-1]  # .strip('()') wasn't working for '(217.7185766(10))' 
                 #.replace('))', ')') - not clear why that exists
             elif ioniz_energy_str.startswith('['):
                 method = 'intrpl' # interpolated

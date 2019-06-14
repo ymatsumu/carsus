@@ -1,57 +1,53 @@
 os:
   - linux
+
+dist: xenial
+
 language: python
 
 python:
-    - 2.7
-
-virtualenv:
-  system_site_packages: true
+    - 3.6
 
 cache:
   apt: true
 
-sudo: false
-
+sudo: true
 
 env:
     global:
-        - COMPILER=gcc
-        - PANDAS_VERSION=0.16
+        - PANDAS_VERSION=0.24
         - ASTROPY_USE_SYSTEM_PYTEST=1
         - SETUP_CMD='test'
         - TEST_MODE='normal'
         - MINICONDA_URL='http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh'
-        - CHIANTI_DATA_URL='http://www.chiantidatabase.org/download/CHIANTI_8.0.2_data.tar.gz'
+        - CHIANTI_DATA_URL='http://www.chiantidatabase.org/download/CHIANTI_9.0_data.tar.gz'
         - CARSUS_DB_URL='https://github.com/tardis-sn/carsus-db.git'
-
 
 matrix:
     include:
 
-        - python: 2.7
+        - python: 3.6
           env: SETUP_CMD='test'
 
         # Test with remote data
-        - python: 2.7
+        - python: 3.6
           env: SETUP_CMD='test --remote-data'
 
         # Test with slow tests
-        - python: 2.7
+        - python: 3.6
           env:
             - SETUP_CMD='test --args="--runslow"'
             - INSTALL_CHIANTI=true
 
         # Test with the test database
-        - python: 2.7
+        - python: 3.6
           env:
             - SETUP_CMD='test --args="--test-db=$HOME/carsus-db/test_databases/test.db"'
             - TEST_MODE='with_test_db'
 
-        # Do a coverage test in Python 2.
-        - python: 2.7
+        # Do a coverage test in Python 3.
+        - python: 3.6
           env: SETUP_CMD='test --coverage'
-
 
 before_install:
 
@@ -64,15 +60,14 @@ before_install:
     - hash -r
     - conda update --yes conda
 
-
 install:
 
-    - conda env create -f carsus_ci/carsus_ci_env27.yml
-    - source activate carsus-ci
+    - conda env create -f carsus_env3.yml
+    - source activate carsus
     # install the CHIANTI database
     - mkdir $HOME/chianti
-    - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_8.0.2_data.tar.gz
-    - tar -zxvf $HOME/chianti/CHIANTI_8.0.2_data.tar.gz -C $HOME/chianti
+    - wget $CHIANTI_DATA_URL -O $HOME/chianti/CHIANTI_9.0_data.tar.gz
+    - tar -zxvf $HOME/chianti/CHIANTI_9.0_data.tar.gz -C $HOME/chianti
     - export XUVTOP=$HOME/chianti
     # Fetch the testing database from carsus-db
     - if [[ $TEST_MODE == 'with_test_db' ]]; then conda install -c ostrokach git-lfs=1.2.1 -y; fi
@@ -83,11 +78,11 @@ install:
 
 script:
     - cd $TRAVIS_BUILD_DIR
-    - echo CC=$COMPILER python setup.py $SETUP_CMD
-    - CC=$COMPILER python setup.py $SETUP_CMD
+    - echo python setup.py $SETUP_CMD
+    - python setup.py $SETUP_CMD
 
 after_success:
     - if [[ $SETUP_CMD == 'test --coverage' ]]; then coveralls; fi
 
 after_failure:
-    - cat /home/travis/.pip/pip.log
+    - python -m sphinx --version
