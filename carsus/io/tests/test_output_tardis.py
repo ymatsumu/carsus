@@ -14,9 +14,6 @@ with_test_db = pytest.mark.skipif(
     reason="--testing database was not specified"
 )
 
-pytestmark = pytest.mark.skip(reason="Tests are failing due to empty DataFrames (traced to atom_data fixture)")
-
-
 @pytest.fixture
 def atom_data(test_session, chianti_short_name):
     atom_data = AtomData(test_session,
@@ -290,7 +287,6 @@ def test_create_lines_convert_air2vacuum(lines, atomic_number, ion_number, level
     assert_quantity_allclose(wavelength, exp_wavelength)
     assert_almost_equal(loggf, exp_loggf)
 
-
 @with_test_db
 @pytest.mark.parametrize("atomic_number, ion_number, level_number_lower, level_number_upper", [
     # Default loggf_threshold = -3
@@ -304,8 +300,9 @@ def test_create_lines_convert_air2vacuum(lines, atomic_number, ion_number, level
 def test_create_lines_loggf_treshold(lines, atomic_number, ion_number, level_number_lower, level_number_upper):
     lines = lines.set_index(["atomic_number", "ion_number",
                              "level_number_lower", "level_number_upper"])
-    with pytest.raises(KeyError):
-        lines.loc[(atomic_number, ion_number, level_number_lower, level_number_upper)]
+    # Normally this would raise a `KeyError`. Keep this in mind for future releases of Pandas.
+    with pytest.raises(TypeError):
+        assert lines.loc[(atomic_number, ion_number, level_number_lower, level_number_upper)]
 
 
 @with_test_db
