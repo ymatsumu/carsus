@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from carsus.io.base import BaseParser
 from carsus.model import (
         Zeta,
         Temperature,
@@ -55,3 +56,53 @@ class KnoxLongZetaIngester(object):
     def ingest(self):
         self.ingest_zeta_values()
         self.session.commit()
+
+
+class KnoxLongZeta(BaseParser):
+    """
+        Attributes
+        ----------
+        base : pandas.DataFrame
+        columns : list of str
+
+        Methods
+        -------
+        to_hdf(fname)
+            Dump the `base` attribute into an HDF5 file
+    """
+    def __init__(self, fname):
+        self.fname = fname
+        self._prepare_data()
+
+    def _prepare_data(self):
+        t_values = np.arange(2000, 42000, 2000)
+
+        names = ['atomic_number', 'ion_charge']
+        names += [str(i) for i in t_values]
+
+        zeta_raw = np.recfromtxt(
+                self.fname,
+                usecols=range(1, 23),
+                names=names)
+
+        self.base = (
+                pd.DataFrame(zeta_raw).set_index(
+                    ['atomic_number', 'ion_charge'])
+                )
+
+        columns = [float(c) for c in self.base.columns]
+
+        # To match exactly the `old` format
+        self.base.columns = pd.Float64Index(columns, name='temp')
+        self.columns = columns
+
+    def to_hdf(self, fname):
+        """Dump the `base` attribute into an HDF5 file
+
+        Parameters
+        ----------
+        fname : path
+           Path to the HDF5 output file
+        """
+        with pd.HDFStore(fname, 'a') as f:
+            f.append('/zeta_data', self.base)
