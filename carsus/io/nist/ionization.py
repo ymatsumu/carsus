@@ -4,6 +4,7 @@ http://physics.nist.gov/PhysRefData/ASD/ionEnergy.html
 """
 
 import requests
+import numpy as np
 import pandas as pd
 
 from bs4 import BeautifulSoup
@@ -110,7 +111,7 @@ class NISTIonizationEnergiesParser(BaseParser):
                 return None
             if ioniz_energy_str.startswith('('):
                 method = 'theor' # theoretical
-                ioniz_energy_str = ioniz_energy_str[1:-1]  # .strip('()') wasn't working for '(217.7185766(10))' 
+                ioniz_energy_str = ioniz_energy_str[1:-1]  # .strip('()') wasn't working for '(217.7185766(10))'
                 #.replace('))', ')') - not clear why that exists
             elif ioniz_energy_str.startswith('['):
                 method = 'intrpl' # interpolated
@@ -290,3 +291,61 @@ class NISTIonizationEnergiesIngester(BaseIngester):
         if ground_levels:
             self.ingest_ground_levels()
             self.session.flush()
+
+
+class NISTIonizationEnergies(BaseParser):
+    """
+    Attributes
+    ----------
+    base : pandas.Series
+
+    Methods
+    -------
+    to_hdf(fname)
+        Dump the `base` attribute into an HDF5 file
+
+    """
+    def __init__(self, spectra):
+        input_data = download_ionization_energies(spectra)
+        self.parser = NISTIonizationEnergiesParser(input_data)
+        self._prepare_data()
+
+    def _prepare_data(self):
+        ionization_data = pd.DataFrame()
+        ionization_data['atomic_number'] = self.parser.base['atomic_number']
+        ionization_data['ion_number'] = self.parser.base['ion_charge'] + 1
+        ionization_data['ionization_energy'] = self.parser.base[
+                'ionization_energy_str'].str.strip('[]()').astype(np.float64)
+        ionization_data.set_index(['atomic_number',
+                                   'ion_number'], inplace=True)
+
+        # `base` attribute is a Series object
+        self.base = ionization_data['ionization_energy']
+
+    def get_ground_levels(self):
+        """Returns a DataFrame with the ground levels for the selected spectra
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with ground levels
+        """
+        levels = self.parser.prepare_ground_levels()
+        levels['g'] = 2*levels['J'] + 1
+        levels['g'] = levels['g'].astype(np.int)
+        levels['energy'] = 0.
+        levels = levels[['g', 'energy']]
+        levels = levels.reset_index()
+
+        return levels
+
+    def to_hdf(self, fname):
+        """Dump the `base` attribute into an HDF5 file
+
+        Parameters
+        ----------
+        fname : path
+           Path to the HDF5 output file
+        """
+        with pd.HDFStore(fname, 'a') as f:
+            f.put('/ionization_data', self.base)
