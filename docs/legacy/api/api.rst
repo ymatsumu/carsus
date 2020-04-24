@@ -1,6 +1,6 @@
 .. _api:
 
-Reference/API
+API reference
 =================
 
 carsus.io.base Module
@@ -20,10 +20,10 @@ Members
 
 .. autoclass:: carsus.io.base.BaseIngester
 
-Class Inheritance Diagram
+Class inheritance diagram
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. image:: images/io_base_inheritance.png
+.. image:: ../images/io_base_inheritance.png
     :width: 300
 
 
@@ -44,9 +44,9 @@ Members
 
 .. autoclass:: carsus.io.nist.NISTWeightsCompIngester(parser_cls=NISTWeightsCompPyparser, downloader=download_weightscomp)
 
-Class Inheritance Diagram
+Class inheritance diagram
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. image:: images/io_nist_inheritance.png
+.. image:: ../images/io_nist_inheritance.png
     :width: 400
 
