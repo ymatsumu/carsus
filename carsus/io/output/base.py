@@ -1,8 +1,9 @@
+import logging
 import numpy as np
 import pandas as pd
 import hashlib
 import uuid
-from carsus.util import parse_selected_species, convert_wavelength_air2vacuum
+from carsus.util import convert_wavelength_air2vacuum
 from carsus.model import MEDIUM_VACUUM, MEDIUM_AIR
 from astropy import units as u
 from astropy import constants as const
@@ -14,6 +15,8 @@ GFALL_AIR_THRESHOLD = 200
 P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
+
+logger = logging.getLogger(__name__)
 
 
 class TARDISAtomData:
@@ -33,21 +36,56 @@ class TARDISAtomData:
         Dump all attributes into an HDF5 file
     """
 
-    def __init__(self, gfall_reader, ionization_energies, ions,
+    def __init__(self,
+                 atomic_weights,
+                 ionization_energies,
+                 gfall_reader,
+                 zeta_data,
+                 chianti_reader=None,
                  lines_loggf_threshold=-3,
                  levels_metastable_loggf_threshold=-3):
 
+        # TODO: pass these params to the function as `gfall_params`
         self.levels_lines_param = {
             "levels_metastable_loggf_threshold":
             levels_metastable_loggf_threshold,
             "lines_loggf_threshold": lines_loggf_threshold
         }
 
-        self.ions = parse_selected_species(ions)
-        self.gfall_reader = gfall_reader
-
-        self.ionization_energies = ionization_energies.base
+        self.atomic_weights = atomic_weights
+        self.ionization_energies = ionization_energies
         self.ground_levels = ionization_energies.get_ground_levels()
+
+        # TODO: make this piece of code more readable 
+        gfall_ions = gfall_reader.levels.index.tolist()
+        # Remove last element from tuple (MultiIndex has 3 elements)
+        gfall_ions = [x[:-1] for x in gfall_ions]
+        # Keep unique tuples, list and sort them
+        gfall_ions = sorted(list(set(gfall_ions)))
+        self.gfall_reader = gfall_reader
+        self.gfall_ions = gfall_ions
+
+        self.zeta_data = zeta_data
+
+        # TODO: priorities should not be managed by the `init` method.
+        self.chianti_reader = chianti_reader
+        if chianti_reader is not None:
+            chianti_lvls = chianti_reader.levels.reset_index()
+            chianti_lvls = chianti_lvls.set_index(
+                ['atomic_number', 'ion_charge', 'priority'])
+
+            mask = chianti_lvls.index.get_level_values(
+                'priority') > self.gfall_reader.priority
+
+            # TODO: make this piece of code more readable
+            chianti_lvls = chianti_lvls[mask]
+            chianti_ions = chianti_lvls.index.tolist()
+            chianti_ions = [x[:-1] for x in chianti_ions]
+            chianti_ions = sorted(list(set(chianti_ions)))
+            self.chianti_ions = chianti_ions
+
+        else:
+            self.chianti_ions = []
 
         self.levels_all = self._get_all_levels_data().reset_index()
         self.lines_all = self._get_all_lines_data(self.levels_all)
@@ -111,26 +149,23 @@ class TARDISAtomData:
 
     def _get_all_levels_data(self):
         """ Returns the same output than `AtomData._get_all_levels_data()` """
-        gf = self.gfall_reader
-        df_list = []
+        gf_levels = self.gfall_reader.levels.reset_index()
+        gf_levels['source'] = 'gfall'
 
-        for ion in self.ions:
-            try:
-                df = gf.levels.loc[ion].copy()
+        if len(self.chianti_ions) > 0:
+            ch_levels = self.chianti_reader.levels.reset_index()
+            ch_levels['source'] = 'chianti'
+        else:
+            ch_levels = pd.DataFrame(columns=gf_levels.columns)
 
-            except (KeyError, TypeError):
-                continue
-
-            df['atomic_number'] = ion[0]
-            df['ion_number'] = ion[1]
-            df_list.append(df)
-
-        levels = pd.concat(df_list, sort=True)
+        levels = pd.concat([gf_levels, ch_levels], sort=True)
         levels['g'] = 2*levels['j'] + 1
         levels['g'] = levels['g'].astype(np.int)
         levels = levels.drop(columns=['j', 'label', 'method'])
         levels = levels.reset_index(drop=True)
-        levels = levels[['atomic_number', 'ion_number', 'g', 'energy']]
+        levels = levels.rename(columns={'ion_charge': 'ion_number'})
+        levels = levels[['atomic_number',
+                         'ion_number', 'g', 'energy', 'source']]
 
         levels['energy'] = levels['energy'].apply(lambda x: x*u.Unit('cm-1'))
         levels['energy'] = levels['energy'].apply(
@@ -140,34 +175,74 @@ class TARDISAtomData:
         ground_levels = self.ground_levels
         ground_levels.rename(
             columns={'ion_charge': 'ion_number'}, inplace=True)
-
-        # Fixes Ar II duplicated ground level. For Kurucz, ground state
-        # has g=2, for NIST has g=4. We keep Kurucz.
-
-        mask = (ground_levels['atomic_number'] == 18) & (
-            ground_levels['ion_number'] == 1)
-        ground_levels.loc[mask, 'g'] = 2
+        ground_levels['source'] = 'nist'
 
         levels = pd.concat([ground_levels, levels], sort=True)
         levels['level_id'] = range(1, len(levels)+1)
         levels = levels.set_index('level_id')
-        levels = levels.drop_duplicates(keep='last')
+
+        # Deliberately keep the "duplicated" Chianti levels.
+        # These levels are not strictly duplicated: same energy
+        # for different configurations. 
+        # 
+        # e.g. ChiantiIonReader('h_1')
+        #
+        # In fact, the following code should only remove the du-
+        # plicated ground levels. Other duplicated levels should
+        # be removed at the reader stage.
+        #
+        # TODO: a more clear way to get the same result could be: 
+        # "keep only zero energy levels from NIST source".
+
+        mask = (levels['source'] != 'chianti') & (
+            levels[['atomic_number', 'ion_number',
+                    'energy', 'g']].duplicated(keep='last'))	
+        levels = levels[~mask]
+
+        # Keep higher priority levels over GFALL: if levels with
+        # different source than 'gfall' made to this point should
+        # be kept.
+        for ion in self.chianti_ions:
+            mask = (levels['source'] == 'gfall') & (
+                levels['atomic_number'] == ion[0]) & (
+                    levels['ion_number'] == ion[1])
+            levels.drop(levels[mask].index, inplace=True)
+
+        levels = levels[['atomic_number',
+                         'ion_number', 'g', 'energy', 'source']]
 
         return levels
 
     def _get_all_lines_data(self, levels):
         """ Returns the same output than `AtomData._get_all_lines_data()` """
         gf = self.gfall_reader
-        df_list = []
+        ch = self.chianti_reader
 
-        for ion in self.ions:
+        start = 1
+        gf_list = []
+        logger.info('Ingesting lines from GFALL')
+        for ion in self.gfall_ions:
 
             try:
                 df = gf.lines.loc[ion]
 
+                # To match `line_id` field with the old API we keep
+                # track of how many GFALL lines we are skipping.
+                if ion in self.chianti_ions:
+                    df['line_id'] = range(start, len(df) + start)
+                    start += len(df)
+                    continue
+
+                else:
+                    df['line_id'] = range(start, len(df) + start)
+                    start += len(df)
+
             except (KeyError, TypeError):
                 continue
 
+            df['source'] = 'gfall'
+
+            # TODO: move this piece of code to a staticmethod
             df = df.reset_index()
             lvl_index2id = levels.set_index(
                 ['atomic_number', 'ion_number']).loc[ion]
@@ -189,10 +264,43 @@ class TARDISAtomData:
 
             df['lower_level_id'] = pd.Series(lower_level_id)
             df['upper_level_id'] = pd.Series(upper_level_id)
-            df_list.append(df)
+            gf_list.append(df)
 
+        ch_list = []
+        logger.info('Ingesting lines from Chianti')
+        for ion in self.chianti_ions:
+
+            df = ch.lines.loc[ion]
+            df['line_id'] = range(start, len(df) + start)
+            start = len(df) + start
+            df['source'] = 'chianti'
+
+            # TODO: move this piece of code to a staticmethod
+            df = df.reset_index()
+            lvl_index2id = levels.set_index(
+                ['atomic_number', 'ion_number']).loc[ion]
+            lvl_index2id = lvl_index2id.reset_index()
+            lvl_index2id = lvl_index2id[['level_id']]
+
+            lower_level_id = []
+            upper_level_id = []
+            for i, row in df.iterrows():
+
+                llid = int(row['level_index_lower'])
+                ulid = int(row['level_index_upper'])
+
+                upper = int(lvl_index2id.loc[ulid])
+                lower = int(lvl_index2id.loc[llid])
+
+                lower_level_id.append(lower)
+                upper_level_id.append(upper)
+
+            df['lower_level_id'] = pd.Series(lower_level_id)
+            df['upper_level_id'] = pd.Series(upper_level_id)
+            ch_list.append(df)
+
+        df_list = gf_list + ch_list
         lines = pd.concat(df_list, sort=True)
-        lines['line_id'] = range(1, len(lines)+1)
         lines['loggf'] = lines['gf'].apply(np.log10)
 
         lines.set_index('line_id', inplace=True)
@@ -204,17 +312,27 @@ class TARDISAtomData:
                   GFALL_AIR_THRESHOLD, 'medium'] = MEDIUM_VACUUM
         lines.loc[lines['wavelength'] >
                   GFALL_AIR_THRESHOLD, 'medium'] = MEDIUM_AIR
-        lines['wavelength'] = lines['wavelength'].apply(lambda x: x*u.nm)
+
+        air_mask = lines['medium'] == MEDIUM_AIR
+        gfall_mask = lines['source'] == 'gfall'
+        chianti_mask = lines['source'] == 'chianti'
+
+        lines.loc[gfall_mask, 'wavelength'] = lines.loc[
+            gfall_mask, 'wavelength'].apply(lambda x: x*u.nm)
+        lines.loc[chianti_mask, 'wavelength'] = lines.loc[
+            chianti_mask, 'wavelength'].apply(lambda x: x*u.angstrom)
         lines['wavelength'] = lines['wavelength'].apply(
             lambda x: x.to('angstrom'))
         lines['wavelength'] = lines['wavelength'].apply(lambda x: x.value)
 
-        air_mask = lines['medium'] == MEDIUM_AIR
-        lines.loc[air_mask, 'wavelength'] = convert_wavelength_air2vacuum(
+        # Why not for Chianti?
+        lines.loc[air_mask & gfall_mask,
+                  'wavelength'] = convert_wavelength_air2vacuum(
             lines.loc[air_mask, 'wavelength'])
+
         lines.drop(columns=['medium'], inplace=True)
         lines = lines[['lower_level_id', 'upper_level_id',
-                       'wavelength', 'gf', 'loggf']]
+                       'wavelength', 'gf', 'loggf', 'source']]
 
         return lines
 
@@ -224,7 +342,7 @@ class TARDISAtomData:
         `AtomData.create_levels_lines` method """
         levels_all = self.levels_all
         lines_all = self.lines_all
-        ionization_energies = self.ionization_energies.reset_index()
+        ionization_energies = self.ionization_energies.base.reset_index()
         ionization_energies['ion_number'] -= 1
 
         # Culling autoionization levels
@@ -535,6 +653,10 @@ class TARDISAtomData:
         fname : path
            Path to the HDF5 output file
         """
+
+        self.atomic_weights.to_hdf(fname)
+        self.ionization_energies.to_hdf(fname)
+        self.zeta_data.to_hdf(fname)
 
         with pd.HDFStore(fname, 'a') as f:
             f.put('/levels', self.levels_prepared)
