@@ -16,11 +16,14 @@ from pyparsing import ParseException
 from carsus.model import Ion, IonizationEnergy, Level, LevelEnergy
 from carsus.io.base import BaseParser, BaseIngester
 from carsus.io.nist.ionization_grammar import level
+from carsus.util import convert_atomic_number2symbol
 
 logger = logging.getLogger(__name__)
 
 IONIZATION_ENERGIES_URL = 'https://physics.nist.gov/cgi-bin/ASD/ie.pl'
+logger = logging.getLogger(__name__)
 IONIZATION_ENERGIES_VERSION_URL = 'https://physics.nist.gov/PhysRefData/ASD/Html/verhist.shtml'
+
 
 
 def download_ionization_energies(
@@ -158,6 +161,12 @@ class NISTIonizationEnergiesParser(BaseParser):
             except KeyError:
                 pass
 
+            # To handle cases where the ground level J has not been understood:
+            # Take as assumption J=0
+            if (np.isnan(lvl["J"])):
+                lvl["J"] = '0'
+                logger.warn(f"Set `J=0` for ground state of species `{convert_atomic_number2symbol(row['atomic_number'])} {row['ion_charge']}`.")
+            
             try:
                 lvl["term"] = "".join([str(_) for _ in lvl_tokens["ls_term"]])
                 lvl["spin_multiplicity"] = lvl_tokens["ls_term"]["mult"]
@@ -227,7 +236,7 @@ class NISTIonizationEnergiesIngester(BaseIngester):
         if ioniz_energies is None:
             ioniz_energies = self.parser.prepare_ioniz_energies()
 
-        print("Ingesting ionization energies from {}".format(self.data_source.short_name))
+        logger.info(f"Ingesting ionization energies from {self.data_source.short_name}.")
 
         for index, row in ioniz_energies.iterrows():
             atomic_number, ion_charge = index
@@ -249,7 +258,7 @@ class NISTIonizationEnergiesIngester(BaseIngester):
         if ground_levels is None:
             ground_levels = self.parser.prepare_ground_levels()
 
-        print("Ingesting ground levels from {}".format(self.data_source.short_name))
+        logger.info(f"Ingesting ground levels from {self.data_source.short_name}.")
 
         for index, row in ground_levels.iterrows():
             atomic_number, ion_charge = index

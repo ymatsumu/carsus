@@ -87,6 +87,8 @@ class GFALLReader(object):
                         'GFALL data has not been given. Defaulting to '
                         '["energy", "j"].')
             self.unique_level_identifier = self.default_unique_level_identifier
+        else:
+            self.unique_level_identifier = unique_level_identifier
 
     @property
     def gfall_raw(self):
