@@ -1,9 +1,11 @@
+import logging
 import numpy as np
 import pandas as pd
 import itertools
 import gzip
-import warnings
 from carsus.io.base import BaseParser
+
+logger = logging.getLogger(__name__)
 
 
 # TODO: add `skiprows` parameter
@@ -29,14 +31,12 @@ def find_row(fname, string1, string2='', how='both', num_row=False):
     Returns
     -------
     str or int
-        Returns matching line or row number.
-
+        Returns matching line or match row number.
     """
     with open(fname, encoding='ISO-8859-1') as f:
         n = 0
         for line in f:
             n += 1
-
             if how == 'one':
                 if string1 in line or string2 in line:
                     break
@@ -78,9 +78,9 @@ def parse_header(fname, keys, start=0, stop=50):
     -------
     dict
         Dictionary containing metadata.
-
     """
     meta = {k.strip('!'): None for k in keys}
+
     with gzip.open(fname, 'rt') if fname.endswith('.gz') else open(fname, encoding='ISO-8859-1') as f:
         for line in itertools.islice(f, start, stop):
             for k in keys:
@@ -91,22 +91,26 @@ def parse_header(fname, keys, start=0, stop=50):
 
 
 def to_float(string):
-    """ String to float, taking care of Fortran 'D' values
+    """ String to float, useful to work with Fortran 'D' type.
 
     Parameters
     ----------
     string : str
 
+    Returns
+    -------
+    float
     """
     try:
         value = float(string.replace('D', 'E'))
 
     except ValueError:
-
-        if string == '1-.00':      # Bad value at MG/VIII/23oct02/phot_sm_3000 line 23340
+        # Weird value in `MG/VIII/23oct02/phot_sm_3000`, line 23340
+        if string == '1-.00':
             value = 10.00
 
-        if string == '*********':  # Bad values at SUL/V/08jul99/phot_op.big lines 9255-9257
+        # Weird values in `SUL/V/08jul99/phot_op.big`, lines 9255-9257
+        if string == '*********':
             value = np.nan
 
     return value
@@ -118,7 +122,6 @@ class CMFGENEnergyLevelsParser(BaseParser):
         ----------
         base : pandas.DataFrame
         columns : list of str
-            (default value = ['Configuration', 'g', 'E(cm^-1)', 'eV', 'Hz 10^15', 'Lam(A)'])
         meta : dict
             Metadata parsed from file header.
 
@@ -128,7 +131,9 @@ class CMFGENEnergyLevelsParser(BaseParser):
             Parses the input data and stores the results in the `base` attribute.
     """
 
-    keys = ['!Date',  # Metadata to parse from header. TODO: look for more keys
+    # Metadata to parse from header. 
+    # TODO: look for more keys
+    keys = ['!Date',
             '!Format date',
             '!Number of energy levels',
             '!Ionization energy',
@@ -137,7 +142,6 @@ class CMFGENEnergyLevelsParser(BaseParser):
             ]
 
     def load(self, fname):
-
         meta = parse_header(fname, self.keys)
         kwargs = {}
         kwargs['header'] = None
@@ -149,15 +153,12 @@ class CMFGENEnergyLevelsParser(BaseParser):
         n = int(meta['Number of energy levels'])
         kwargs['nrows'] = n
 
-        columns = ['Configuration', 'g',
-                   'E(cm^-1)', 'eV', 'Hz 10^15', 'Lam(A)']
-
         try:
             df = pd.read_csv(fname, **kwargs, engine='python')
 
         except pd.errors.EmptyDataError:
             df = pd.DataFrame(columns=columns)
-            warnings.warn('Empty table')
+            logger.warn(f'Table is empty: `{fname}`.')
 
         # Assign column names by file content
         if df.shape[1] == 10:
@@ -171,21 +172,16 @@ class CMFGENEnergyLevelsParser(BaseParser):
             df.columns = columns
 
         elif df.shape[1] == 7:
-            df.columns = columns + ['#']
-            df = df.drop(columns=['#'])
+            df.columns = ['Configuration', 'g', 'E(cm^-1)', 'eV', 'Hz 10^15', 'Lam(A)', 'ID']
 
         elif df.shape[1] == 6:
-            df.columns = ['Configuration', 'g',
-                          'E(cm^-1)', 'Hz 10^15', 'Lam(A)', '#']
-            df = df.drop(columns=['#'])
+            df.columns = ['Configuration', 'g', 'E(cm^-1)', 'Hz 10^15', 'Lam(A)', 'ID']
 
         elif df.shape[1] == 5:
-            df.columns = columns[:-2] + ['#']
-            df = df.drop(columns=['#'])
+            df.columns = ['Configuration', 'g', 'E(cm^-1)', 'eV', 'ID']
 
         else:
-            # TODO: raise exception here (discuss)
-            warnings.warn('Inconsistent number of columns')
+            logger.warn(f'Inconsistent number of columns: `{fname}`.')
 
         self.fname = fname
         self.base = df
@@ -194,7 +190,7 @@ class CMFGENEnergyLevelsParser(BaseParser):
 
     def to_hdf(self, key='/energy_levels'):
         if not self.base.empty:
-            with pd.HDFStore('{}.h5'.format(self.fname), 'a') as f:
+            with pd.HDFStore('{}.h5'.format(self.fname), 'w') as f:
                 f.put(key, self.base)
                 f.get_storer(key).attrs.metadata = self.meta
 
@@ -205,7 +201,6 @@ class CMFGENOscillatorStrengthsParser(BaseParser):
         ----------
         base : pandas.DataFrame
         columns : list of str
-            (default value = ['State A', 'State B', 'f', 'A', 'Lam(A)', 'i', 'j', 'Lam(obs)', '% Acc'])
         meta : dict
             Metadata parsed from file header.
 
@@ -226,38 +221,40 @@ class CMFGENOscillatorStrengthsParser(BaseParser):
         kwargs['skiprows'] = find_row(
             fname, "Transition", "Lam", num_row=True) + 1
 
-        # Will only parse tables listed increasing lower level i, e.g. FE/II/24may96/osc_nahar.dat
+        # Parse only tables listed increasing lower level i, e.g. `FE/II/24may96/osc_nahar.dat`
         n = int(meta['Number of transitions'])
         kwargs['nrows'] = n
-
-        columns = ['State A', 'State B', 'f', 'A',
-                   'Lam(A)', 'i', 'j', 'Lam(obs)', '% Acc']
 
         try:
             df = pd.read_csv(fname, **kwargs, engine='python')
 
         except pd.errors.EmptyDataError:
-            df = pd.DataFrame(columns=columns)
-            warnings.warn('Empty table')
+            df = pd.DataFrame(columns=['State A', 'State B', 'f', 'A',
+                                 'Lam(A)', 'i', 'j', 'Lam(obs)', '% Acc'])
+            logger.warn(f'Table is empty: `{fname}`.')
 
         # Assign column names by file content
         if df.shape[1] == 9:
-            df.columns = columns
+            df.columns = ['State A', 'State B', 'f', 'A',
+                            'Lam(A)', 'i', 'j', 'Lam(obs)', '% Acc']
 
+        # These files are 9-column, but for some reason the regex produces 10 columns
         elif df.shape[1] == 10:
-            df.columns = columns + ['?']
+            df.columns = ['State A', 'State B', 'f', 'A',
+                            'Lam(A)', 'i', 'j', 'Lam(obs)', '% Acc', '?']
             df = df.drop(columns=['?'])
 
         elif df.shape[1] == 8:
-            df.columns = columns[:-2] + ['#']
-            df = df.drop(columns=['#'])
+            df.columns = ['State A', 'State B', 'f', 'A', 'Lam(A)', 
+                            'i', 'j', '#']
             df['Lam(obs)'] = np.nan
             df['% Acc'] = np.nan
+            df = df.drop(columns=['#'])
 
         else:
-            warnings.warn('Inconsistent number of columns')
+            logger.warn(f'Inconsistent number of columns `{fname}`.')
 
-        # Fix for Fortran float type 'D'
+        # Fix Fortran float type 'D'
         if df.shape[0] > 0 and 'D' in str(df['f'][0]):
             df['f'] = df['f'].map(to_float)
             df['A'] = df['A'].map(to_float)
@@ -269,12 +266,12 @@ class CMFGENOscillatorStrengthsParser(BaseParser):
 
     def to_hdf(self, key='/oscillator_strengths'):
         if not self.base.empty:
-            with pd.HDFStore('{}.h5'.format(self.fname), 'a') as f:
+            with pd.HDFStore('{}.h5'.format(self.fname), 'w') as f:
                 f.put(key, self.base)
                 f.get_storer(key).attrs.metadata = self.meta
 
 
-class CMFGENCollisionalDataParser(BaseParser):
+class CMFGENCollisionalStrengthsParser(BaseParser):
     """
         Description
         ----------
@@ -289,7 +286,7 @@ class CMFGENCollisionalDataParser(BaseParser):
             Parses the input data and stores the results in the `base` attribute.
     """
 
-    keys = ['!Number of transitions',  # Metadata to parse from header. TODO: look for more keys
+    keys = ['!Number of transitions',
             '!Number of T values OMEGA tabulated at',
             '!Scaling factor for OMEGA (non-FILE values)',
             '!Value for OMEGA if f=0',
@@ -304,14 +301,16 @@ class CMFGENCollisionalDataParser(BaseParser):
         kwargs['skiprows'] = find_row(fname, "ransition\T", num_row=True)
 
         # FIXME: expensive solution for two files with more than one table
-        # ARG/III/19nov07/col_ariii  &  HE/II/5dec96/he2col.dat
+        # `ARG/III/19nov07/col_ariii` & `HE/II/5dec96/he2col.dat`
         footer = find_row(fname, "Johnson values:",
                           "dln_OMEGA_dlnT", how='one', num_row=True)
+
         if footer is not None:
             kwargs['nrows'] = footer - kwargs['skiprows'] - 2
 
         try:
-            names = find_row(fname, 'ransition\T').split()  # Not a typo
+            names = find_row(fname, 'ransition\T').split()  # Not a typo!
+            
             # Comment next line when trying new regexes!
             names = [np.format_float_scientific(
                 to_float(x)*1e+04, precision=4) for x in names[1:]]
@@ -319,11 +318,11 @@ class CMFGENCollisionalDataParser(BaseParser):
 
         except AttributeError:
             # TODO: some files have no column names nor header
-            warnings.warn('No column names')
+            logger.warn(f'Column names not found: `{fname}`.')
 
         try:
             df = pd.read_csv(fname, **kwargs, engine='python')
-            for c in df.columns[2:]:          # This is done column-wise on purpose
+            for c in df.columns[2:]:  # This is done column-wise on purpose
                 try:
                     df[c] = df[c].astype('float64')
 
@@ -332,25 +331,26 @@ class CMFGENCollisionalDataParser(BaseParser):
 
         except pd.errors.EmptyDataError:
             df = pd.DataFrame()
-            warnings.warn('Empty table')
+            logger.warn(f'Table is empty: `{fname}`.')
 
         self.fname = fname
         self.base = df
         self.columns = df.columns.tolist()
         self.meta = meta
 
-    def to_hdf(self, key='/collisional_data'):
+    def to_hdf(self, key='/collisional_strengths'):
         if not self.base.empty:
-            with pd.HDFStore('{}.h5'.format(self.fname), 'a') as f:
+            with pd.HDFStore('{}.h5'.format(self.fname), 'w') as f:
                 f.put(key, self.base)
                 f.get_storer(key).attrs.metadata = self.meta
 
 
+# TODO: inherit from `BaseParser` class seems a bit forced
 class CMFGENPhotoionizationCrossSectionParser(BaseParser):
     """
         Description
         ----------
-        base : list of pandas.DataFrame 's
+        base : list of pandas.DataFrame
         columns : list of str
         meta : dict
             Metadata parsed from file header.
@@ -373,7 +373,17 @@ class CMFGENPhotoionizationCrossSectionParser(BaseParser):
             ]
 
     def _table_gen(self, f):
-        """ Generator. Yields a cross section table for an energy level """
+        """Yields a cross section table for an energy level.
+
+        Parameters
+        ----------
+        f : file buffer
+
+        Yields
+        -------
+        pd.DataFrame
+            DataFrame with metadata.
+        """        
         meta = {}
         data = []
 
@@ -392,7 +402,8 @@ class CMFGENPhotoionizationCrossSectionParser(BaseParser):
                 for i in range(p):
 
                     values = f.readline().split()
-                    if len(values) == 8:  # Verner ground state fits
+                    # Verner ground state fits
+                    if len(values) == 8:
 
                         data.append(
                             list(map(int, values[:2])) + list(map(float, values[2:])))
@@ -434,7 +445,7 @@ class CMFGENPhotoionizationCrossSectionParser(BaseParser):
                                   'sigma_0', 'y(a)', 'P', 'y(w)']
 
                 else:
-                    warnings.warn('Inconsistent number of columns')
+                    logger.warn(f'Inconsistent number of columns: `{fname}`.')
 
                 tables.append(df)
 
@@ -445,7 +456,7 @@ class CMFGENPhotoionizationCrossSectionParser(BaseParser):
 
     def to_hdf(self, key='/photoionization_cross_sections'):
         if len(self.base) > 0:
-            with pd.HDFStore('{}.h5'.format(self.fname), 'a') as f:
+            with pd.HDFStore('{}.h5'.format(self.fname), 'w') as f:
 
                 for i in range(0, len(self.base)-1):
                     subkey = '{0}/{1}'.format(key, i)

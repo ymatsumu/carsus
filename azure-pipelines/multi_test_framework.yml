@@ -1,106 +1,97 @@
-# Python package
-# Create and test a Python package on multiple Python versions.
-# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/python
-
-
-# Specify which branches you want to trigger for continuous deployment and/or applicable for pull requests.
-# Otherwise it triggers all of them.
-
 trigger:
-- master
+  - master
 
-pr:
-- master
-
-# Consistent environment variables
 variables:
-  system.debug: "true"
-  PANDAS_VERSION: 0.24
-  ASTROPY_USE_SYSTEM_PYTEST: 1
-  SETUP_CMD: ""
-  TEST_MODE: "normal"
-  CHIANTI_DATA_URL: "http://www.chiantidatabase.org/download/CHIANTI_9.0_data.tar.gz"
-  CARSUS_DB_URL: "https://github.com/tardis-sn/carsus-db.git"
-  PYTHONIOENCODING: UTF8
-  CONDA: "/usr/share/miniconda"
-  XUVTOP: "/usr/share/chianti"
-  PYTHON_VERSION: '3.7'
-  codecov.token: 'bd02b09d-d24f-45a3-8c0b-25eec64a29e7'
+  package.manager: "mamba"
+  build.dir: $(Agent.BuildDirectory)
+  carsus.db.url: "https://github.com/tardis-sn/carsus-db.git"
+  carsus.refdata.url: "https://github.com/tardis-sn/carsus-refdata.git"
+  chianti.data.url: "http://www.chiantidatabase.org/download/CHIANTI_9.0.1_data.tar.gz"
+  xuvtop: "$(build.dir)/chianti"
+  codecov.token: "bd02b09d-d24f-45a3-8c0b-25eec64a29e7"
+  system.debug: "false"
 
 jobs:
+  - job: "Test"
+    pool:
+      vmImage: "ubuntu-latest"
 
-- job: "Test"
+    strategy:
+      matrix:
+        simple:
+          SETUP_CMD: ""
+          TEST_MODE: "simple"
 
-  pool:
-    vmImage: "Ubuntu-16.04"
-  strategy:
-    matrix:
-      simple:
-        SETUP_CMD: ""
-      remote_data:
-        SETUP_CMD: "--remote-data"
-      slow:
-        SETUP_CMD: "--runslow"
-      database:
-        SETUP_CMD: "--test-db=$HOME/carsus-db/test_databases/test.db"
-        TEST_MODE: "with_test_db"
-      coverage:
-        SETUP_CMD: "--cov=carsus --cov-report=xml --cov-report=html"
-    
-    maxParallel: 5
+        remote_data:
+          SETUP_CMD: "--remote-data"
+          TEST_MODE: "remote_data"
 
-  steps:
+        runslow:
+          SETUP_CMD: "--runslow"
+          TEST_MODE: "runslow"
 
-# Add conda to path
-  - bash: |
-          echo "##vso[task.prependpath]$CONDA/bin"
-    displayName: Add conda to PATH
+        database:
+          SETUP_CMD: "--test-db=$BUILD_DIR/carsus-db/test_databases/test.db"
+          TEST_MODE: "database"
 
-# Update conda and change its permissions to the Azure user 'vsts'
-  - bash: |
-          sudo chown -R $USER $CONDA
-          #conda update -y conda
-    displayName: "updating conda and activating"
+        refdata:
+          SETUP_CMD: "--refdata=$BUILD_DIR/carsus-refdata"
+          TEST_MODE: "refdata"
 
-  - bash: |
-          conda env create -f carsus_env3.yml
-    displayName: "Install Carsus env"
+        coverage:
+          SETUP_CMD: "--remote-data --runslow --test-db=$BUILD_DIR/carsus-db/test_databases/test.db --refdata=$BUILD_DIR/carsus-refdata --cov=carsus --cov-report=xml --cov-report=html"
+          TEST_MODE: "coverage"
 
-# Download chianti data for tests
-  - bash: |
-          mkdir /usr/share/chianti
-          wget $CHIANTI_DATA_URL -O /usr/share/chianti/CHIANTI_9.0_data.tar.gz
-          tar -zxvf /usr/share/chianti/CHIANTI_9.0_data.tar.gz -C /usr/share/chianti
-    displayName: "Fetch Chianti Data"
+      maxParallel: 6
 
-# Download database testing data for TEST_MODE
-  - bash: |
+    steps:
+      - bash: echo "##vso[task.setvariable variable=shellopts]errexit"
+        displayName: "Force exit on error (bash)"
+
+      - bash: echo "##vso[task.prependpath]$CONDA/bin"
+        displayName: "Add conda to PATH"
+
+      - bash: conda install mamba -c conda-forge -y
+        displayName: "Install Mamba package manager"
+        condition: eq(variables['package.manager'], 'mamba')
+
+      - bash: $PACKAGE_MANAGER env create -f carsus_env3.yml
+        displayName: "Install Carsus environment"
+
+      - bash: |
+          mkdir -p $XUVTOP
+          wget $CHIANTI_DATA_URL -O $XUVTOP/CHIANTI_9.0.1_data.tar.gz
+          tar -zxvf $XUVTOP/CHIANTI_9.0.1_data.tar.gz -C $XUVTOP
+        displayName: "Fetch Chianti database"
+
+      - bash: |
           source activate carsus
-          conda install git-lfs -c conda-forge -y
-          git lfs install --skip-smudge
-          git clone $CARSUS_DB_URL $HOME/carsus-db
-          cd $HOME/carsus-db
-          git lfs pull --include="test_databases/test.db" origin
-    condition: and(succeeded(), eq(variables['TEST_MODE'], 'with_test_db'))
-    displayName: "Fetch the testing database from carsus-db"
+          GIT_LFS_SKIP_SMUDGE=1 git clone $CARSUS_DB_URL $BUILD_DIR/carsus-db
+          cd $BUILD_DIR/carsus-db
+          git lfs pull --include="test_databases/test.db"
+        displayName: "Fetch testing database"
+        condition: or(eq(variables['TEST_MODE'], 'database'), eq(variables['TEST_MODE'], 'coverage'))
 
-# Activate environment and start test
-  - bash: |
+      - bash: |
           source activate carsus
-          echo pytest carsus $SETUP_CMD
+          git clone $CARSUS_REFDATA_URL $BUILD_DIR/carsus-refdata
+        displayName: "Fetch reference data"
+        condition: or(eq(variables['TEST_MODE'], 'refdata'), eq(variables['TEST_MODE'], 'coverage'))
+
+      - bash: |
+          source activate carsus
+          pytest carsus $SETUP_CMD
+        displayName: "Carsus test"
+        condition: ne(variables['TEST_MODE'], 'coverage')
+
+      - bash: |
+          source activate carsus
           pip install pytest-azurepipelines
           pytest carsus $SETUP_CMD
-    displayName: "Carsus test"
+        displayName: "Carsus test (with coverage)"
+        condition: eq(variables['TEST_MODE'], 'coverage')
 
-  - bash: |
+      - bash: |
           bash <(curl -s https://codecov.io/bash)
-    condition: and(succeeded(), eq(variables['SETUP_CMD'], '--cov=carsus --cov-report=xml --cov-report=html'))
-    displayName: "Upload to codecov.io"
-    
-# Clean up in case of failure
-  - bash: |
-          source activate carsus
-          python -m sphinx --version
-    condition: failed()
-    displayName: 'Failure'
+        displayName: "Upload to codecov.io"
+        condition: eq(variables['TEST_MODE'], 'coverage')
