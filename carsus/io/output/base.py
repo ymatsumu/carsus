@@ -1,20 +1,22 @@
+import re
 import logging
-import numpy as np
-import pandas as pd
 import hashlib
-import platform
 import uuid
 import pytz
+import platform
+import numpy as np
+import pandas as pd
+import astropy.units as u
+import astropy.constants as const
+from scipy import interpolate
 from datetime import datetime
 from carsus.util import (convert_wavelength_air2vacuum,
                          serialize_pandas_object,
                          hash_pandas_object)
 from carsus.model import MEDIUM_VACUUM, MEDIUM_AIR
-from astropy import units as u
-from astropy import constants as const
 
-# [nm], wavelengths above this value are given in air
 # TODO: pass GFALL_AIR_THRESHOLD as parameter
+# [nm] wavelengths above this value are given in air
 GFALL_AIR_THRESHOLD = 200
 
 P_EMISSION_DOWN = -1
@@ -25,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 
 class TARDISAtomData:
-
     """
     Attributes
     ----------
     levels_prepared : pandas.DataFrame
     lines_prepared : pandas.DataFrame
+    collisions_prepared: pandas.DataFrame
     macro_atom_prepared : pandas.DataFrame
     macro_atom_references_prepared : pandas.DataFrame
 
@@ -47,7 +49,8 @@ class TARDISAtomData:
                  zeta_data,
                  chianti_reader=None,
                  lines_loggf_threshold=-3,
-                 levels_metastable_loggf_threshold=-3):
+                 levels_metastable_loggf_threshold=-3,
+                 collisions_temperatures=None):
 
         # TODO: pass these params to the function as `gfall_params`
         self.levels_lines_param = {
@@ -56,20 +59,29 @@ class TARDISAtomData:
             "lines_loggf_threshold": lines_loggf_threshold
         }
 
+        if collisions_temperatures is None:
+            collisions_temperatures = np.arange(2000, 50000, 2000)
+        else:
+            collisions_temperatures = np.array(collisions_temperatures)
+
+        self.collisions_param = {
+            "temperatures": collisions_temperatures
+        }
+
         self.atomic_weights = atomic_weights
         self.ionization_energies = ionization_energies
         self.ground_levels = ionization_energies.get_ground_levels()
 
         # TODO: make this piece of code more readable 
         gfall_ions = gfall_reader.levels.index.tolist()
+       
         # Remove last element from tuple (MultiIndex has 3 elements)
         gfall_ions = [x[:-1] for x in gfall_ions]
+
         # Keep unique tuples, list and sort them
         gfall_ions = sorted(list(set(gfall_ions)))
         self.gfall_reader = gfall_reader
         self.gfall_ions = gfall_ions
-
-        self.zeta_data = zeta_data
 
         # TODO: priorities should not be managed by the `init` method.
         self.chianti_reader = chianti_reader
@@ -91,16 +103,47 @@ class TARDISAtomData:
         else:
             self.chianti_ions = []
 
-        self.levels_all = self._get_all_levels_data().reset_index()
-        self.lines_all = self._get_all_lines_data(self.levels_all)
-
+        self.levels_all = self._get_all_levels_data()
+        self.lines_all = self._get_all_lines_data()
         self._create_levels_lines(**self.levels_lines_param)
         self._create_macro_atom()
         self._create_macro_atom_references()
 
+        if not self.chianti_reader.collisions.empty:
+            self.collisions = self._create_collisions()
+
+        self.zeta_data = zeta_data
+
+    @staticmethod
+    def get_lvl_index2id(df, levels_all, ion):
+        df = df.reset_index()
+        lvl_index2id = levels_all.set_index(
+                            ['atomic_number', 'ion_number']).loc[ion]
+        lvl_index2id = lvl_index2id.reset_index()
+        lvl_index2id = lvl_index2id[['level_id']]
+
+        lower_level_id = []
+        upper_level_id = []
+        for i, row in df.iterrows():
+
+            llid = int(row['level_index_lower'])
+            ulid = int(row['level_index_upper'])
+
+            upper = int(lvl_index2id.loc[ulid])
+            lower = int(lvl_index2id.loc[llid])
+
+            lower_level_id.append(lower)
+            upper_level_id.append(upper)
+
+        df['lower_level_id'] = pd.Series(lower_level_id)
+        df['upper_level_id'] = pd.Series(upper_level_id)
+
+        return df
+
     @staticmethod
     def _create_artificial_fully_ionized(levels):
-        """ Create artificial levels for fully ionized ions """
+        """ Create artificial levels for fully ionized ions. """
+
         fully_ionized_levels = list()
 
         for atomic_number, _ in levels.groupby("atomic_number"):
@@ -151,9 +194,60 @@ class TARDISAtomData:
         lines['A_ul'] = 2 * einstein_coeff * lines['nu'] ** 2 / \
             const.c.cgs.value ** 2 * lines['f_ul']
 
+    @staticmethod
+    def calculate_collisional_strength(row, temperatures, 
+                                       kb_ev, c_ul_temperature_cols):
+        """
+        Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38).
+        """
+
+        c = row["cups"]
+        x_knots = np.linspace(0, 1, len(row["btemp"]))
+        y_knots = row["bscups"]
+        delta_e = row["delta_e"]
+        g_u = row["g_u"]
+
+        ttype = row["ttype"]
+        if ttype > 5: 
+            ttype -= 5
+
+        kt = kb_ev * temperatures
+
+        spline_tck = interpolate.splrep(x_knots, y_knots)
+
+        if ttype == 1:
+            x = 1 - np.log(c) / np.log(kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func * np.log(kt / delta_e + np.exp(1))
+
+        elif ttype == 2:
+            x = (kt / delta_e) / (kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func
+
+        elif ttype == 3:
+            x = (kt / delta_e) / (kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func / (kt / delta_e + 1)
+
+        elif ttype == 4:
+            x = 1 - np.log(c) / np.log(kt / delta_e + c)
+            y_func = interpolate.splev(x, spline_tck)
+            upsilon = y_func * np.log(kt / delta_e + c)
+
+        elif ttype == 5:
+            raise ValueError('Not sure what to do with ttype=5')
+
+        #### 1992A&A...254..436B Equation 20 & 22 #####
+        collisional_ul_factor = 8.63e-6 * upsilon / (g_u * temperatures**.5)
+
+        return pd.Series(data=collisional_ul_factor, index=c_ul_temperature_cols)
+
     def _get_all_levels_data(self):
-        """ Returns the same output than `AtomData._get_all_levels_data()` """
-        logger.info('Ingesting levels from GFALL.')
+        """ Returns the same output than `AtomData._get_all_levels_data()` 
+        with `reset_index` method applied.
+        """
+
         gf_levels = self.gfall_reader.levels.reset_index()
         gf_levels['source'] = 'gfall'
 
@@ -217,10 +311,14 @@ class TARDISAtomData:
         levels = levels[['atomic_number',
                          'ion_number', 'g', 'energy', 'source']]
 
+        levels = levels.reset_index()
+
         return levels
 
-    def _get_all_lines_data(self, levels):
+
+    def _get_all_lines_data(self):
         """ Returns the same output than `AtomData._get_all_lines_data()` """
+
         gf = self.gfall_reader
         ch = self.chianti_reader
 
@@ -246,30 +344,8 @@ class TARDISAtomData:
             except (KeyError, TypeError):
                 continue
 
+            df = self.get_lvl_index2id(df, self.levels_all, ion)
             df['source'] = 'gfall'
-
-            # TODO: move this piece of code to a staticmethod
-            df = df.reset_index()
-            lvl_index2id = levels.set_index(
-                ['atomic_number', 'ion_number']).loc[ion]
-            lvl_index2id = lvl_index2id.reset_index()
-            lvl_index2id = lvl_index2id[['level_id']]
-
-            lower_level_id = []
-            upper_level_id = []
-            for i, row in df.iterrows():
-
-                llid = int(row['level_index_lower'])
-                ulid = int(row['level_index_upper'])
-
-                upper = int(lvl_index2id.loc[ulid])
-                lower = int(lvl_index2id.loc[llid])
-
-                lower_level_id.append(lower)
-                upper_level_id.append(upper)
-
-            df['lower_level_id'] = pd.Series(lower_level_id)
-            df['upper_level_id'] = pd.Series(upper_level_id)
             gf_list.append(df)
 
         ch_list = []
@@ -279,30 +355,9 @@ class TARDISAtomData:
             df = ch.lines.loc[ion]
             df['line_id'] = range(start, len(df) + start)
             start = len(df) + start
+
+            df = self.get_lvl_index2id(df, self.levels_all, ion)
             df['source'] = 'chianti'
-
-            # TODO: move this piece of code to a staticmethod
-            df = df.reset_index()
-            lvl_index2id = levels.set_index(
-                ['atomic_number', 'ion_number']).loc[ion]
-            lvl_index2id = lvl_index2id.reset_index()
-            lvl_index2id = lvl_index2id[['level_id']]
-
-            lower_level_id = []
-            upper_level_id = []
-            for i, row in df.iterrows():
-
-                llid = int(row['level_index_lower'])
-                ulid = int(row['level_index_upper'])
-
-                upper = int(lvl_index2id.loc[ulid])
-                lower = int(lvl_index2id.loc[llid])
-
-                lower_level_id.append(lower)
-                upper_level_id.append(upper)
-
-            df['lower_level_id'] = pd.Series(lower_level_id)
-            df['upper_level_id'] = pd.Series(upper_level_id)
             ch_list.append(df)
 
         df_list = gf_list + ch_list
@@ -344,8 +399,8 @@ class TARDISAtomData:
 
     def _create_levels_lines(self, lines_loggf_threshold=-3,
                              levels_metastable_loggf_threshold=-3):
-        """ Returns almost the same output than
-        `AtomData.create_levels_lines` method """
+        """ Returns almost the same output than`AtomData.create_levels_lines` method """
+
         levels_all = self.levels_all
         lines_all = self.lines_all
         ionization_energies = self.ionization_energies.base.reset_index()
@@ -434,24 +489,87 @@ class TARDISAtomData:
         self.lines = lines
         self.levels = levels
 
+    def _create_collisions(self):
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
+
+        ch_list = []
+        ch = self.chianti_reader
+
+        logger.info('Ingesting collisions from Chianti')
+        for ion in self.chianti_ions:
+
+            df = ch.collisions.loc[ion]
+            df = self.get_lvl_index2id(df, self.levels_all, ion)
+            ch_list.append(df)
+
+        collisions = pd.concat(ch_list, sort=True)
+        collisions['source'] = 'chianti'
+
+        # Keep this value to compare against SQL
+        collisions['ds_id'] = 4
+
+        # `e_col_id` number starts after the last line id
+        start = self.lines_all.index[-1] + 1
+        collisions['e_col_id'] = range(start, start + len(collisions))
+        collisions = collisions.reset_index()
+
+        # Join atomic_number, ion_number, level_number_lower, level_number_upper
+        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
+                              loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
+        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+                              loc[:, ["level_number_upper", "g_u", "energy_upper"]]
+
+        collisions = collisions.join(lower_levels, on="lower_level_id").join(
+                                            upper_levels, on="upper_level_id")
+
+        # Calculate delta_e
+        kb_ev = const.k_B.cgs.to('eV / K').value
+        collisions["delta_e"] = (collisions["energy_upper"] - collisions["energy_lower"])/kb_ev
+
+        # Calculate g_ratio
+        collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
+
+        temperatures = self.collisions_param['temperatures']
+
+        # Derive columns for collisional strengths
+        c_ul_temperature_cols = ['t{:06d}'.format(t) for t in temperatures]
+
+        collisions = collisions.rename(columns={'ion_charge': 'ion_number',
+                                                'temperatures': 'btemp',
+                                                'collision_strengths': 'bscups'})
+        collisions = collisions[['e_col_id', 'lower_level_id',
+                                 'upper_level_id', 'ds_id',
+                                 'btemp', 'bscups', 'ttype', 'cups',
+                                 'gf', 'atomic_number', 'ion_number',
+                                 'level_number_lower', 'g_l',
+                                 'energy_lower', 'level_number_upper', 
+                                 'g_u', 'energy_upper', 'delta_e', 
+                                    'g_ratio']]
+
+        collisional_ul_factors = collisions.apply(self.calculate_collisional_strength, 
+                                                  axis=1, args=(temperatures, kb_ev, 
+                                                                c_ul_temperature_cols))
+
+        collisions = collisions.join(collisional_ul_factors)
+        collisions = collisions.set_index('e_col_id')
+
+        return collisions
+
     @property
     def levels_prepared(self):
         """
-        Prepare the DataFrame with levels for TARDIS
+        Prepare the DataFrame with levels for TARDIS.
+
         Returns
         -------
-        levels_prepared: pandas.DataFrame
-            DataFrame with:
-                index: none;
-                columns: atomic_number, ion_number, level_number,
-                            energy[eV], g[1], metastable.
+        pandas.DataFrame
         """
 
         levels_prepared = self.levels.loc[:, [
             "atomic_number", "ion_number", "level_number",
             "energy", "g", "metastable"]].copy()
 
-        # Set index
         levels_prepared.set_index(
             ["atomic_number", "ion_number", "level_number"], inplace=True)
 
@@ -460,17 +578,11 @@ class TARDISAtomData:
     @property
     def lines_prepared(self):
         """
-            Prepare the DataFrame with lines for TARDIS
-            Returns
-            -------
-            lines_prepared : pandas.DataFrame
-                DataFrame with:
-                    index: none;
-                    columns: line_id, atomic_number, ion_number,
-                             level_number_lower, level_number_upper,
-                             wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1],
-                             B_ul[cm^3 s^-2 erg^-1], B_lu[cm^3 s^-2 erg^-1],
-                             A_ul[1/s].
+        Prepare the DataFrame with lines for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
         """
 
         lines_prepared = self.lines.loc[:, [
@@ -478,28 +590,55 @@ class TARDISAtomData:
             "f_ul", "f_lu", "level_number_lower", "level_number_upper",
             "nu", "B_lu", "B_ul", "A_ul"]].copy()
 
-        # Set the index
+        # TODO: store units in metadata
+        # wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1],
+        # B_ul[cm^3 s^-2 erg^-1], B_lu[cm^3 s^-2 erg^-1],
+        # A_ul[1/s].
+
         lines_prepared.set_index([
             "atomic_number", "ion_number",
             "level_number_lower", "level_number_upper"], inplace=True)
 
         return lines_prepared
 
+    @property
+    def collisions_prepared(self):
+        """
+        Prepare the DataFrame with electron collisions for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
+
+        collisions_columns = ['atomic_number', 'ion_number', 'level_number_upper',
+                              'level_number_lower', 'g_ratio', 'delta_e'] + \
+                              sorted([col for col in self.collisions.columns if re.match('^t\d+$', col)])
+
+        collisions_prepared = self.collisions.loc[:, collisions_columns].copy()
+
+        collisions_prepared.set_index([
+                    "atomic_number",
+                    "ion_number",
+                    "level_number_lower",
+                    "level_number_upper"],
+                    inplace=True)
+
+        return collisions_prepared
+
     def _create_macro_atom(self):
         """
-            Create a DataFrame containing *macro atom* data.
-            Returns
-            -------
-            macro_atom: pandas.DataFrame
-                DataFrame with:
-                    index: none;
-                    columns: atomic_number, ion_number, source_level_number,
-                             target_level_number, transition_line_id,
-                             transition_type, transition_probability.
-            Notes:
-                Refer to the docs:
-                https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
+        Create a DataFrame containing macro atom data.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Notes
+        -----
+        Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
         """
+
         # Exclude artificially created levels from levels
         levels = self.levels.loc[self.levels["level_id"]
                                  != -1].set_index("level_id")
@@ -529,7 +668,7 @@ class TARDISAtomData:
             f_ul, f_lu = row["f_ul"], row["f_lu"]
             e_lower, e_upper = row["energy_lower"], row["energy_upper"]
 
-            transition_probabilities_dict = dict()  # type : probability
+            transition_probabilities_dict = dict()
             transition_probabilities_dict[P_EMISSION_DOWN] = 2 * \
                 nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
             transition_probabilities_dict[P_INTERNAL_DOWN] = 2 * \
@@ -558,18 +697,15 @@ class TARDISAtomData:
     @property
     def macro_atom_prepared(self):
         """
-            Prepare the DataFrame with macro atom data for TARDIS
-            Returns
-            -------
-            macro_atom_prepared : pandas.DataFrame
-                DataFrame with the *macro atom data* with:
-                    index: none;
-                    columns: atomic_number, ion_number, source_level_number,
-                             destination_level_number, transition_line_id
-                             transition_type, transition_probability.
-            Notes:
-                Refer to the docs:
-                https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
+        Prepare the DataFrame with macro atom data for TARDIS
+        
+        Returns
+        -------
+        macro_atom_prepared : pandas.DataFrame
+        
+        Notes
+        -----
+        Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
         """
 
         macro_atom_prepared = self.macro_atom.loc[:, [
@@ -578,10 +714,6 @@ class TARDISAtomData:
             "transition_type", "transition_probability",
             "transition_line_id"]].copy()
 
-        # ToDo: choose between `target_level_number` and
-        # `destination_level_number` Rename `target_level_number` to
-        # `destination_level_number` used in TARDIS Personally, I think
-        # `target_level_number` is better so I use it in Carsus.
         macro_atom_prepared = macro_atom_prepared.rename(columns={
             "target_level_number": "destination_level_number"})
 
@@ -591,14 +723,11 @@ class TARDISAtomData:
 
     def _create_macro_atom_references(self):
         """
-            Create a DataFrame containing *macro atom reference* data.
-            Returns
-            -------
-            macro_atom_reference : pandas.DataFrame
-                DataFrame with:
-                index: no index;
-                and columns: atomic_number, ion_number, source_level_number,
-                count_down, count_up, count_total
+        Create a DataFrame containing macro atom reference data.
+    
+        Returns
+        -------
+        pandas.DataFrame
         """
         macro_atom_references = self.levels.rename(
             columns={"level_number": "source_level_number"}).\
@@ -620,7 +749,6 @@ class TARDISAtomData:
             macro_atom_references["count_down"] + \
             macro_atom_references["count_up"]
 
-        # Convert to int
         macro_atom_references["count_down"] = \
             macro_atom_references["count_down"].astype(np.int)
         macro_atom_references["count_up"] = \
@@ -633,14 +761,11 @@ class TARDISAtomData:
     @property
     def macro_atom_references_prepared(self):
         """
-            Prepare the DataFrame with macro atom references for TARDIS
-            Returns
-            -------
-            macro_atom_references_prepared : pandas.DataFrame
-                DataFrame with:
-                    index: none;
-                    columns: atomic_number, ion_number, source_level_number,
-                             count_down, count_up, count_total.
+        Prepare the DataFrame with macro atom references for TARDIS
+
+        Returns
+        -------
+        pandas.DataFrame
         """
         macro_atom_references_prepared = self.macro_atom_references.loc[:, [
             "atomic_number", "ion_number", "source_level_number", "count_down",
@@ -653,7 +778,9 @@ class TARDISAtomData:
         return macro_atom_references_prepared
 
     def to_hdf(self, fname):
-        """Dump the `base` attribute into an HDF5 file
+        """
+        Dump the `base` attribute into an HDF5 file
+        
         Parameters
         ----------
         fname : path
@@ -666,7 +793,10 @@ class TARDISAtomData:
             f.put('/zeta_data', self.zeta_data.base)
             f.put('/levels', self.levels_prepared)
             f.put('/lines', self.lines_prepared)
+            f.put('/collision_data', self.collisions_prepared)
             f.put('/macro_atom_data', self.macro_atom_prepared)
+            f.put('collision_data_temperatures', 
+                   pd.Series(self.collisions_param['temperatures']))
             f.put('/macro_atom_references',
                   self.macro_atom_references_prepared)
 
