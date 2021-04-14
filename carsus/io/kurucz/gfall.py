@@ -14,8 +14,8 @@ from carsus.io.base import IngesterError
 from carsus.util import convert_atomic_number2symbol, parse_selected_species
 
 
-# [nm], wavelengths above this value are given in air
-GFALL_AIR_THRESHOLD = 200
+GFALL_URL = 'https://media.githubusercontent.com/media/tardis-sn/carsus-db/master/gfall/gfall_latest.dat'
+GFALL_AIR_THRESHOLD = 200  # [nm], wavelengths above this value are given in air
 
 logger = logging.getLogger(__name__)
 
@@ -53,21 +53,25 @@ class GFALLReader(object):
     default_unique_level_identifier = ['energy', 'j']
 
     def __init__(self, ions=None, 
-                 fname='http://kurucz.harvard.edu/linelists/gfall/gfall.dat',
-                 priority=10, unique_level_identifier=None):
+                 fname=GFALL_URL,
+                 unique_level_identifier=None,
+                 priority=10
+                ):
         """
-
         Parameters
         ----------
         fname: str
-            path to the gfall file (http or local file)
+            Path to the gfall file (http or local file).
 
         ions: str, optional
-            ions to extract, by default None
+            Ions to extract, by default None.
 
         unique_level_identifier: list
-            list of attributes to identify unique levels from. Will always use
+            List of attributes to identify unique levels from. Will always use
             atomic_number and ion charge in addition.
+
+        priority: int, optional
+            Priority of the current data source.
         """
         self.fname = fname
         self.priority = priority
@@ -136,7 +140,7 @@ class GFALLReader(object):
         if fname is None:
             fname = self.fname
 
-        logger.info(f'Parsing GFALL: {fname}')
+        logger.info(f'Parsing GFALL from: {fname}')
 
         # FORMAT(F11.4,F7.3,F6.2,F12.3,F5.2,1X,A10,F12.3,F5.2,1X,A10,
         # 3F6.2,A4,2I2,I3,F6.3,I3,F6.3,2I5,1X,A1,A1,1X,A1,A1,i1,A3,2I5,I6)
@@ -293,14 +297,14 @@ class GFALLReader(object):
         
         # TODO: move to a staticmethod
         if self.ions is not None:
-            df_list = []
+            lvl_list = []
             for ion in self.ions:
                 mask = (levels['atomic_number'] == ion[0]) & (
-                    levels['ion_charge'] == ion[1])
-                df = levels[mask]
-                df_list.append(df)
+                            levels['ion_charge'] == ion[1])
+                lvl = levels[mask]
+                lvl_list.append(lvl)
 
-            levels = pd.concat(df_list, sort=True)
+            levels = pd.concat(lvl_list, sort=True)
 
         levels.set_index(["atomic_number", "ion_charge",
                           "level_index"], inplace=True)
@@ -351,7 +355,6 @@ class GFALLReader(object):
         lines = lines.drop(["loggf"], 1)
 
         # Assigning levels to lines
-
         levels_unique_idxed = self.levels.reset_index().set_index(
             ['atomic_number', 'ion_charge'] + self.unique_level_identifier)
 
@@ -366,17 +369,19 @@ class GFALLReader(object):
         lines_upper_idx['level_index_upper'] = levels_unique_idxed['level_index']
         lines = lines_upper_idx.reset_index()
 
-        #TODO: move to staticmethod
+        # TODO: move to a staticmethod
         if self.ions is not None:
-            df_list = []
+            lns_list = []
             for ion in self.ions:
                 mask = (lines['atomic_number'] == ion[0]) & (
-                    lines['ion_charge'] == ion[1])
-                df = lines[mask]
-                df_list.append(df)
+                            lines['ion_charge'] == ion[1])
+                lns = lines[mask]
+                lns_list.append(lns)
 
-            lines = pd.concat(df_list, sort=True)
+            lines = pd.concat(lns_list, sort=True)
 
+        lines['level_index_lower'] = lines['level_index_lower'].astype('int')
+        lines['level_index_upper'] = lines['level_index_upper'].astype('int')
         lines.set_index(['atomic_number', 'ion_charge',
                          'level_index_lower', 'level_index_upper'], inplace=True)
 

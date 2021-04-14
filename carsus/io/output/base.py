@@ -10,15 +10,14 @@ import astropy.units as u
 import astropy.constants as const
 from scipy import interpolate
 from datetime import datetime
-from carsus.util import (convert_wavelength_air2vacuum,
+from carsus.util import (convert_atomic_number2symbol,
+                         convert_wavelength_air2vacuum,
                          serialize_pandas_object,
                          hash_pandas_object)
 from carsus.model import MEDIUM_VACUUM, MEDIUM_AIR
 
-# TODO: pass GFALL_AIR_THRESHOLD as parameter
-# [nm] wavelengths above this value are given in air
-GFALL_AIR_THRESHOLD = 200
-
+# Wavelengths above this value are given in air
+GFALL_AIR_THRESHOLD = 2000 * u.AA
 P_EMISSION_DOWN = -1
 P_INTERNAL_DOWN = 0
 P_INTERNAL_UP = 1
@@ -30,16 +29,18 @@ class TARDISAtomData:
     """
     Attributes
     ----------
+
+    levels : pandas.DataFrame
+    lines : pandas.DataFrame
+    collisions : pandas.DataFrame
+    macro_atom : pandas.DataFrame
+    macro_atom_references : pandas.DataFrame
     levels_prepared : pandas.DataFrame
     lines_prepared : pandas.DataFrame
     collisions_prepared: pandas.DataFrame
     macro_atom_prepared : pandas.DataFrame
     macro_atom_references_prepared : pandas.DataFrame
 
-    Methods
-    -------
-    to_hdf(fname)
-        Dump all attributes into an HDF5 file
     """
 
     def __init__(self,
@@ -48,89 +49,93 @@ class TARDISAtomData:
                  gfall_reader,
                  zeta_data,
                  chianti_reader=None,
-                 lines_loggf_threshold=-3,
-                 levels_metastable_loggf_threshold=-3,
-                 collisions_temperatures=None):
-
-        # TODO: pass these params to the function as `gfall_params`
-        self.levels_lines_param = {
-            "levels_metastable_loggf_threshold":
-            levels_metastable_loggf_threshold,
-            "lines_loggf_threshold": lines_loggf_threshold
-        }
-
-        if collisions_temperatures is None:
-            collisions_temperatures = np.arange(2000, 50000, 2000)
-        else:
-            collisions_temperatures = np.array(collisions_temperatures)
-
-        self.collisions_param = {
-            "temperatures": collisions_temperatures
-        }
+                 cmfgen_reader=None,
+                 levels_lines_param={"levels_metastable_loggf_threshold": -3,
+                                     "lines_loggf_threshold": -3},
+                 collisions_param={"temperatures": np.arange(2000, 50000, 2000)}
+                ):
 
         self.atomic_weights = atomic_weights
         self.ionization_energies = ionization_energies
         self.ground_levels = ionization_energies.get_ground_levels()
-
-        # TODO: make this piece of code more readable 
-        gfall_ions = gfall_reader.levels.index.tolist()
-       
-        # Remove last element from tuple (MultiIndex has 3 elements)
-        gfall_ions = [x[:-1] for x in gfall_ions]
-
-        # Keep unique tuples, list and sort them
-        gfall_ions = sorted(list(set(gfall_ions)))
         self.gfall_reader = gfall_reader
-        self.gfall_ions = gfall_ions
-
-        # TODO: priorities should not be managed by the `init` method.
+        self.zeta_data = zeta_data
         self.chianti_reader = chianti_reader
-        if chianti_reader is not None:
-            chianti_lvls = chianti_reader.levels.reset_index()
-            chianti_lvls = chianti_lvls.set_index(
-                ['atomic_number', 'ion_charge', 'priority'])
-
-            mask = chianti_lvls.index.get_level_values(
-                'priority') > self.gfall_reader.priority
-
-            # TODO: make this piece of code more readable
-            chianti_lvls = chianti_lvls[mask]
-            chianti_ions = chianti_lvls.index.tolist()
-            chianti_ions = [x[:-1] for x in chianti_ions]
-            chianti_ions = sorted(list(set(chianti_ions)))
-            self.chianti_ions = chianti_ions
-
-        else:
-            self.chianti_ions = []
+        self.cmfgen_reader = cmfgen_reader
+        self.levels_lines_param = levels_lines_param
+        self.collisions_param = collisions_param
 
         self.levels_all = self._get_all_levels_data()
         self.lines_all = self._get_all_lines_data()
-        self._create_levels_lines(**self.levels_lines_param)
-        self._create_macro_atom()
-        self._create_macro_atom_references()
+        self.levels, self.lines = self.create_levels_lines(**levels_lines_param)
+        self.create_macro_atom()
+        self.create_macro_atom_references()
 
-        if not self.chianti_reader.collisions.empty:
-            self.collisions = self._create_collisions()
+        if (chianti_reader is not None) and (not chianti_reader.collisions.empty):
+            self.collisions = self.create_collisions(**collisions_param)
 
-        self.zeta_data = zeta_data
+        logger.info('Finished.')
 
     @staticmethod
-    def get_lvl_index2id(df, levels_all, ion):
-        df = df.reset_index()
+    def solve_priorities(levels):
+        """ 
+        Returns a list of unique species per data source. 
+        
+
+        Notes
+        -----
+
+        The `ds_id` field is the data source identifier.
+
+        1 : NIST
+        2 : GFALL
+        3 : Knox Long's Zeta
+        4 : Chianti Database
+        5 : CMFGEN
+
+        """
+        levels = levels.set_index(['atomic_number', 'ion_number'])
+        levels = levels.sort_index()  # To supress warnings
+
+        lvl_list = []
+        for ion in levels.index.unique():
+            max_priority = levels.loc[ion, 'priority'].max()
+            lvl = levels.loc[ion][ levels.loc[ion, 'priority'] == max_priority ]
+            lvl_list.append(lvl)
+
+        levels_uq = pd.concat(lvl_list, sort=True)
+        gfall_ions = levels_uq[ levels_uq['ds_id'] == 2 ].index.unique()
+        chianti_ions = levels_uq[ levels_uq['ds_id'] == 4 ].index.unique()
+        cmfgen_ions = levels_uq[ levels_uq['ds_id'] == 5 ].index.unique()
+
+        assert set(gfall_ions).intersection(set(chianti_ions))\
+                                .intersection(set(cmfgen_ions)) == set([])
+
+        return gfall_ions, chianti_ions, cmfgen_ions
+
+    @staticmethod
+    def get_lvl_index2id(df, levels_all):
+        """
+        Matches level indexes with level IDs for a given DataFrame. 
+        
+        """
+        # TODO: re-write this method without a for loop
+        ion = df.index.unique()
         lvl_index2id = levels_all.set_index(
                             ['atomic_number', 'ion_number']).loc[ion]
         lvl_index2id = lvl_index2id.reset_index()
-        lvl_index2id = lvl_index2id[['level_id']]
 
         lower_level_id = []
         upper_level_id = []
-        for i, row in df.iterrows():
+        
+        df = df.reset_index()
+        for row in df.itertuples():
 
-            llid = int(row['level_index_lower'])
-            ulid = int(row['level_index_upper'])
+            llid = row.level_index_lower
+            ulid = row.level_index_upper
 
-            upper = int(lvl_index2id.loc[ulid])
-            lower = int(lvl_index2id.loc[llid])
+            upper = lvl_index2id.at[ulid, 'level_id']
+            lower = lvl_index2id.at[llid, 'level_id']
 
             lower_level_id.append(lower)
             upper_level_id.append(upper)
@@ -142,9 +147,11 @@ class TARDISAtomData:
 
     @staticmethod
     def _create_artificial_fully_ionized(levels):
-        """ Create artificial levels for fully ionized ions. """
+        """
+        Returns a DataFrame with fully ionized levels.
 
-        fully_ionized_levels = list()
+        """
+        fully_ionized_levels = []
 
         for atomic_number, _ in levels.groupby("atomic_number"):
             fully_ionized_levels.append(
@@ -154,6 +161,7 @@ class TARDISAtomData:
         levels_columns = ["level_id", "atomic_number",
                           "ion_number", "level_number",
                           "energy", "g", "metastable"]
+
         fully_ionized_levels_dtypes = [
             (key, levels.dtypes[key]) for key in levels_columns]
 
@@ -165,6 +173,21 @@ class TARDISAtomData:
     @staticmethod
     def _create_metastable_flags(levels, lines,
                                  levels_metastable_loggf_threshold=-3):
+        """
+        Returns metastable flag column for the `levels` DataFrame.
+
+        Parameters
+        ----------
+        levels : pandas.DataFrame
+           Energy levels dataframe.
+
+        lines : pandas.DataFrame
+           Transition lines dataframe.
+
+        levels_metastable_loggf_threshold : int
+           loggf threshold value.
+
+        """
         # Filter lines on the loggf threshold value
         metastable_lines = lines.loc[lines["loggf"]
                                      > levels_metastable_loggf_threshold]
@@ -185,20 +208,33 @@ class TARDISAtomData:
 
     @staticmethod
     def _create_einstein_coeff(lines):
+        """
+        Create Einstein coefficients columns for the `lines` DataFrame.
+
+        Parameters
+        ----------
+        lines : pandas.DataFrame
+           Transition lines dataframe.
+
+        """
         einstein_coeff = (4 * np.pi ** 2 * const.e.gauss.value **
                           2) / (const.m_e.cgs.value * const.c.cgs.value)
+
         lines['B_lu'] = einstein_coeff * lines['f_lu'] / \
             (const.h.cgs.value * lines['nu'])
+
         lines['B_ul'] = einstein_coeff * lines['f_ul'] / \
             (const.h.cgs.value * lines['nu'])
+
         lines['A_ul'] = 2 * einstein_coeff * lines['nu'] ** 2 / \
             const.c.cgs.value ** 2 * lines['f_ul']
 
     @staticmethod
-    def calculate_collisional_strength(row, temperatures, 
-                                       kb_ev, c_ul_temperature_cols):
+    def _calculate_collisional_strength(row, temperatures, 
+                                        kb_ev, c_ul_temperature_cols):
         """
         Function to calculation upsilon from Burgess & Tully 1992 (TType 1 - 4; Eq. 23 - 38).
+
         """
 
         c = row["cups"]
@@ -240,188 +276,210 @@ class TARDISAtomData:
 
         #### 1992A&A...254..436B Equation 20 & 22 #####
         collisional_ul_factor = 8.63e-6 * upsilon / (g_u * temperatures**.5)
-
         return pd.Series(data=collisional_ul_factor, index=c_ul_temperature_cols)
 
     def _get_all_levels_data(self):
-        """ Returns the same output than `AtomData._get_all_levels_data()` 
-        with `reset_index` method applied.
+        """ 
+        Returns the same output than `AtomData._get_all_levels_data()`.
+
+        The resulting DataFrame contains stacked energy levels from GFALL,
+        Chianti (optional), CMFGEN (optional) and NIST ground levels. Only
+        one source of levels is kept based on priorities.
+
         """
 
-        gf_levels = self.gfall_reader.levels.reset_index()
-        gf_levels['source'] = 'gfall'
+        logger.info('Ingesting energy levels.')
+        gf_levels = self.gfall_reader.levels
+        gf_levels['ds_id'] = 2
 
-        if len(self.chianti_ions) > 0:
-            logger.info('Ingesting levels from Chianti.')
-            ch_levels = self.chianti_reader.levels.reset_index()
-            ch_levels['source'] = 'chianti'
+        if self.chianti_reader is not None:
+            ch_levels = self.chianti_reader.levels
+            ch_levels['ds_id'] = 4
         else:
             ch_levels = pd.DataFrame(columns=gf_levels.columns)
 
-        levels = pd.concat([gf_levels, ch_levels], sort=True)
+        if self.cmfgen_reader is not None:
+            cf_levels = self.cmfgen_reader.levels
+            cf_levels['ds_id'] = 5
+        else:
+            cf_levels = pd.DataFrame(columns=gf_levels.columns)
+
+        levels = pd.concat([gf_levels, ch_levels, cf_levels], sort=True)
         levels['g'] = 2*levels['j'] + 1
         levels['g'] = levels['g'].astype(np.int)
         levels = levels.drop(columns=['j', 'label', 'method'])
-        levels = levels.reset_index(drop=True)
+        levels = levels.reset_index()
         levels = levels.rename(columns={'ion_charge': 'ion_number'})
-        levels = levels[['atomic_number',
-                         'ion_number', 'g', 'energy', 'source']]
+        levels = levels[['atomic_number', 'ion_number', 'g', 'energy', 
+                         'ds_id', 'priority']]
+        levels['energy'] = u.Quantity(levels['energy'], u.Unit('cm-1')).to(
+            u.eV, equivalencies=u.spectral()).value
+ 
+        # Solve priorities and set attributes for later use.
+        self.gfall_ions, self.chianti_ions, self.cmfgen_ions = self.solve_priorities(levels)
 
-        levels['energy'] = levels['energy'].apply(lambda x: x*u.Unit('cm-1'))
-        levels['energy'] = levels['energy'].apply(
-            lambda x: x.to(u.eV, equivalencies=u.spectral()))
-        levels['energy'] = levels['energy'].apply(lambda x: x.value)
+        to_string = lambda x: [f"{convert_atomic_number2symbol(ion[0])} {ion[1]}" \
+                                    for ion in sorted(x)]
 
+        gfall_str = ', '.join(to_string(self.gfall_ions))
+        logger.info(f'GFALL selected species: {gfall_str}.')
+        
+        if len(self.chianti_ions) > 0:
+            chianti_str = ', '.join(to_string(self.chianti_ions))
+            logger.info(f'Chianti selected species: {chianti_str}.')
+        
+        if len(self.cmfgen_ions) > 0: 
+            cmfgen_str = ', '.join(to_string(self.cmfgen_ions))
+            logger.info(f'CMFGEN selected species: {cmfgen_str}.')
+
+        # Concatenate ground levels from NIST
         ground_levels = self.ground_levels
-        ground_levels.rename(
-            columns={'ion_charge': 'ion_number'}, inplace=True)
-        ground_levels['source'] = 'nist'
+        ground_levels = ground_levels.rename(columns={'ion_charge': 'ion_number'})
+        ground_levels['ds_id'] = 1
 
         levels = pd.concat([ground_levels, levels], sort=True)
         levels['level_id'] = range(1, len(levels)+1)
         levels = levels.set_index('level_id')
 
-        # Deliberately keep the "duplicated" Chianti levels.
-        # These levels are not strictly duplicated: same energy
-        # for different configurations. 
-        # 
-        # e.g. ChiantiIonReader('h_1')
-        #
-        # In fact, the following code should only remove the du-
-        # plicated ground levels. Other duplicated levels should
-        # be removed at the reader stage.
-        #
-        # TODO: a more clear way to get the same result could be: 
-        # "keep only zero energy levels from NIST source".
+        # The following code should only remove the duplicated
+        # ground levels. Other duplicated levels should be re-
+        # moved at the reader stage.
 
-        mask = (levels['source'] != 'chianti') & (
-            levels[['atomic_number', 'ion_number',
-                    'energy', 'g']].duplicated(keep='last'))	
+        mask = (levels['energy'] == 0.) & (levels[['atomic_number',
+                    'ion_number', 'energy', 'g']].duplicated(keep='last'))
         levels = levels[~mask]
 
-        # Keep higher priority levels over GFALL: if levels with
-        # different source than 'gfall' made to this point should
-        # be kept.
+        # Filter levels by priority
         for ion in self.chianti_ions:
-            mask = (levels['source'] == 'gfall') & (
-                levels['atomic_number'] == ion[0]) & (
-                    levels['ion_number'] == ion[1])
-            levels.drop(levels[mask].index, inplace=True)
+            mask = (levels['ds_id'] != 4) & (
+                        levels['atomic_number'] == ion[0]) & (
+                            levels['ion_number'] == ion[1])
+            levels = levels.drop(levels[mask].index)
 
-        levels = levels[['atomic_number',
-                         'ion_number', 'g', 'energy', 'source']]
+        for ion in self.cmfgen_ions:
+            mask = (levels['ds_id'] != 5) & (
+                        levels['atomic_number'] == ion[0]) & (
+                            levels['ion_number'] == ion[1])
+            levels = levels.drop(levels[mask].index)
 
+        levels = levels[['atomic_number', 'ion_number', 'g', 'energy', 
+                         'ds_id']]
         levels = levels.reset_index()
 
         return levels
 
 
     def _get_all_lines_data(self):
-        """ Returns the same output than `AtomData._get_all_lines_data()` """
+        """
+        Returns the same output than `AtomData._get_all_lines_data()`.
+        
+        The resulting DataFrame contains stacked transition lines for 
+        GFALL, Chianti (optional) and CMFGEN (optional).
 
-        gf = self.gfall_reader
-        ch = self.chianti_reader
+        """
 
-        start = 1
-        gf_list = []
-        logger.info('Ingesting lines from GFALL.')
-        for ion in self.gfall_ions:
+        logger.info('Ingesting transition lines.')
+        gf_lines = self.gfall_reader.lines
+        gf_lines['ds_id'] = 2
 
-            try:
-                df = gf.lines.loc[ion]
+        if self.chianti_reader is not None:
+            ch_lines = self.chianti_reader.lines
+            ch_lines['ds_id'] = 4
+        else:
+            ch_lines = pd.DataFrame(columns=gf_lines.columns)
 
-                # To match `line_id` field with the old API we keep
-                # track of how many GFALL lines we are skipping.
-                if ion in self.chianti_ions:
-                    df['line_id'] = range(start, len(df) + start)
-                    start += len(df)
-                    continue
+        if self.cmfgen_reader is not None:
+            cf_lines = self.cmfgen_reader.lines
+            cf_lines['ds_id'] = 5
+        else:
+            cf_lines = pd.DataFrame(columns=gf_lines.columns)
 
-                else:
-                    df['line_id'] = range(start, len(df) + start)
-                    start += len(df)
+        lines = pd.concat([gf_lines, ch_lines, cf_lines], sort=True)
+        lines = lines.reset_index()
+        lines = lines.rename(columns={'ion_charge': 'ion_number'})
+        lines['line_id'] = range(1, len(lines)+1)
 
-            except (KeyError, TypeError):
-                continue
-
-            df = self.get_lvl_index2id(df, self.levels_all, ion)
-            df['source'] = 'gfall'
-            gf_list.append(df)
-
-        ch_list = []
-        logger.info('Ingesting lines from Chianti.')
+        # Filter lines by priority
         for ion in self.chianti_ions:
+            mask = (lines['ds_id'] != 4) & (
+                        lines['atomic_number'] == ion[0]) & (
+                            lines['ion_number'] == ion[1])
+            lines = lines.drop(lines[mask].index)
 
-            df = ch.lines.loc[ion]
-            df['line_id'] = range(start, len(df) + start)
-            start = len(df) + start
+        for ion in self.cmfgen_ions:
+            mask = (lines['ds_id'] != 5) & (
+                        lines['atomic_number'] == ion[0]) & (
+                            lines['ion_number'] == ion[1])
+            lines = lines.drop(lines[mask].index)
 
-            df = self.get_lvl_index2id(df, self.levels_all, ion)
-            df['source'] = 'chianti'
-            ch_list.append(df)
+        lines = lines.set_index(['atomic_number', 'ion_number'])
+        lines = lines.sort_index()  # To supress warnings
+        ions = set(self.gfall_ions).union(set(self.chianti_ions))\
+                    .union((set(self.cmfgen_ions)))
 
-        df_list = gf_list + ch_list
-        lines = pd.concat(df_list, sort=True)
-        lines['loggf'] = lines['gf'].apply(np.log10)
+        logger.info('Matching lines and levels.')
+        lns_list = [ self.get_lvl_index2id(lines.loc[ion], self.levels_all)
+                        for ion in ions]
+        lines = pd.concat(lns_list, sort=True)
+        lines = lines.set_index('line_id').sort_index()
 
-        lines.set_index('line_id', inplace=True)
-        lines.drop(columns=['energy_upper', 'j_upper', 'energy_lower',
+        lines['loggf'] = np.log10(lines['gf'])
+        lines = lines.drop(columns=['energy_upper', 'j_upper', 'energy_lower',
                             'j_lower', 'level_index_lower',
-                            'level_index_upper'], inplace=True)
+                            'level_index_upper'])
+
+        lines['wavelength'] = u.Quantity(lines['wavelength'], u.nm).to(
+            'angstrom').value
 
         lines.loc[lines['wavelength'] <=
                   GFALL_AIR_THRESHOLD, 'medium'] = MEDIUM_VACUUM
+
         lines.loc[lines['wavelength'] >
                   GFALL_AIR_THRESHOLD, 'medium'] = MEDIUM_AIR
 
+        # Chianti wavelengths are already given in vacuum
+        gfall_mask = lines['ds_id'] == 2
         air_mask = lines['medium'] == MEDIUM_AIR
-        gfall_mask = lines['source'] == 'gfall'
-        chianti_mask = lines['source'] == 'chianti'
-
-        lines.loc[gfall_mask, 'wavelength'] = lines.loc[
-            gfall_mask, 'wavelength'].apply(lambda x: x*u.nm)
-        lines.loc[chianti_mask, 'wavelength'] = lines.loc[
-            chianti_mask, 'wavelength'].apply(lambda x: x*u.angstrom)
-        lines['wavelength'] = lines['wavelength'].apply(
-            lambda x: x.to('angstrom'))
-        lines['wavelength'] = lines['wavelength'].apply(lambda x: x.value)
-
-        # Why not for Chianti?
         lines.loc[air_mask & gfall_mask,
                   'wavelength'] = convert_wavelength_air2vacuum(
             lines.loc[air_mask, 'wavelength'])
 
-        lines.drop(columns=['medium'], inplace=True)
         lines = lines[['lower_level_id', 'upper_level_id',
-                       'wavelength', 'gf', 'loggf', 'source']]
+                       'wavelength', 'gf', 'loggf', 'ds_id']]
 
         return lines
 
-    def _create_levels_lines(self, lines_loggf_threshold=-3,
-                             levels_metastable_loggf_threshold=-3):
-        """ Returns almost the same output than`AtomData.create_levels_lines` method """
+    def create_levels_lines(self, lines_loggf_threshold=-3,
+                            levels_metastable_loggf_threshold=-3):
+        """
+        Returns the same output than `AtomData.create_levels_lines` method.
 
-        levels_all = self.levels_all
-        lines_all = self.lines_all
+        Generates the definitive `lines` and `levels` DataFrames by adding
+        new columns and making some calculations.
+        
+        """
+
         ionization_energies = self.ionization_energies.base.reset_index()
         ionization_energies['ion_number'] -= 1
 
         # Culling autoionization levels
-        levels_w_ionization_energies = pd.merge(levels_all,
+        levels_w_ionization_energies = pd.merge(self.levels_all,
                                                 ionization_energies,
                                                 how='left',
                                                 on=["atomic_number",
                                                     "ion_number"])
+
         mask = levels_w_ionization_energies["energy"] < \
             levels_w_ionization_energies["ionization_energy"]
+
         levels = levels_w_ionization_energies[mask].copy()
         levels = levels.set_index('level_id').sort_values(
-            by=['atomic_number', 'ion_number'])
+                    by=['atomic_number', 'ion_number'])
         levels = levels.drop(columns='ionization_energy')
 
         # Clean lines
-        lines = lines_all.join(pd.DataFrame(index=levels.index),
-                               on="lower_level_id", how="inner").\
+        lines = self.lines_all.join(pd.DataFrame(index=levels.index),
+                                    on="lower_level_id", how="inner").\
             join(pd.DataFrame(index=levels.index),
                  on="upper_level_id", how="inner")
 
@@ -432,19 +490,21 @@ class TARDISAtomData:
 
         # Create the metastable flags for levels
         levels["metastable"] = \
-            self._create_metastable_flags(levels, lines_all,
+            self._create_metastable_flags(levels, self.lines_all,
                                           levels_metastable_loggf_threshold)
 
         # Create levels numbers
         levels = levels.sort_values(
             ["atomic_number", "ion_number", "energy", "g"])
+
         levels["level_number"] = levels.groupby(['atomic_number',
                                                  'ion_number'])['energy']. \
             transform(lambda x: np.arange(len(x))).values
+
         levels["level_number"] = levels["level_number"].astype(np.int)
 
-        levels = levels[['atomic_number', 'energy', 'g', 'ion_number',
-                         'level_number', 'metastable']]
+        levels = levels[['atomic_number', 'ion_number', 'g', 'energy',
+                         'metastable', 'level_number', 'ds_id']]
 
         # Join atomic_number, ion_number, level_number_lower,
         # level_number_upper on lines
@@ -453,11 +513,13 @@ class TARDISAtomData:
                 "level_number": "level_number_lower",
                 "g": "g_l"}
         ).loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l"]]
+
         upper_levels = levels.rename(
             columns={
                 "level_number": "level_number_upper",
                 "g": "g_u"}
         ).loc[:, ["level_number_upper", "g_u"]]
+
         lines = lines.join(lower_levels, on="lower_level_id").join(
             upper_levels, on="upper_level_id")
 
@@ -486,42 +548,55 @@ class TARDISAtomData:
         levels = levels.sort_values(
             ["atomic_number", "ion_number", "level_number"])
 
-        self.lines = lines
-        self.levels = levels
+        return levels, lines
 
-    def _create_collisions(self):
-        # Exclude artificially created levels from levels
-        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
+    def create_collisions(self, temperatures=np.arange(2000, 50000, 2000)):
+        """
+        Returns the same output than `AtomData.create_collisions` method.
 
-        ch_list = []
-        ch = self.chianti_reader
+        Generates the definitive `collisions` DataFrame by adding new columns
+        and making some calculations.
 
-        logger.info('Ingesting collisions from Chianti')
-        for ion in self.chianti_ions:
+        """
 
-            df = ch.collisions.loc[ion]
-            df = self.get_lvl_index2id(df, self.levels_all, ion)
-            ch_list.append(df)
+        logger.info('Ingesting collisional strengths.')
+        ch_collisions = self.chianti_reader.collisions
+        ch_collisions['ds_id'] = 4
 
-        collisions = pd.concat(ch_list, sort=True)
-        collisions['source'] = 'chianti'
+        # Not really needed because we have only one source of collisions
+        collisions = pd.concat([ch_collisions], sort=True)
+        ions = self.chianti_ions
 
-        # Keep this value to compare against SQL
-        collisions['ds_id'] = 4
+        collisions = collisions.reset_index()
+        collisions = collisions.rename(columns={'ion_charge': 'ion_number'})
+        collisions = collisions.set_index(['atomic_number', 'ion_number'])
+
+        logger.info('Matching collisions and levels.')
+        col_list = [ self.get_lvl_index2id(collisions.loc[ion], self.levels_all)
+                        for ion in ions]
+        collisions = pd.concat(col_list, sort=True)
+        collisions = collisions.sort_values(by=['lower_level_id', 'upper_level_id'])
 
         # `e_col_id` number starts after the last line id
         start = self.lines_all.index[-1] + 1
         collisions['e_col_id'] = range(start, start + len(collisions))
-        collisions = collisions.reset_index()
+
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels["level_id"] != -1].set_index("level_id")
 
         # Join atomic_number, ion_number, level_number_lower, level_number_upper
-        lower_levels = levels.rename(columns={"level_number": "level_number_lower", "g": "g_l", "energy": "energy_lower"}). \
-                              loc[:, ["atomic_number", "ion_number", "level_number_lower", "g_l", "energy_lower"]]
-        upper_levels = levels.rename(columns={"level_number": "level_number_upper", "g": "g_u", "energy": "energy_upper"}). \
+        collisions = collisions.set_index(['atomic_number', 'ion_number'])
+        lower_levels = levels.rename(columns={"level_number": "level_number_lower", 
+                                              "g": "g_l", "energy": "energy_lower"}). \
+                              loc[:, ["atomic_number", "ion_number", "level_number_lower",
+                                      "g_l", "energy_lower"]]
+
+        upper_levels = levels.rename(columns={"level_number": "level_number_upper",
+                                              "g": "g_u", "energy": "energy_upper"}). \
                               loc[:, ["level_number_upper", "g_u", "energy_upper"]]
 
         collisions = collisions.join(lower_levels, on="lower_level_id").join(
-                                            upper_levels, on="upper_level_id")
+                                     upper_levels, on="upper_level_id")
 
         # Calculate delta_e
         kb_ev = const.k_B.cgs.to('eV / K').value
@@ -530,14 +605,12 @@ class TARDISAtomData:
         # Calculate g_ratio
         collisions["g_ratio"] = collisions["g_l"] / collisions["g_u"]
 
-        temperatures = self.collisions_param['temperatures']
-
         # Derive columns for collisional strengths
         c_ul_temperature_cols = ['t{:06d}'.format(t) for t in temperatures]
 
-        collisions = collisions.rename(columns={'ion_charge': 'ion_number',
-                                                'temperatures': 'btemp',
+        collisions = collisions.rename(columns={'temperatures': 'btemp',
                                                 'collision_strengths': 'bscups'})
+
         collisions = collisions[['e_col_id', 'lower_level_id',
                                  'upper_level_id', 'ds_id',
                                  'btemp', 'bscups', 'ttype', 'cups',
@@ -545,88 +618,18 @@ class TARDISAtomData:
                                  'level_number_lower', 'g_l',
                                  'energy_lower', 'level_number_upper', 
                                  'g_u', 'energy_upper', 'delta_e', 
-                                    'g_ratio']]
+                                 'g_ratio']]
 
-        collisional_ul_factors = collisions.apply(self.calculate_collisional_strength, 
+        collisional_ul_factors = collisions.apply(self._calculate_collisional_strength, 
                                                   axis=1, args=(temperatures, kb_ev, 
                                                                 c_ul_temperature_cols))
 
-        collisions = collisions.join(collisional_ul_factors)
+        collisions = pd.concat([collisions, collisional_ul_factors], axis=1)
         collisions = collisions.set_index('e_col_id')
 
         return collisions
 
-    @property
-    def levels_prepared(self):
-        """
-        Prepare the DataFrame with levels for TARDIS.
-
-        Returns
-        -------
-        pandas.DataFrame
-        """
-
-        levels_prepared = self.levels.loc[:, [
-            "atomic_number", "ion_number", "level_number",
-            "energy", "g", "metastable"]].copy()
-
-        levels_prepared.set_index(
-            ["atomic_number", "ion_number", "level_number"], inplace=True)
-
-        return levels_prepared
-
-    @property
-    def lines_prepared(self):
-        """
-        Prepare the DataFrame with lines for TARDIS.
-
-        Returns
-        -------
-        pandas.DataFrame
-        """
-
-        lines_prepared = self.lines.loc[:, [
-            "line_id", "wavelength", "atomic_number", "ion_number",
-            "f_ul", "f_lu", "level_number_lower", "level_number_upper",
-            "nu", "B_lu", "B_ul", "A_ul"]].copy()
-
-        # TODO: store units in metadata
-        # wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1],
-        # B_ul[cm^3 s^-2 erg^-1], B_lu[cm^3 s^-2 erg^-1],
-        # A_ul[1/s].
-
-        lines_prepared.set_index([
-            "atomic_number", "ion_number",
-            "level_number_lower", "level_number_upper"], inplace=True)
-
-        return lines_prepared
-
-    @property
-    def collisions_prepared(self):
-        """
-        Prepare the DataFrame with electron collisions for TARDIS.
-
-        Returns
-        -------
-        pandas.DataFrame
-        """
-
-        collisions_columns = ['atomic_number', 'ion_number', 'level_number_upper',
-                              'level_number_lower', 'g_ratio', 'delta_e'] + \
-                              sorted([col for col in self.collisions.columns if re.match('^t\d+$', col)])
-
-        collisions_prepared = self.collisions.loc[:, collisions_columns].copy()
-
-        collisions_prepared.set_index([
-                    "atomic_number",
-                    "ion_number",
-                    "level_number_lower",
-                    "level_number_upper"],
-                    inplace=True)
-
-        return collisions_prepared
-
-    def _create_macro_atom(self):
+    def create_macro_atom(self):
         """
         Create a DataFrame containing macro atom data.
 
@@ -637,14 +640,16 @@ class TARDISAtomData:
         Notes
         -----
         Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
-        """
 
+        """
+        
         # Exclude artificially created levels from levels
         levels = self.levels.loc[self.levels["level_id"]
                                  != -1].set_index("level_id")
 
         lvl_energy_lower = levels.rename(
             columns={"energy": "energy_lower"}).loc[:, ["energy_lower"]]
+
         lvl_energy_upper = levels.rename(
             columns={"energy": "energy_upper"}).loc[:, ["energy_upper"]]
 
@@ -669,19 +674,24 @@ class TARDISAtomData:
             e_lower, e_upper = row["energy_lower"], row["energy_upper"]
 
             transition_probabilities_dict = dict()
+            
             transition_probabilities_dict[P_EMISSION_DOWN] = 2 * \
                 nu**2 * f_ul / const.c.cgs.value**2 * (e_upper - e_lower)
+
             transition_probabilities_dict[P_INTERNAL_DOWN] = 2 * \
                 nu**2 * f_ul / const.c.cgs.value**2 * e_lower
+
             transition_probabilities_dict[P_INTERNAL_UP] = f_lu * \
                 e_lower / (const.h.cgs.value * nu)
 
             macro_atom.append((atomic_number, ion_number, level_number_upper,
                                level_number_lower, line_id, P_EMISSION_DOWN,
                                transition_probabilities_dict[P_EMISSION_DOWN]))
+
             macro_atom.append((atomic_number, ion_number, level_number_upper,
                                level_number_lower, line_id, P_INTERNAL_DOWN,
                                transition_probabilities_dict[P_INTERNAL_DOWN]))
+
             macro_atom.append((atomic_number, ion_number, level_number_lower,
                                level_number_upper, line_id, P_INTERNAL_UP,
                                transition_probabilities_dict[P_INTERNAL_UP]))
@@ -694,40 +704,14 @@ class TARDISAtomData:
 
         self.macro_atom = macro_atom
 
-    @property
-    def macro_atom_prepared(self):
-        """
-        Prepare the DataFrame with macro atom data for TARDIS
-        
-        Returns
-        -------
-        macro_atom_prepared : pandas.DataFrame
-        
-        Notes
-        -----
-        Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
-        """
-
-        macro_atom_prepared = self.macro_atom.loc[:, [
-            "atomic_number",
-            "ion_number", "source_level_number", "target_level_number",
-            "transition_type", "transition_probability",
-            "transition_line_id"]].copy()
-
-        macro_atom_prepared = macro_atom_prepared.rename(columns={
-            "target_level_number": "destination_level_number"})
-
-        macro_atom_prepared = macro_atom_prepared.reset_index(drop=True)
-
-        return macro_atom_prepared
-
-    def _create_macro_atom_references(self):
+    def create_macro_atom_references(self):
         """
         Create a DataFrame containing macro atom reference data.
     
         Returns
         -------
         pandas.DataFrame
+
         """
         macro_atom_references = self.levels.rename(
             columns={"level_number": "source_level_number"}).\
@@ -751,12 +735,114 @@ class TARDISAtomData:
 
         macro_atom_references["count_down"] = \
             macro_atom_references["count_down"].astype(np.int)
+
         macro_atom_references["count_up"] = \
             macro_atom_references["count_up"].astype(np.int)
+
         macro_atom_references["count_total"] = \
             macro_atom_references["count_total"].astype(np.int)
 
         self.macro_atom_references = macro_atom_references
+
+    @property
+    def levels_prepared(self):
+        """
+        Prepare the DataFrame with levels for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        """
+
+        levels_prepared = self.levels.loc[:, [
+            "atomic_number", "ion_number", "level_number",
+            "energy", "g", "metastable"]].copy()
+
+        levels_prepared = levels_prepared.set_index(
+            ["atomic_number", "ion_number", "level_number"])
+
+        return levels_prepared
+
+    @property
+    def lines_prepared(self):
+        """
+        Prepare the DataFrame with lines for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        """
+
+        lines_prepared = self.lines.loc[:, [
+            "line_id", "wavelength", "atomic_number", "ion_number",
+            "f_ul", "f_lu", "level_number_lower", "level_number_upper",
+            "nu", "B_lu", "B_ul", "A_ul"]].copy()
+
+        # TODO: store units in metadata
+        # wavelength[angstrom], nu[Hz], f_lu[1], f_ul[1],
+        # B_ul[cm^3 s^-2 erg^-1], B_lu[cm^3 s^-2 erg^-1],
+        # A_ul[1/s].
+
+        lines_prepared = lines_prepared.set_index([
+            "atomic_number", "ion_number",
+            "level_number_lower", "level_number_upper"])
+
+        return lines_prepared
+
+    @property
+    def collisions_prepared(self):
+        """
+        Prepare the DataFrame with electron collisions for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        """
+
+        collisions_columns = ['atomic_number', 'ion_number', 'level_number_upper',
+                              'level_number_lower', 'g_ratio', 'delta_e'] + \
+                              sorted([col for col in self.collisions.columns if re.match('^t\d+$', col)])
+
+        collisions_prepared = self.collisions.loc[:, collisions_columns].copy()
+
+        collisions_prepared = collisions_prepared.set_index([
+                    "atomic_number",
+                    "ion_number",
+                    "level_number_lower",
+                    "level_number_upper"])
+
+        return collisions_prepared
+
+    @property
+    def macro_atom_prepared(self):
+        """
+        Prepare the DataFrame with macro atom data for TARDIS
+        
+        Returns
+        -------
+        macro_atom_prepared : pandas.DataFrame
+        
+        Notes
+        -----
+        Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
+
+        """
+
+        macro_atom_prepared = self.macro_atom.loc[:, [
+            "atomic_number",
+            "ion_number", "source_level_number", "target_level_number",
+            "transition_type", "transition_probability",
+            "transition_line_id"]].copy()
+
+        macro_atom_prepared = macro_atom_prepared.rename(columns={
+            "target_level_number": "destination_level_number"})
+
+        macro_atom_prepared = macro_atom_prepared.reset_index(drop=True)
+
+        return macro_atom_prepared
 
     @property
     def macro_atom_references_prepared(self):
@@ -766,25 +852,26 @@ class TARDISAtomData:
         Returns
         -------
         pandas.DataFrame
+
         """
         macro_atom_references_prepared = self.macro_atom_references.loc[:, [
             "atomic_number", "ion_number", "source_level_number", "count_down",
             "count_up", "count_total"]].copy()
 
-        macro_atom_references_prepared.set_index(
-            ['atomic_number', 'ion_number', 'source_level_number'],
-            inplace=True)
+        macro_atom_references_prepared = macro_atom_references_prepared.set_index(
+            ['atomic_number', 'ion_number', 'source_level_number'])
 
         return macro_atom_references_prepared
 
     def to_hdf(self, fname):
         """
-        Dump the `base` attribute into an HDF5 file
+        Dump `prepared` attributes into an HDF5 file.
         
         Parameters
         ----------
         fname : path
-           Path to the HDF5 output file
+           Path to the HDF5 output file.
+
         """
 
         with pd.HDFStore(fname, 'w') as f:
@@ -793,12 +880,18 @@ class TARDISAtomData:
             f.put('/zeta_data', self.zeta_data.base)
             f.put('/levels', self.levels_prepared)
             f.put('/lines', self.lines_prepared)
-            f.put('/collision_data', self.collisions_prepared)
             f.put('/macro_atom_data', self.macro_atom_prepared)
-            f.put('collision_data_temperatures', 
-                   pd.Series(self.collisions_param['temperatures']))
             f.put('/macro_atom_references',
                   self.macro_atom_references_prepared)
+
+            try:
+                f.put('/collision_data', self.collisions_prepared)
+                f.put('/collision_data_temperatures', 
+                      pd.Series(self.collisions_param['temperatures']))
+
+            # Do not try to store collisions if collisions do not exist.
+            except AttributeError:
+                pass
 
             meta = []
             md5_hash = hashlib.md5()
@@ -827,7 +920,7 @@ class TARDISAtomData:
             meta.append(('software', 'python', platform.python_version()))
             imports = ['carsus', 'astropy', 'numpy', 'pandas', 'pyarrow', 
                        'tables', 'ChiantiPy']
- 
+
             for package in imports:
                 meta.append(('software', package,
                              __import__(package).__version__))
@@ -841,8 +934,10 @@ class TARDISAtomData:
             logger.info(f"MD5: {md5_hash.hexdigest()}")
             logger.info(f"UUID1: {uuid1}")
 
-            f.root._v_attrs['md5'] = md5_hash.hexdigest()
-            f.root._v_attrs['uuid1'] = uuid1
+            # TARDIS tries to decode MD5 and UUID, then it's necessary
+            # to store these strings encoded (or change TARDIS code).
+            f.root._v_attrs['md5'] = md5_hash.hexdigest().encode('ascii')
+            f.root._v_attrs['uuid1'] = uuid1.encode('ascii')
             f.put('/meta', meta_df)
 
             utc = pytz.timezone('UTC')
@@ -850,5 +945,4 @@ class TARDISAtomData:
             f.root._v_attrs['date'] = timestamp
 
             self.meta = meta_df
-            
-            return
+
