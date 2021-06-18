@@ -68,16 +68,18 @@ rst_epilog += """
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
-    'sphinxcontrib.bibtex',
-    'sphinx_copybutton',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
     'sphinx.ext.todo',
-    'matplotlib.sphinxext.plot_directive',  # not working
+    'sphinx_copybutton',
+    'sphinxcontrib.apidoc',
+    'sphinxcontrib.bibtex',
+    'matplotlib.sphinxext.plot_directive',
     'nbsphinx',
     'numpydoc',
 ]
 
+bibtex_bibfiles = ['references.bib', 'publications.bib']
 nbsphinx_allow_errors = False  # use for debugging purposes only
 
 # -- Project information ------------------------------------------------------
@@ -126,7 +128,6 @@ html_theme_options = {
     'logotext2': '',  # orange, light
     'logotext3': ':docs'   # white,  light
     }
-
 
 # Custom sidebar templates, maps document names to template names.
 #html_sidebars = {}
@@ -220,3 +221,9 @@ linkcheck_anchors = False
 #     dtype, target = line.split(None, 1)
 #     target = target.strip()
 #     nitpick_ignore.append((dtype, six.u(target)))
+
+# -- APIDoc configuration -----------------------------------------------------
+apidoc_module_dir = "../carsus"
+apidoc_output_dir = "api"
+apidoc_excluded_paths = ["*tests*", "*setup_package*", "*conftest*", "*version*" ]
+apidoc_separate_modules = True
