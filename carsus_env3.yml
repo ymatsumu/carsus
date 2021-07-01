@@ -4,23 +4,28 @@ channels:
   - conda-forge
 
 dependencies:
-  - python=3
-  - setuptools
+  - python=3.6
   - numpy=1.15
   - pandas=1.0
   - astropy=3
-  - uncertainties
+  - chiantipy=0.8.4
+  - blas=1.1 # numpy/numpy/issues/14165
   - pip
+  - setuptools_scm
 
   # I/O
+  - pyyaml
+  - requests
+  - uncertainties
   - beautifulsoup4
-  - pyparsing=2.2
   - html5lib
-  - SQLAlchemy=1.0
-  - PyYAMl
+  - pyparsing=2.2
+  - sqlalchemy=1.0
   - h5py
   - pytables
   - pyarrow=0.14
+
+# --- Not required for conda-forge package ---
 
   # Analysis
   - jupyter
@@ -28,31 +33,27 @@ dependencies:
 
   # Documentation
   - sphinx
-  - nbconvert
-  - numpydoc
-  - docutils
-  - nbformat
   - sphinx-astropy
   - sphinx_bootstrap_theme
-  - sphinxcontrib-apidoc
-  - sphinxcontrib-bibtex
   - sphinx-copybutton
   - sphinx_rtd_theme
+  - sphinxcontrib-apidoc
+  - sphinxcontrib-bibtex
+  - nbconvert=5  # chrisjsewell/pytest-notebook/issues/10
+  - nbformat
   - nbsphinx
+  - numpydoc
+  - docutils
   - recommonmark
 
-  # Test/Coverage requirements
-  - git-lfs
+  # Test/Coverage
   - pytest=4
   - pytest-cov
   - pytest-astropy
-  - coverage
-  - requests
+  - pytest-notebook
+  - coverage=4  # chrisjsewell/pytest-notebook/issues/6
+  - attrs=20  # chrisjsewell/pytest-notebook/issues/16
 
-  # ChiantiPy dependencies
-  - scipy
-  - ipyparallel
-
-  # Pip
-  - pip:
-      - git+https://github.com/chianti-atomic/ChiantiPy.git@0.8.4
+  # Other
+  - git-lfs
+  

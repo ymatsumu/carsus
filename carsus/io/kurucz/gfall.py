@@ -53,7 +53,7 @@ class GFALLReader(object):
     default_unique_level_identifier = ['energy', 'j']
 
     def __init__(self, ions=None, 
-                 fname=GFALL_URL,
+                 fname=None,
                  unique_level_identifier=None,
                  priority=10
                 ):
@@ -73,7 +73,12 @@ class GFALLReader(object):
         priority: int, optional
             Priority of the current data source.
         """
-        self.fname = fname
+
+        if fname is None:
+            self.fname = GFALL_URL
+        else:
+            self.fname = fname
+
         self.priority = priority
 
         if ions is not None:
@@ -410,13 +415,14 @@ class GFALLIngester(object):
         session: SQLAlchemy session
         fname: str
             The name of the gfall file to read
+        unique_level_identifier: list
+            List of attributes to identify unique levels from. Will always use
+            atomic_number and ion charge in addition.
         ions: str
             Ingest levels and lines only for these ions. If set to None then ingest all.
             (default: None)
         data_source: DataSource instance
             The data source of the ingester
-
-        gfall_reader : GFALLReaderinstance
 
         Methods
         -------
@@ -424,9 +430,16 @@ class GFALLIngester(object):
             Persists data into the database
     """
 
-    def __init__(self, session, fname, ions=None, ds_short_name="ku_latest"):
+    def __init__(self, session, fname=None, ions=None, unique_level_identifier=None, ds_short_name="ku_latest"):
         self.session = session
-        self.gfall_reader = GFALLReader(ions, fname)
+        
+        if fname is None:
+            self.fname = GFALL_URL
+        else:
+            self.fname = fname
+        
+        self.gfall_reader = GFALLReader(ions, self.fname, unique_level_identifier)
+
         if ions is not None:
             try:
                 ions = parse_selected_species(ions)
@@ -474,7 +487,7 @@ class GFALLIngester(object):
                      on=["atomic_number", "ion_charge"]).\
                 set_index(["atomic_number", "ion_charge", "level_index"])
 
-        logger.info("Ingesting levels from {}.".format(self.data_source.short_name))
+        logger.info("Ingesting levels from `{}`.".format(self.data_source.short_name))
 
         for ion_index, ion_levels in levels.groupby(level=["atomic_number", "ion_charge"]):
 
@@ -514,7 +527,7 @@ class GFALLIngester(object):
                 set_index(["atomic_number", "ion_charge",
                            "level_index_lower", "level_index_upper"])
 
-        logger.info("Ingesting lines from {}.".format(self.data_source.short_name))
+        logger.info("Ingesting lines from `{}`.".format(self.data_source.short_name))
 
         for ion_index, ion_lines in lines.groupby(level=["atomic_number", "ion_charge"]):
 
