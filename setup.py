@@ -75,4 +75,6 @@ except Exception:
 """.lstrip()
 
 setup(use_scm_version={'write_to': os.path.join('carsus', 'version.py'),
-                       'write_to_template': VERSION_TEMPLATE})
+                       'write_to_template': VERSION_TEMPLATE,
+                       #'version_scheme': 'calver-by-date',
+                    })
