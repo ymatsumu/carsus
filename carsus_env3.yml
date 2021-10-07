@@ -30,6 +30,7 @@ dependencies:
 
   # Analysis
   - jupyter
+  - jupyter_client=6  # jupyter/jupyter_client/issues/637
   - matplotlib
 
   # Documentation
