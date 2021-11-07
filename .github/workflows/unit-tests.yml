@@ -1,0 +1,108 @@
+# For more information about this pipeline, please refer to:
+# https://tardis-sn.github.io/tardis/development/continuous_integration.html
+
+name: tests
+
+on:
+  push:
+    branches:
+    - master
+
+  pull_request:
+    branches:
+    - '*'
+
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XUVTOP: /tmp/chianti
+  CHIANTI_DL_URL: https://download.chiantidatabase.org
+  CHIANTI_DB_VER: CHIANTI_v9.0.1_database.tar.gz
+  PYTEST_CORES: auto
+  PYTEST_FLAGS: --remote-data --runslow --test-db=carsus-db/test_databases/test.db
+                --refdata=carsus-refdata --cov=carsus --cov-report=xml
+                --cov-report=html
+  PYTEST_NB_FLAGS: --ignore-glob="**/*.py" --nb-test-files --nb-exec-timeout 600
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+jobs:
+
+  build:
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Clone tardis-sn/carsus-db
+        uses: actions/checkout@v2
+        with:
+          repository: tardis-sn/carsus-db
+          path: carsus-db
+          lfs: false
+
+      - name: Pull test database
+        run: |
+          cd carsus-db
+          git lfs install --skip-smudge
+          git lfs pull --include="test_databases/test.db"
+
+      - name: Clone tardis-sn/carsus-refdata
+        uses: actions/checkout@v2
+        with:
+          repository: tardis-sn/carsus-refdata
+          path: carsus-refdata
+          lfs: true
+
+      - uses: actions/cache@v2
+        with:
+          path: ${{ env.XUVTOP }}
+          key: ${{ runner.os }}-${{ env.CHIANTI_DB_VER }}
+        id: chianti-cache
+
+      - name: Download Chianti database
+        run: |
+            mkdir -p ${{ env.XUVTOP }}
+            wget -q ${{ env.CHIANTI_DL_URL }}/${{ env.CHIANTI_DB_VER }} -O ${{ env.XUVTOP }}/chianti.tar.gz
+            tar -zxf ${{ env.XUVTOP }}/chianti.tar.gz -C ${{ env.XUVTOP }}
+        if: steps.chianti-cache.outputs.cache-hit != 'true'
+
+      - name: Setup environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+            miniforge-variant: Mambaforge
+            miniforge-version: latest
+            environment-file: carsus_env3.yml
+            activate-environment: carsus
+            use-mamba: true
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Run unit tests
+        run: pytest carsus -n ${{ env.PYTEST_CORES }} ${{ env.PYTEST_FLAGS }}
+
+      - name: Run notebook tests
+        run: pytest carsus -n ${{ env.PYTEST_CORES }} ${{ env.PYTEST_NB_FLAGS }}
+        env:
+          CARSUS_REFDATA: ${{ github.workspace }}/carsus-refdata
+        if: runner.os == 'Linux'
+
+      - name: Upload to codecov.io
+        run: bash <(curl -s https://codecov.io/bash)
+        if: runner.os == 'Linux'
