@@ -1,0 +1,109 @@
+#  README
+#  ======
+#
+#  Use relative paths to grab a file from a different date.
+#
+#  Although the `pho` input is a list of files, Carsus currently does not handle
+#  more than a single ionization route. Then, only the first file is used and the
+#  rest are ignored.
+#
+
+atom:
+  H:
+    ion_charge:
+      0:
+        date: 5dec96
+        osc: hi_osc.dat      # oscillator strengths
+        hyd: hyd_l_data.dat  # hydrogen log cross-sections
+        gbf: gbf_n_data.dat  # bound-free gaunt factors
+        pho:
+          - hiphot.dat       # photoionization cross-sections
+
+  He:
+    ion_charge:
+      0: 
+        date: 15jul15
+        osc: hei_osc
+        pho:
+          - phot_hei
+
+      1:
+        date: 5dec96
+        osc: he2_osc.dat
+        pho:
+          - he2phot.dat
+
+  C:
+    ion_charge:
+      0: 
+        date: 12dec04
+        osc: ci_split_osc
+        pho:
+          - phot_smooth_50
+
+      1: 
+        date: 30oct12
+        osc: c2osc_rev.dat
+        pho:
+          - phot_sm_3000.dat
+
+      2: 
+        date: 23dec04
+        osc: ciiiosc_st_split_big.dat
+        pho:
+          - ciiiphot_sm_a_500.dat
+          - ciiiphot_sm_b_500.dat
+
+      3: 
+        date: 30oct12
+        osc: civosc_a12_split.dat
+        pho:
+          - civphot_a12.dat
+        
+  Si:
+    ion_charge:
+      0: 
+        date: 23nov11
+        osc: SiI_OSC
+        pho:
+          - SiI_PHOT_DATA
+
+      1: 
+        date: 16sep15
+        osc: si2_osc_nahar
+        pho:
+          - phot_nahar_A
+          - phot_nahar_B
+
+  Co:
+    ion_charge:
+      2:
+        date: 30oct12
+        osc: coiii_osc.dat
+        pho:
+          - phot_nosm
+
+  N:
+    ion_charge:
+      0:
+        date: 12sep12
+        osc: ni_osc
+        pho:
+          - niphot_a.dat
+          - niphot_b.dat
+          - niphot_c.dat
+          - niphot_d.dat
+
+  S:
+    ion_charge:
+      0:
+        date: 24nov11
+        osc: SI_OSC
+        pho:
+          - SI_PHOT_DATA
+
+      1:
+        date: 30oct12
+        osc: s2_osc
+        pho:
+          - phot_sm_3000

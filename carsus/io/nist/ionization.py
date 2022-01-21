@@ -147,7 +147,7 @@ class NISTIonizationEnergiesParser(BaseParser):
 
         def parse_ground_level(row):
             ground_level = row["ground_level"]
-            lvl = pd.Series(index=["term", "spin_multiplicity", "L", "parity", "J"])
+            lvl = pd.Series(index=["term", "spin_multiplicity", "L", "parity", "J"], dtype='float64')
 
             try:
                 lvl_tokens = level.parseString(ground_level)
@@ -165,7 +165,7 @@ class NISTIonizationEnergiesParser(BaseParser):
             # Take as assumption J=0
             if (np.isnan(lvl["J"])):
                 lvl["J"] = '0'
-                logger.warn(f"Set `J=0` for ground state of species `{convert_atomic_number2symbol(row['atomic_number'])} {row['ion_charge']}`.")
+                logger.warning(f"Set `J=0` for ground state of species `{convert_atomic_number2symbol(row['atomic_number'])} {row['ion_charge']}`.")
             
             try:
                 lvl["term"] = "".join([str(_) for _ in lvl_tokens["ls_term"]])
@@ -311,12 +311,7 @@ class NISTIonizationEnergies(BaseParser):
     Attributes
     ----------
     base : pandas.Series
-
-    Methods
-    -------
-    to_hdf(fname)
-        Dump the `base` attribute into an HDF5 file
-
+    version : str
     """
     def __init__(self, spectra):
         input_data = download_ionization_energies(spectra)
@@ -327,15 +322,13 @@ class NISTIonizationEnergies(BaseParser):
 
     def _prepare_data(self):
         ionization_data = pd.DataFrame()
-        ionization_data['atomic_number'] = self.parser.base['atomic_number']
-        ionization_data['ion_number'] = self.parser.base['ion_charge'] + 1
+        ionization_data = self.parser.base[['atomic_number', 'ion_charge']].copy()
         ionization_data['ionization_energy'] = self.parser.base[
                 'ionization_energy_str'].str.strip('[]()').astype(np.float64)
         ionization_data.set_index(['atomic_number',
-                                   'ion_number'], inplace=True)
+                                   'ion_charge'], inplace=True)
 
-        # `base` attribute is a Series object
-        self.base = ionization_data['ionization_energy']
+        self.base = ionization_data.squeeze()
 
     def get_ground_levels(self):
         """Returns a DataFrame with the ground levels for the selected spectra
@@ -368,14 +361,3 @@ class NISTIonizationEnergies(BaseParser):
                     .replace('Version', ' ')
 
         self.version = version
-
-    def to_hdf(self, fname):
-        """Dump the `base` attribute into an HDF5 file
-
-        Parameters
-        ----------
-        fname : path
-           Path to the HDF5 output file
-        """
-        with pd.HDFStore(fname, 'w') as f:
-            f.put('/ionization_data', self.base)

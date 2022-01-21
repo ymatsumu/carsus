@@ -92,7 +92,7 @@ class GFALLReader(object):
         self._levels = None
         self._lines = None
         if unique_level_identifier is None:
-            logger.warn('A specific combination to identify unique levels from '
+            logger.warning('A specific combination to identify unique levels from '
                         'GFALL data has not been given. Defaulting to '
                         '["energy", "j"].')
             self.unique_level_identifier = self.default_unique_level_identifier
@@ -398,8 +398,6 @@ class GFALLReader(object):
         ----------
         fname : path
            Path to the HDF5 output file
-        raw : bool
-           If `True` stores `gfall_raw` attribute (default is `True`)
         """
         with pd.HDFStore(fname, 'w') as f:
             f.put('/gfall_raw', self.gfall_raw)

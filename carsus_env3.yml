@@ -12,7 +12,6 @@ dependencies:
   - pandas=1.0
   - astropy=3
   - chiantipy=0.8.4
-  - blas=1.1 # numpy/numpy/issues/14165
 
   # I/O
   - pyyaml
@@ -25,6 +24,7 @@ dependencies:
   - h5py
   - pytables
   - pyarrow=0.14
+  - roman
 
 # --- Not required for conda-forge package ---
 
@@ -56,6 +56,11 @@ dependencies:
   - pytest-xdist
   - coverage=4  # chrisjsewell/pytest-notebook/issues/6
   - attrs=20  # chrisjsewell/pytest-notebook/issues/16
+
+  # ChiantiPy
+  - scipy
+  - ipyparallel
+  - blas=1.1  # numpy/numpy/issues/14165
 
   # Other
   - git-lfs

@@ -57,7 +57,6 @@ class TARDISAtomData:
 
         self.atomic_weights = atomic_weights
         self.ionization_energies = ionization_energies
-        self.ground_levels = ionization_energies.get_ground_levels()
         self.gfall_reader = gfall_reader
         self.zeta_data = zeta_data
         self.chianti_reader = chianti_reader
@@ -73,6 +72,9 @@ class TARDISAtomData:
 
         if (chianti_reader is not None) and (not chianti_reader.collisions.empty):
             self.collisions = self.create_collisions(**collisions_param)
+
+        if (cmfgen_reader is not None) and hasattr(cmfgen_reader, 'cross_sections'):
+            self.cross_sections = self.create_cross_sections()
 
         logger.info('Finished.')
 
@@ -280,11 +282,17 @@ class TARDISAtomData:
 
     def _get_all_levels_data(self):
         """ 
-        Returns the same output than `AtomData._get_all_levels_data()`.
-
         The resulting DataFrame contains stacked energy levels from GFALL,
         Chianti (optional), CMFGEN (optional) and NIST ground levels. Only
         one source of levels is kept based on priorities.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Notes
+        -----
+        Produces the same output than `AtomData._get_all_levels_data()`.
 
         """
 
@@ -312,8 +320,8 @@ class TARDISAtomData:
         levels = levels.rename(columns={'ion_charge': 'ion_number'})
         levels = levels[['atomic_number', 'ion_number', 'g', 'energy', 
                          'ds_id', 'priority']]
-        levels['energy'] = u.Quantity(levels['energy'], u.Unit('cm-1')).to(
-            u.eV, equivalencies=u.spectral()).value
+        levels['energy'] = u.Quantity(levels['energy'], 'cm-1').to(
+            'eV', equivalencies=u.spectral()).value
  
         # Solve priorities and set attributes for later use.
         self.gfall_ions, self.chianti_ions, self.cmfgen_ions = self.solve_priorities(levels)
@@ -333,7 +341,7 @@ class TARDISAtomData:
             logger.info(f'CMFGEN selected species: {cmfgen_str}.')
 
         # Concatenate ground levels from NIST
-        ground_levels = self.ground_levels
+        ground_levels = self.ionization_energies.get_ground_levels()
         ground_levels = ground_levels.rename(columns={'ion_charge': 'ion_number'})
         ground_levels['ds_id'] = 1
 
@@ -370,11 +378,17 @@ class TARDISAtomData:
 
 
     def _get_all_lines_data(self):
-        """
-        Returns the same output than `AtomData._get_all_lines_data()`.
-        
+        """        
         The resulting DataFrame contains stacked transition lines for 
         GFALL, Chianti (optional) and CMFGEN (optional).
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Notes
+        -----
+        Produces the same output than `AtomData._get_all_lines_data()`.
 
         """
 
@@ -417,7 +431,7 @@ class TARDISAtomData:
         ions = set(self.gfall_ions).union(set(self.chianti_ions))\
                     .union((set(self.cmfgen_ions)))
 
-        logger.info('Matching lines and levels.')
+        logger.info('Matching levels and lines.')
         lns_list = [ self.get_lvl_index2id(lines.loc[ion], self.levels_all)
                         for ion in ions]
         lines = pd.concat(lns_list, sort=True)
@@ -428,8 +442,8 @@ class TARDISAtomData:
                             'j_lower', 'level_index_lower',
                             'level_index_upper'])
 
-        lines['wavelength'] = u.Quantity(lines['wavelength'], u.nm).to(
-            'angstrom').value
+        lines['wavelength'] = u.Quantity(lines['wavelength'], 'nm').to(
+            'AA').value
 
         lines.loc[lines['wavelength'] <=
                   GFALL_AIR_THRESHOLD, 'medium'] = MEDIUM_VACUUM
@@ -452,15 +466,21 @@ class TARDISAtomData:
     def create_levels_lines(self, lines_loggf_threshold=-3,
                             levels_metastable_loggf_threshold=-3):
         """
-        Returns the same output than `AtomData.create_levels_lines` method.
-
         Generates the definitive `lines` and `levels` DataFrames by adding
         new columns and making some calculations.
-        
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Notes
+        -----
+        Produces the same output than `AtomData.create_levels_lines` method.
+
         """
 
         ionization_energies = self.ionization_energies.base.reset_index()
-        ionization_energies['ion_number'] -= 1
+        ionization_energies = ionization_energies.rename(columns={'ion_charge': 'ion_number'})
 
         # Culling autoionization levels
         levels_w_ionization_energies = pd.merge(self.levels_all,
@@ -530,7 +550,7 @@ class TARDISAtomData:
 
         # Calculate frequency
         lines['nu'] = u.Quantity(
-            lines['wavelength'], 'angstrom').to('Hz', u.spectral())
+            lines['wavelength'], 'AA').to('Hz', u.spectral())
 
         # Create Einstein coefficients
         self._create_einstein_coeff(lines)
@@ -552,10 +572,16 @@ class TARDISAtomData:
 
     def create_collisions(self, temperatures=np.arange(2000, 50000, 2000)):
         """
-        Returns the same output than `AtomData.create_collisions` method.
-
         Generates the definitive `collisions` DataFrame by adding new columns
         and making some calculations.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Notes
+        -----
+        Produces the same output than `AtomData.create_collisions` method.
 
         """
 
@@ -629,6 +655,52 @@ class TARDISAtomData:
 
         return collisions
 
+    def create_cross_sections(self):
+        """
+        Create a DataFrame containing photoionization cross-sections.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        """
+
+        logger.info('Ingesting photoionization cross-sections.')
+        cross_sections = self.cmfgen_reader.cross_sections.reset_index()
+
+        logger.info('Matching levels and cross sections.')
+        cross_sections = cross_sections.rename(columns={'ion_charge': 'ion_number'})
+        cross_sections = cross_sections.set_index(['atomic_number', 'ion_number'])
+
+        cross_sections['level_index_lower'] = cross_sections['level_index'].values
+        cross_sections['level_index_upper'] = cross_sections['level_index'].values
+        phixs_list = [ self.get_lvl_index2id(cross_sections.loc[ion], self.levels_all) 
+                        for ion in self.cmfgen_ions ]
+
+        cross_sections = pd.concat(phixs_list, sort=True)
+        cross_sections = cross_sections.sort_values(by=['lower_level_id', 'upper_level_id'])
+        cross_sections['level_id'] = cross_sections['lower_level_id']
+
+        # `x_sect_id` number starts after the last `line_id`, just a convention
+        start = self.lines_all.index[-1] + 1
+        cross_sections['x_sect_id'] = range(start, start + len(cross_sections))
+
+        # Exclude artificially created levels from levels
+        levels = self.levels.loc[self.levels['level_id'] != -1].set_index('level_id')
+        level_number = levels.loc[:, ['level_number']]
+        cross_sections = cross_sections.join(level_number, on='level_id')
+
+        # Levels are already cleaned, just drop the NaN's after join
+        cross_sections = cross_sections.dropna()
+
+        cross_sections['energy'] = u.Quantity(cross_sections['energy'], 'Ry').to('Hz', equivalencies=u.spectral())
+        cross_sections['sigma'] = u.Quantity(cross_sections['sigma'], 'Mbarn').to('cm2')
+        cross_sections['level_number'] = cross_sections['level_number'].astype('int')
+        cross_sections = cross_sections.rename(columns={'energy':'nu', 'sigma':'x_sect'})
+
+        return cross_sections
+
+
     def create_macro_atom(self):
         """
         Create a DataFrame containing macro atom data.
@@ -639,7 +711,7 @@ class TARDISAtomData:
 
         Notes
         -----
-        Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
+        Refer to the docs: https://tardis-sn.github.io/tardis/physics/setup/plasma/macroatom.html
 
         """
         
@@ -745,6 +817,25 @@ class TARDISAtomData:
         self.macro_atom_references = macro_atom_references
 
     @property
+    def ionization_energies_prepared(self):
+        """
+        Prepare the DataFrame with ionization energies for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        """
+        ionization_energies_prepared = self.ionization_energies.base.copy()
+        ionization_energies_prepared = ionization_energies_prepared.reset_index()
+        ionization_energies_prepared['ion_charge'] += 1
+        ionization_energies_prepared = ionization_energies_prepared.rename(columns={'ion_charge': 'ion_number'})
+        ionization_energies_prepared = ionization_energies_prepared.set_index(['atomic_number', 'ion_number'])
+
+        return ionization_energies_prepared.squeeze()
+
+
+    @property
     def levels_prepared(self):
         """
         Prepare the DataFrame with levels for TARDIS.
@@ -817,6 +908,21 @@ class TARDISAtomData:
         return collisions_prepared
 
     @property
+    def cross_sections_prepared(self):
+        """
+        Prepare the DataFrame with photoionization cross-sections for TARDIS.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        """
+        cross_sections_prepared = self.cross_sections.set_index(['atomic_number', 'ion_number', 'level_number'])
+        cross_sections_prepared = cross_sections_prepared[['nu', 'x_sect']]
+
+        return cross_sections_prepared
+
+    @property
     def macro_atom_prepared(self):
         """
         Prepare the DataFrame with macro atom data for TARDIS
@@ -827,7 +933,7 @@ class TARDISAtomData:
         
         Notes
         -----
-        Refer to the docs: https://tardis-sn.github.io/tardis/physics/plasma/macroatom.html
+        Refer to the docs: https://tardis-sn.github.io/tardis/physics/setup/plasma/macroatom.html
 
         """
 
@@ -876,7 +982,7 @@ class TARDISAtomData:
 
         with pd.HDFStore(fname, 'w') as f:
             f.put('/atom_data', self.atomic_weights.base)
-            f.put('/ionization_data', self.ionization_energies.base)
+            f.put('/ionization_data', self.ionization_energies_prepared)
             f.put('/zeta_data', self.zeta_data.base)
             f.put('/levels', self.levels_prepared)
             f.put('/lines', self.lines_prepared)
@@ -884,14 +990,13 @@ class TARDISAtomData:
             f.put('/macro_atom_references',
                   self.macro_atom_references_prepared)
 
-            try:
+            if hasattr(self, 'collisions_prepared'):
                 f.put('/collision_data', self.collisions_prepared)
                 f.put('/collision_data_temperatures', 
                       pd.Series(self.collisions_param['temperatures']))
 
-            # Do not try to store collisions if collisions do not exist.
-            except AttributeError:
-                pass
+            if hasattr(self, 'cross_sections'):
+                f.put('/photoionization_data', self.cross_sections_prepared)
 
             meta = []
             md5_hash = hashlib.md5()
@@ -945,4 +1050,3 @@ class TARDISAtomData:
             f.root._v_attrs['date'] = timestamp
 
             self.meta = meta_df
-
