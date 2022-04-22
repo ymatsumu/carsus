@@ -13,17 +13,17 @@ sources and output them to file formats readable by radiative transfer codes.
     :target: http://www.astropy.org
     :alt: Powered by Astropy Badge
 
+.. image:: https://github.com/tardis-sn/carsus/actions/workflows/docs-build.yml/badge.svg
+    :target: https://tardis-sn.github.io/carsus
+    :alt: docs
+
+.. image:: https://github.com/tardis-sn/carsus/actions/workflows/unit-tests.yml/badge.svg
+    :target: https://github.com/tardis-sn/carsus/actions/workflows/unit-tests.yml
+    :alt: tests
+
 .. image:: https://badges.gitter.im/Join%20Chat.svg
     :target: https://gitter.im/tardis-sn/carsus
     :alt: Join Chat
-
-.. image:: https://github.com/tardis-sn/carsus/actions/workflows/docs-build.yml/badge.svg
-    :target: https://tardis-sn.github.io/carsus
-    :alt: Carsus Documentation
-
-.. image:: https://dev.azure.com/tardis-sn/Carsus/_apis/build/status/Carsus%20tests?branchName=master
-    :target: https://dev.azure.com/tardis-sn/Carsus/_build/latest?definitionId=6&branchName=master
-    :alt: Azure Pipelines
 
 *******
 License
