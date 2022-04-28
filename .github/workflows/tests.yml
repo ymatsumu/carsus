@@ -7,13 +7,11 @@ name: tests
 on:
   push:
     branches:
-    - master
+    - '*'
 
   pull_request:
     branches:
     - '*'
-
-  workflow_dispatch:
 
 concurrency:
   group: tests-${{ github.ref }}
@@ -23,15 +21,13 @@ env:
   XUVTOP: /tmp/chianti
   CHIANTI_DL_URL: https://download.chiantidatabase.org
   CHIANTI_DB_VER: CHIANTI_v9.0.1_database.tar.gz
-  PYTEST_CORES: auto
   PYTEST_FLAGS: --remote-data --runslow --test-db=carsus-db/test_databases/test.db
                 --refdata=carsus-refdata --cov=carsus --cov-report=xml
                 --cov-report=html
-  PYTEST_NB_FLAGS: --ignore-glob="**/*.py" --nb-test-files --nb-exec-timeout 600
+  NBCONVERT_CMD: jupyter nbconvert --execute --ExecutePreprocessor.timeout=600 --to html
   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
 jobs:
-
   build:
 
     strategy:
@@ -45,7 +41,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
@@ -55,7 +50,7 @@ jobs:
         with:
           repository: tardis-sn/carsus-db
           path: carsus-db
-          lfs: false
+          lfs: false  # do not pull LFS objects
 
       - name: Pull test database
         run: |
@@ -95,15 +90,15 @@ jobs:
       - name: Install package
         run: pip install -e .
 
-      - name: Run unit tests
-        run: pytest carsus -n ${{ env.PYTEST_CORES }} ${{ env.PYTEST_FLAGS }}
+      - name: Run tests
+        run: pytest carsus ${{ env.PYTEST_FLAGS }}
 
-      - name: Run notebook tests
-        run: pytest carsus -n ${{ env.PYTEST_CORES }} ${{ env.PYTEST_NB_FLAGS }}
+      - name: Run notebooks
+        run: |
+          ${{ env.NBCONVERT_CMD }} carsus/io/tests/test_legacy_consistency.ipynb
+          ${{ env.NBCONVERT_CMD }} carsus/io/tests/test_output_base.ipynb
         env:
           CARSUS_REFDATA: ${{ github.workspace }}/carsus-refdata
-        if: runner.os == 'Linux'
 
-      - name: Upload to codecov.io
+      - name: Upload to Codecov
         run: bash <(curl -s https://codecov.io/bash)
-        if: runner.os == 'Linux'
