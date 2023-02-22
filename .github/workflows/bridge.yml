@@ -1,0 +1,140 @@
+name: tardis-carsus-compatibility-check
+
+on: 
+  workflow_dispatch
+
+        
+env:
+  XUVTOP: /tmp/chianti
+  CHIANTI_DL_URL: https://download.chiantidatabase.org
+  CHIANTI_DB_VER: CHIANTI_v9.0.1_database.tar.gz
+  NBCONVERT_FLAGS: --execute --ExecutePreprocessor.timeout=600 --to html
+  CMFGEN_DL_URL: http://kookaburra.phyast.pitt.edu/hillier/cmfgen_files
+  CMFGEN_DB_VER: atomic_data_15nov16.tar.gz
+  # original reference data
+  REF1_PATH: ${{ github.workspace }}/tardis-refdata/unit_test_data_org.h5
+  # generated reference data using the new atomic file 
+  REF2_PATH: ${{ github.workspace }}/tardis-refdata/unit_test_data.h5
+  PYTEST_FLAGS: --tardis-refdata=${{ github.workspace }}/tardis-refdata 
+                --generate-reference
+
+defaults:
+      run:
+        shell: bash -l {0}
+
+jobs:
+  carsus-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: carsus/
+        
+      - uses: actions/cache@v2
+        with:
+          path: ${{ env.XUVTOP }}
+          key: ${{ runner.os }}-${{ env.CHIANTI_DB_VER }}
+        id: chianti-cache
+
+      - name: Download Chianti database
+        run: |
+            mkdir -p ${{ env.XUVTOP }}
+            wget -q ${{ env.CHIANTI_DL_URL }}/${{ env.CHIANTI_DB_VER }} -O ${{ env.XUVTOP }}/chianti.tar.gz
+            tar -zxf ${{ env.XUVTOP }}/chianti.tar.gz -C ${{ env.XUVTOP }}
+        if: steps.chianti-cache.outputs.cache-hit != 'true'
+      
+      - uses: actions/cache@v2
+        with:
+          path: /tmp/atomic
+          key: ${{ env.CMFGEN_DB_VER }}
+        id: cmfgen-cache
+
+      - name: Download CMFGEN database
+        run: |
+            wget -q -U "Mozilla/4.0" ${{ env.CMFGEN_DL_URL }}/${{ env.CMFGEN_DB_VER }} -O /tmp/atomic.tar.gz
+            tar -zxf /tmp/atomic.tar.gz -C /tmp
+        if: steps.cmfgen-cache.outputs.cache-hit != 'true'
+
+      - name: Setup carsus environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+            miniforge-variant: Mambaforge
+            miniforge-version: latest
+            environment-file: carsus/carsus_env3.yml
+            activate-environment: carsus
+            use-mamba: true
+
+      - name: Install package
+        run: pip install -e carsus/
+
+      - name: Run notebooks
+        run: |
+          jupyter nbconvert ${{ env.NBCONVERT_FLAGS }} carsus/docs/tardis_atomdata_ref.ipynb
+        env:
+          CARSUS_REFDATA: ${{ github.workspace }}/carsus-refdata
+        
+      - name: Upload Atom Data
+        uses: actions/upload-artifact@v2
+        with:
+          name: atom-data
+          path: carsus/docs/kurucz_cd23_chianti_H_He.h5
+  
+  tardis-build:
+    needs: carsus-build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: tardis-sn/tardis
+        
+      - name: Download refdata_compare notebook
+        run: wget https://raw.githubusercontent.com/tardis-sn/tardis-refdata/master/notebooks/ref_data_compare_from_paths.ipynb
+        
+      - name: Download reference data
+        run: bash .ci-helpers/download_reference_data.sh
+
+      - name: Setup TARDIS environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+            miniforge-variant: Mambaforge
+            miniforge-version: latest
+            activate-environment: tardis
+            use-mamba: true
+
+      - name: Update environment
+        run: mamba update -n tardis --file conda-linux-64.lock
+
+      - name: Install bokeh
+        run: mamba install bokeh --channel conda-forge --no-update-deps --yes
+
+      - name: Install package
+        run: pip install -e .
+        
+      - name: Download atom data
+        uses: actions/download-artifact@v2
+        with:
+          name: atom-data
+          path: carsus/docs/kurucz_cd23_chianti_H_He.h5
+      
+      - name: Replace Atomic Data
+        run: cp carsus/docs/kurucz_cd23_chianti_H_He.h5/kurucz_cd23_chianti_H_He.h5 tardis-refdata/atom_data/kurucz_cd23_chianti_H_He.h5
+      
+      - name: Generate Reference Data Copy
+        run: cp tardis-refdata/unit_test_data.h5 tardis-refdata/unit_test_data_org.h5 
+
+      - name: Generate New Reference Data
+        run:  pytest tardis ${{ env.PYTEST_FLAGS }}
+
+      - name: Compare Reference Data
+        run: |
+            jupyter nbconvert ${{ env.NBCONVERT_FLAGS }} ref_data_compare_from_paths.ipynb
+      
+      - name: Upload comparison notebook
+        uses: actions/upload-artifact@v2
+        with:
+          name: Comparison Notebook
+          path: ref_data_compare_from_paths.html
+      
+      - name: Check if reference data are equal
+        run: if [ "$(cat ../refdata_compare_result)" == "REFDATA COMPARISON FAILED" ]; then exit 1; fi
