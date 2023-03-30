@@ -1,7 +1,11 @@
-name: tardis-carsus-compatibility-check
+name: tardis-carsus-bridge
 
 on: 
-  workflow_dispatch
+  workflow_call: # to be called by save_atomic_files workflow
+    outputs:
+      ref-check-trig:
+        value: ${{ jobs.tardis-build.outputs.step-ref-check-trig}}
+  workflow_dispatch:
 
         
 env:
@@ -83,6 +87,8 @@ jobs:
   tardis-build:
     needs: carsus-build
     runs-on: ubuntu-latest
+    outputs:
+      step-ref-check-trig: ${{ steps.ref-equal-check.outputs.triggered }}
 
     steps:
       - uses: actions/checkout@v2
@@ -162,4 +168,5 @@ jobs:
           path: ref_data_compare_from_paths.html
       
       - name: Check if reference data are equal
+        id: ref-equal-check
         run: if [ "$(cat ../refdata_compare_result)" == "REFDATA COMPARISON FAILED" ]; then exit 1; fi
