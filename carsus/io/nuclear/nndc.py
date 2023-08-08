@@ -1,14 +1,12 @@
 import pandas as pd
-import os
-import pathlib
+from pathlib import Path
+import subprocess
 
-DECAY_DATA_SOURCE_DIR = os.path.join(
-    os.path.expanduser("~"), "Downloads", "carsus-data-nndc-main", "csv"
-)
+DECAY_DATA_SOURCE_DIR = Path.home() / "Downloads" / "carsus-data-nndc"
 
-DECAY_DATA_FINAL_DIR = os.path.join(
-    os.path.expanduser("~"), "Downloads", "tardis-data", "decay-data"
-)
+DECAY_DATA_FINAL_DIR = Path.home() / "Downloads" / "tardis-data" / "decay-data"
+
+NNDC_SOURCE_URL = "https://github.com/tardis-sn/carsus-data-nndc"
 
 
 class NNDCReader:
@@ -25,7 +23,7 @@ class NNDCReader:
         Return pandas DataFrame representation of the decay data
     """
 
-    def __init__(self, dirname=None):
+    def __init__(self, dirname=None, remote=False):
         """
         Parameters
         ----------
@@ -34,12 +32,13 @@ class NNDCReader:
 
         """
         if dirname is None:
-            self.dirname = DECAY_DATA_SOURCE_DIR
+            if remote:
+                subprocess.run(['git', 'clone', NNDC_SOURCE_URL, DECAY_DATA_SOURCE_DIR])
+            self.dirname = Path().joinpath(DECAY_DATA_SOURCE_DIR, "csv")
         else:
             self.dirname = dirname
 
         self._decay_data = None
-
 
     @property
     def decay_data(self):
@@ -58,7 +57,7 @@ class NNDCReader:
         """
 
         all_data = []
-        dirpath = pathlib.Path(self.dirname)
+        dirpath = Path(self.dirname)
         for file in dirpath.iterdir():
             # convert every csv file to Dataframe and append it to all_data
             if file.suffix == ".csv" and file.stat().st_size != 0:
@@ -137,10 +136,10 @@ class NNDCReader:
         if fpath is None:
             fpath = DECAY_DATA_FINAL_DIR
 
-        if not os.path.exists(fpath):
-            os.mkdir(fpath)
+        if not Path(fpath).exists():
+            Path(fpath).mkdir()
 
-        target_fname = os.path.join(fpath, "compiled_ensdf_csv.h5")
+        target_fname = Path().joinpath(fpath, "compiled_ensdf_csv.h5")
 
         with pd.HDFStore(target_fname, 'w') as f:
             f.put('/decay_data', self.decay_data)
